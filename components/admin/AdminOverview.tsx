@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { useQuery, usePaginatedQuery } from "convex/react"
+import { useMemo } from "react"
+import { usePaginatedQuery } from "convex/react"
 import { api } from "@devlider001/washlab-backend/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +21,6 @@ import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
 import { format } from "date-fns"
 
 const AdminOverview = () => {
-  // Fetch orders using paginated query
   const { results: ordersPages, status } = usePaginatedQuery(
     api.admin.getOrders,
     {},
@@ -31,17 +30,23 @@ const AdminOverview = () => {
   const orders = ordersPages?.flat() || []
   const isLoading = status === 'LoadingFirstPage'
 
-  // Calculate stats from orders
   const stats = useMemo(() => {
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
 
     const todayOrders = orders.filter((o: any) => o._creationTime >= todayStart)
-    const todayRevenue = todayOrders.reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
+    // Fix 1: Only count revenue from paid orders
+    const todayRevenue = todayOrders
+      .filter((o: any) => o.paymentStatus === 'paid')
+      .reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
 
     const last30DaysOrders = orders.filter((o: any) => o._creationTime >= thirtyDaysAgo)
-    const totalRevenue = last30DaysOrders.reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
+    // Fix 1: Only count revenue from paid orders
+    const totalRevenue = last30DaysOrders
+      .filter((o: any) => o.paymentStatus === 'paid')
+      .reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
+
     const completedOrders = last30DaysOrders.filter((o: any) => o.status === 'completed').length
     const pendingOrders = orders.filter((o: any) =>
       o.status === 'pending' ||
@@ -56,6 +61,7 @@ const AdminOverview = () => {
 
     const todayCompletedOrders = todayOrders.filter((o: any) => o.status === 'completed').length
 
+    // Fix 2: Single combined chart — revenue (paid only) + order count per day
     const last7Days = []
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now)
@@ -67,7 +73,10 @@ const AdminOverview = () => {
       const dayOrders = orders.filter((o: any) =>
         o._creationTime >= dayStart && o._creationTime < dayEnd
       )
-      const dayRevenue = dayOrders.reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
+      // Only paid orders count toward revenue
+      const dayRevenue = dayOrders
+        .filter((o: any) => o.paymentStatus === 'paid')
+        .reduce((sum: number, o: any) => sum + (o.finalPrice || 0), 0)
 
       last7Days.push({
         period: date.toISOString(),
@@ -162,7 +171,7 @@ const AdminOverview = () => {
                       <span className="text-red-600 font-medium">{stats.revenueChange.toFixed(1)}%</span>
                     </>
                   )}
-                  <span className="text-muted-foreground">vs avg</span>
+                  <span className="text-muted-foreground">vs avg • paid only</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
@@ -239,6 +248,7 @@ const AdminOverview = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Total Revenue (30d)</p>
                 <p className="text-2xl font-bold">₵{stats.totalRevenue.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Paid orders only</p>
               </div>
               <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -288,85 +298,66 @@ const AdminOverview = () => {
         </Card>
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Revenue Trend (Last 7 Days)
-            </CardTitle>
-            <CardDescription>Daily revenue performance over the past week</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stats.revenueTrends.length > 0 ? (
-              <div className="space-y-3">
-                {stats.revenueTrends.map((trend: any) => {
-                  const percentage = maxRevenue > 0 ? (trend.revenue / maxRevenue) * 100 : 0
-                  return (
-                    <div key={trend.period} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{format(new Date(trend.period), 'EEE, MMM d')}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground">{trend.orders} orders</span>
-                          <span className="font-bold">₵{trend.revenue.toFixed(2)}</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        />
+      {/* Single combined chart — Revenue + Orders (Last 7 Days) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Performance Trend (Last 7 Days)
+          </CardTitle>
+          <CardDescription>Daily paid revenue and total order volume over the past week</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {stats.revenueTrends.length > 0 ? (
+            <div className="space-y-4">
+              {stats.revenueTrends.map((trend: any) => {
+                const revenuePercentage = maxRevenue > 0 ? (trend.revenue / maxRevenue) * 100 : 0
+                const maxOrders = Math.max(...stats.revenueTrends.map((t: any) => t.orders))
+                const ordersPercentage = maxOrders > 0 ? (trend.orders / maxOrders) * 100 : 0
+                return (
+                  <div key={trend.period} className="space-y-2">
+                    {/* Date + values */}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium w-28">{format(new Date(trend.period), 'EEE, MMM d')}</span>
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="text-muted-foreground">{trend.orders} orders</span>
+                        <span className="font-bold text-foreground">₵{trend.revenue.toFixed(2)}</span>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No revenue data available</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5" />
-              Orders Trend (Last 7 Days)
-            </CardTitle>
-            <CardDescription>Daily order volume over the past week</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stats.revenueTrends.length > 0 ? (
-              <div className="space-y-3">
-                {stats.revenueTrends.map((trend: any) => {
-                  const maxOrders = Math.max(...stats.revenueTrends.map((t: any) => t.orders))
-                  const percentage = maxOrders > 0 ? (trend.orders / maxOrders) * 100 : 0
-                  return (
-                    <div key={trend.period} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{format(new Date(trend.period), 'EEE, MMM d')}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground">₵{trend.revenue.toFixed(2)}</span>
-                          <span className="font-bold">{trend.orders} orders</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
+                    {/* Revenue bar (purple) */}
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${revenuePercentage}%` }}
+                      />
                     </div>
-                  )
-                })}
+                    {/* Orders bar (blue) */}
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-400 to-cyan-400 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${ordersPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Legend */}
+              <div className="flex items-center gap-6 pt-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                  <span>Revenue (paid)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-1.5 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400" />
+                  <span>Orders</span>
+                </div>
               </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No order data available</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No data available</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent Orders */}
       <Card>
@@ -397,6 +388,12 @@ const AdminOverview = () => {
                       >
                         {formatStatus(order.status)}
                       </Badge>
+                      {/* Payment status indicator */}
+                      {order.paymentStatus !== 'paid' && (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          Unpaid
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground truncate">
                       {order.customerName || order.customerPhoneNumber}
@@ -406,7 +403,12 @@ const AdminOverview = () => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">₵{(order.finalPrice || 0).toFixed(2)}</p>
+                    <p className={`text-2xl font-bold ${order.paymentStatus !== 'paid' ? 'text-muted-foreground' : ''}`}>
+                      ₵{(order.finalPrice || 0).toFixed(2)}
+                    </p>
+                    {order.paymentStatus !== 'paid' && (
+                      <p className="text-xs text-orange-500">Not counted in revenue</p>
+                    )}
                   </div>
                 </div>
               ))

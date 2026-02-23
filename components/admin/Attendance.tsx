@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@devlider001/washlab-backend/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,32 +24,25 @@ import {
 } from '@/components/ui/table';
 import {
   Clock,
-  User,
   Building2,
   LogIn,
   LogOut,
-  Calendar,
-  Search,
   Filter,
   Download,
   Timer,
-  Users as UsersIcon
+  Search,
 } from 'lucide-react';
-import { format, formatDistanceToNow, startOfToday, endOfToday } from 'date-fns';
+import { format, startOfToday, endOfToday } from 'date-fns';
 import { Id } from '@devlider001/washlab-backend/dataModel';
 
-/**
- * Attendance Page
- * Professional UI for viewing staff attendance logs with filtering
- */
 const Attendance = () => {
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Calculate date range
-  const getDateRange = () => {
+  // Fix: useMemo so this doesn't re-create on every render and cause infinite loop
+  const { startDate, endDate } = useMemo(() => {
     const now = Date.now();
     switch (dateRange) {
       case 'today':
@@ -61,18 +54,14 @@ const Attendance = () => {
       default:
         return { startDate: 0, endDate: now };
     }
-  };
+  }, [dateRange]);
 
-  const { startDate, endDate } = getDateRange();
-
-  // Get branches for filter
   const branchesResult = useQuery(api.admin.getBranches, {
     includeInactive: false,
     paginationOpts: { numItems: 100, cursor: null },
   });
   const branches = branchesResult?.page || [];
 
-  // Get attendance logs
   const attendanceLogs = useQuery(
     api.admin.getAttendanceLogs,
     branchFilter !== 'all'
@@ -89,53 +78,53 @@ const Attendance = () => {
         }
   );
 
-  // Filter attendance logs
-  const filteredLogs = (attendanceLogs || []).filter((log) => {
-    // Status filter
-    if (statusFilter === 'active' && !log.isActive) return false;
-    if (statusFilter === 'completed' && log.isActive) return false;
+  const filteredLogs = useMemo(() => {
+    return (attendanceLogs || []).filter((log) => {
+      if (statusFilter === 'active' && !log.isActive) return false;
+      if (statusFilter === 'completed' && log.isActive) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          log.attendant?.name?.toLowerCase().includes(query) ||
+          log.attendant?.email?.toLowerCase().includes(query) ||
+          log.branch?.name?.toLowerCase().includes(query) ||
+          log.branch?.code?.toLowerCase().includes(query)
+        );
+      }
+      return true;
+    });
+  }, [attendanceLogs, statusFilter, searchQuery]);
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        log.attendant?.name?.toLowerCase().includes(query) ||
-        log.attendant?.email?.toLowerCase().includes(query) ||
-        log.branch?.name?.toLowerCase().includes(query) ||
-        log.branch?.code?.toLowerCase().includes(query)
-      );
-    }
-
-    return true;
-  });
-
-  // Calculate statistics
-  const stats = {
+  const stats = useMemo(() => ({
     total: filteredLogs.length,
     active: filteredLogs.filter((l) => l.isActive).length,
     completed: filteredLogs.filter((l) => !l.isActive).length,
-    totalHours: filteredLogs
-      .filter((l) => l.durationMinutes !== null)
-      .reduce((sum, l) => sum + (l.durationMinutes || 0), 0) / 60,
-  };
+    totalHours:
+      filteredLogs
+        .filter((l) => l.durationMinutes !== null)
+        .reduce((sum, l) => sum + (l.durationMinutes || 0), 0) / 60,
+  }), [filteredLogs]);
 
   const formatDuration = (minutes: number | null) => {
     if (minutes === null) return 'N/A';
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}h ${mins}m`;
-    }
-    return `${mins}m`;
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
   const getElapsedTime = (clockInAt: number) => {
-    const now = Date.now();
-    const diff = now - clockInAt;
+    const diff = Date.now() - clockInAt;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;
   };
+
+  const dateRangeLabel = {
+    today: 'Today',
+    week: 'Last 7 Days',
+    month: 'Last 30 Days',
+    all: 'All Time',
+  }[dateRange];
 
   return (
     <div className="space-y-6">
@@ -212,7 +201,6 @@ const Attendance = () => {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -223,7 +211,6 @@ const Attendance = () => {
               />
             </div>
 
-            {/* Branch Filter */}
             <Select value={branchFilter} onValueChange={setBranchFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="All Branches" />
@@ -238,7 +225,6 @@ const Attendance = () => {
               </SelectContent>
             </Select>
 
-            {/* Status Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="All Status" />
@@ -250,7 +236,6 @@ const Attendance = () => {
               </SelectContent>
             </Select>
 
-            {/* Date Range */}
             <Select value={dateRange} onValueChange={(v: any) => setDateRange(v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Date Range" />
@@ -276,9 +261,7 @@ const Attendance = () => {
                 {filteredLogs.length} record{filteredLogs.length !== 1 ? 's' : ''} found
               </CardDescription>
             </div>
-            <Badge variant="outline">
-              {dateRange === 'today' ? 'Today' : dateRange === 'week' ? 'Last 7 Days' : dateRange === 'month' ? 'Last 30 Days' : 'All Time'}
-            </Badge>
+            <Badge variant="outline">{dateRangeLabel}</Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -310,8 +293,13 @@ const Attendance = () => {
                     <TableRow key={log._id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                            {log.attendant?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                            {log.attendant?.name
+                              ?.split(' ')
+                              .map((n: string) => n[0])
+                              .join('')
+                              .slice(0, 2)
+                              .toUpperCase() || '??'}
                           </div>
                           <div>
                             <p className="font-medium">{log.attendant?.name || 'Unknown'}</p>

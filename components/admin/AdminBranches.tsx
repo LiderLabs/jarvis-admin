@@ -81,7 +81,6 @@ const AdminBranches = () => {
   const [branchToDelete, setBranchToDelete] = useState<Id<"branches"> | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
-  // Form state
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -90,7 +89,7 @@ const AdminBranches = () => {
     country: "Ghana",
     phoneNumber: "",
     email: "",
-    pricingPerKg: PRICING_CONFIG.services[1].price, // Default to wash_and_dry price
+    pricingPerKg: PRICING_CONFIG.services[1].price,
     deliveryFee: 10,
     stationPin: "",
   })
@@ -327,7 +326,6 @@ const AdminBranches = () => {
         </div>
       </div>
 
-      {/* Branches Grid */}
       {branches.length === 0 && paginationStatus === "LoadingFirstPage" ? (
         <Card>
           <CardContent className='flex items-center justify-center py-12'>
@@ -441,10 +439,10 @@ const AdminBranches = () => {
                   <div className='space-y-2 text-sm'>
                     <div className='flex justify-between'>
                       <span className='text-muted-foreground'>
-                        Price per kg:
+                        Price per load:
                       </span>
                       <span className='font-semibold'>
-                        ₵{branch.pricingPerKg.toFixed(2)}
+                        &#8373;{branch.pricingPerKg.toFixed(2)}
                       </span>
                     </div>
                     <div className='flex justify-between'>
@@ -452,7 +450,7 @@ const AdminBranches = () => {
                         Delivery fee:
                       </span>
                       <span className='font-semibold'>
-                        ₵{branch.deliveryFee.toFixed(2)}
+                        &#8373;{branch.deliveryFee.toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -584,7 +582,7 @@ const AdminBranches = () => {
             <Separator />
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-2'>
-                <Label htmlFor='pricingPerKg'>Price per kg (₵) *</Label>
+                <Label htmlFor='pricingPerKg'>Price per load (&#8373;) *</Label>
                 <Input
                   id='pricingPerKg'
                   type='number'
@@ -600,7 +598,7 @@ const AdminBranches = () => {
                 />
               </div>
               <div className='space-y-2'>
-                <Label htmlFor='deliveryFee'>Delivery Fee (₵) *</Label>
+                <Label htmlFor='deliveryFee'>Delivery Fee (&#8373;) *</Label>
                 <Input
                   id='deliveryFee'
                   type='number'
@@ -751,7 +749,7 @@ const AdminBranches = () => {
             <Separator />
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-2'>
-                <Label htmlFor='edit-pricingPerKg'>Price per kg (₵) *</Label>
+                <Label htmlFor='edit-pricingPerKg'>Price per load (&#8373;) *</Label>
                 <Input
                   id='edit-pricingPerKg'
                   type='number'
@@ -767,7 +765,7 @@ const AdminBranches = () => {
                 />
               </div>
               <div className='space-y-2'>
-                <Label htmlFor='edit-deliveryFee'>Delivery Fee (₵) *</Label>
+                <Label htmlFor='edit-deliveryFee'>Delivery Fee (&#8373;) *</Label>
                 <Input
                   id='edit-deliveryFee'
                   type='number'

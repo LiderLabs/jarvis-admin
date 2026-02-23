@@ -50,7 +50,7 @@ import {
 import { toast } from "sonner"
 import { format, addDays, subDays, isToday } from "date-fns"
 
-const ORDERS_LIMIT = 100 // Load more per page since we filter client-side by day
+const ORDERS_LIMIT = 100
 
 type OrderStatus =
   | "pending_dropoff"
@@ -62,7 +62,6 @@ type OrderStatus =
   | "ready"
   | "completed"
   | "cancelled"
-  // Legacy statuses for backward compatibility
   | "pending"
   | "in_progress"
   | "ready_for_pickup"
@@ -87,7 +86,6 @@ const AdminOrders = () => {
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
 
-  // Get branches for filter
   const { results: branchesPages } = usePaginatedQuery(
     api.admin.getBranches,
     isAuthenticated ? {} : "skip",
@@ -95,7 +93,6 @@ const AdminOrders = () => {
   )
   const branchesList = branchesPages?.flat() || []
 
-  // Get orders with pagination
   const {
     results: ordersPages,
     status: paginationStatus,
@@ -117,13 +114,11 @@ const AdminOrders = () => {
     { initialNumItems: ORDERS_LIMIT }
   )
 
-  // Get order details when selected
   const orderDetails = useQuery(
     api.admin.getOrderDetails,
     selectedOrder && isAuthenticated ? { orderId: selectedOrder._id } : "skip"
   )
 
-  // Mutations
   const updateOrderStatus = useMutation(api.admin.updateOrderStatus)
   const deleteOrder = useMutation(api.admin.deleteOrder)
 
@@ -132,7 +127,6 @@ const AdminOrders = () => {
   const isLoading =
     paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore"
 
-  // Compute selected day's start and end timestamps
   const { dayStart, dayEnd } = useMemo(() => {
     const d = new Date(selectedDate)
     d.setHours(0, 0, 0, 0)
@@ -141,14 +135,12 @@ const AdminOrders = () => {
     return { dayStart, dayEnd }
   }, [selectedDate])
 
-  // Filter orders to the selected day
   const dayOrders = useMemo(() => {
     return orders.filter(
       (o) => o._creationTime >= dayStart && o._creationTime < dayEnd
     )
   }, [orders, dayStart, dayEnd])
 
-  // Apply search + status filters on top of day filter
   const filteredOrders = useMemo(() => {
     return dayOrders.filter((order) => {
       if (searchQuery.trim()) {
@@ -163,7 +155,6 @@ const AdminOrders = () => {
     })
   }, [dayOrders, searchQuery])
 
-  // Stats — based on the selected day's orders
   const stats = useMemo(() => ({
     total: dayOrders.length,
     pending_dropoff: dayOrders.filter((o) => o.status === "pending_dropoff").length,
@@ -229,6 +220,8 @@ const AdminOrders = () => {
   const goToNextDay = () => setSelectedDate((d) => addDays(d, 1))
   const goToToday = () => setSelectedDate(new Date())
 
+  const isSelectedToday = isToday(selectedDate)
+
   return (
     <div>
       {/* Header */}
@@ -243,29 +236,54 @@ const AdminOrders = () => {
 
       {/* Date Selector */}
       <Card className="mb-6">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Label className="text-sm font-medium text-muted-foreground shrink-0">Viewing orders for:</Label>
-            <div className="flex items-center gap-2">
-              {/* Prev Day */}
-              <Button variant="outline" size="icon" onClick={goToPrevDay} className="h-9 w-9">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+        <CardContent className="py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground shrink-0 mr-1">
+              Viewing orders for:
+            </span>
 
-              {/* Calendar Popover */}
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="gap-2 min-w-[180px] justify-start font-medium"
-                  >
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                    {isToday(selectedDate)
-                      ? "Today"
+            {/* Prev */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToPrevDay}
+              className="h-9 w-9 shrink-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Calendar trigger */}
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-9 min-w-[200px] justify-start gap-2 font-medium border-2 border-primary/30 hover:border-primary/60 transition-colors"
+                >
+                  <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+                  <span>
+                    {isSelectedToday
+                      ? "Today · " + format(selectedDate, "MMM d, yyyy")
                       : format(selectedDate, "EEE, MMM d, yyyy")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0 shadow-lg border rounded-xl overflow-hidden"
+                align="start"
+                sideOffset={6}
+              >
+                {/* Calendar header */}
+                <div className="bg-primary px-4 py-3">
+                  <p className="text-xs font-semibold text-primary-foreground/70 uppercase tracking-wider">
+                    Select Date
+                  </p>
+                  <p className="text-lg font-bold text-primary-foreground mt-0.5">
+                    {format(selectedDate, "EEEE, MMMM d")}
+                  </p>
+                </div>
+
+                {/* Calendar widget */}
+                <div className="p-3">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
@@ -277,42 +295,86 @@ const AdminOrders = () => {
                     }}
                     disabled={(date) => date > new Date()}
                     initialFocus
+                    classNames={{
+                      months: "flex flex-col space-y-4",
+                      month: "space-y-4",
+                      caption: "flex justify-center pt-1 relative items-center",
+                      caption_label: "text-sm font-semibold",
+                      nav: "space-x-1 flex items-center",
+                      nav_button: "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 hover:bg-muted rounded-md inline-flex items-center justify-center",
+                      nav_button_previous: "absolute left-1",
+                      nav_button_next: "absolute right-1",
+                      table: "w-full border-collapse",
+                      head_row: "flex",
+                      head_cell: "text-muted-foreground rounded-md w-9 font-medium text-[0.8rem] flex items-center justify-center",
+                      row: "flex w-full mt-2",
+                      cell: "h-9 w-9 text-center text-sm relative p-0 focus-within:relative focus-within:z-20",
+                      day: "h-9 w-9 p-0 font-normal rounded-md hover:bg-muted inline-flex items-center justify-center",
+                      day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md font-semibold",
+                      day_today: "bg-accent text-accent-foreground font-semibold",
+                      day_outside: "text-muted-foreground opacity-40",
+                      day_disabled: "text-muted-foreground opacity-25 cursor-not-allowed",
+                      day_hidden: "invisible",
+                    }}
                   />
-                </PopoverContent>
-              </Popover>
+                </div>
 
-              {/* Next Day */}
+                {/* Footer: Today shortcut */}
+                {!isSelectedToday && (
+                  <div className="border-t px-3 py-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-8 text-xs font-medium text-primary hover:text-primary"
+                      onClick={() => {
+                        setSelectedDate(new Date())
+                        setCalendarOpen(false)
+                      }}
+                    >
+                      Jump to Today
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Next */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToNextDay}
+              className="h-9 w-9 shrink-0"
+              disabled={isSelectedToday}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+
+            {/* Today pill — only when on a past date */}
+            {!isSelectedToday && (
               <Button
-                variant="outline"
-                size="icon"
-                onClick={goToNextDay}
-                className="h-9 w-9"
-                disabled={isToday(selectedDate)}
+                variant="secondary"
+                size="sm"
+                onClick={goToToday}
+                className="h-9 px-4 font-medium"
               >
-                <ChevronRight className="h-4 w-4" />
+                Back to Today
               </Button>
-
-              {/* Today shortcut */}
-              {!isToday(selectedDate) && (
-                <Button variant="secondary" size="sm" onClick={goToToday}>
-                  Today
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Stats — scoped to selected day */}
+      {/* Stats */}
       <div className="space-y-3 mb-6">
-        {/* Row 1: Summary */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
             <CardContent className="py-4 px-5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total Orders</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-primary">{stats.total}</span>
-                <span className="text-xs text-muted-foreground">{isToday(selectedDate) ? "today" : format(selectedDate, "MMM d")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {isSelectedToday ? "today" : format(selectedDate, "MMM d")}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -331,14 +393,15 @@ const AdminOrders = () => {
             <CardContent className="py-4 px-5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">In Progress</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-yellow-600">{stats.checked_in + stats.sorting + stats.washing + stats.drying + stats.folding}</span>
+                <span className="text-4xl font-bold text-yellow-600">
+                  {stats.checked_in + stats.sorting + stats.washing + stats.drying + stats.folding}
+                </span>
                 <span className="text-xs text-muted-foreground">active now</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Row 2: Wash Pipeline — horizontal flow */}
         <Card>
           <CardContent className="py-3 px-5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Wash Pipeline</p>
@@ -372,7 +435,6 @@ const AdminOrders = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Search */}
             <div className="sm:col-span-2 lg:col-span-1">
               <Label htmlFor="search">Search Orders</Label>
               <div className="relative mt-2">
@@ -387,7 +449,6 @@ const AdminOrders = () => {
               </div>
             </div>
 
-            {/* Branch Filter */}
             <div>
               <Label htmlFor="branch">Branch</Label>
               <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
@@ -405,7 +466,6 @@ const AdminOrders = () => {
               </Select>
             </div>
 
-            {/* Status Filter — actual wash process statuses */}
             <div>
               <Label htmlFor="status">Status</Label>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -438,7 +498,6 @@ const AdminOrders = () => {
         onDelete={handleDelete}
       />
 
-      {/* Load More — only shown if there might be more orders on other days */}
       {hasMore && (
         <div className="flex justify-center mt-6">
           <Button
@@ -458,7 +517,6 @@ const AdminOrders = () => {
         </div>
       )}
 
-      {/* Order Details Dialog */}
       {selectedOrder && (
         <OrderDetailsDialog
           order={selectedOrder}
@@ -469,7 +527,6 @@ const AdminOrders = () => {
         />
       )}
 
-      {/* Order Status Update Dialog */}
       {orderToUpdate && (
         <OrderStatusDialog
           order={orderToUpdate}
@@ -479,7 +536,6 @@ const AdminOrders = () => {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={!!orderToDelete}
         onOpenChange={(open) => !open && setOrderToDelete(null)}
