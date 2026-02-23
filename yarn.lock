@@ -166,17 +166,6 @@
     snakecase-keys "5.4.4"
     tslib "2.4.1"
 
-"@clerk/backend@^1.21.6":
-  version "1.34.0"
-  resolved "https://registry.yarnpkg.com/@clerk/backend/-/backend-1.34.0.tgz#e1b37954c8b2c89d7bbc1cc57349ac0d57719ca3"
-  integrity sha512-9rZ8hQJVpX5KX2bEpiuVXfpjhojQCiqCWADJDdCI0PCeKxn58Ep0JPYiIcczg4VKUc3a7jve9vXylykG2XajLQ==
-  dependencies:
-    "@clerk/shared" "^3.9.5"
-    "@clerk/types" "^4.59.3"
-    cookie "1.0.2"
-    snakecase-keys "8.0.1"
-    tslib "2.8.1"
-
 "@clerk/backend@^2.30.1":
   version "2.30.1"
   resolved "https://registry.npmjs.org/@clerk/backend/-/backend-2.30.1.tgz"
@@ -208,16 +197,6 @@
     "@types/node-fetch" "2.6.2"
     camelcase-keys "6.2.2"
     snakecase-keys "3.2.1"
-    tslib "2.4.1"
-
-"@clerk/clerk-sdk-node@^5.1.6":
-  version "5.1.6"
-  resolved "https://registry.yarnpkg.com/@clerk/clerk-sdk-node/-/clerk-sdk-node-5.1.6.tgz#fc3d8cf6ed63d9c0956dc643557bb75ec91f9fa7"
-  integrity sha512-KeF5p0XP0gNoCx+YIHrfrkNNADBz8ZabwPAhOiJZ9Wo14r93WlzRA51IE0Qgteej8IpWwnvKu4/MpiV7FFoLqA==
-  dependencies:
-    "@clerk/backend" "^1.21.6"
-    "@clerk/shared" "^2.20.6"
-    "@clerk/types" "^4.40.2"
     tslib "2.4.1"
 
 "@clerk/elements@^0.24.2":
@@ -258,34 +237,10 @@
     js-cookie "3.0.1"
     swr "2.2.0"
 
-"@clerk/shared@^2.20.6":
-  version "2.22.0"
-  resolved "https://registry.yarnpkg.com/@clerk/shared/-/shared-2.22.0.tgz#c5c5b6f24241370a0ebb0e0109e8812219f55f9a"
-  integrity sha512-VWBeddOJVa3sqUPdvquaaQYw4h5hACSG3EUDOW7eSu2F6W3BXUozyLJQPBJ9C0MuoeHhOe/DeV8x2KqOgxVZaQ==
-  dependencies:
-    "@clerk/types" "^4.46.1"
-    dequal "2.0.3"
-    glob-to-regexp "0.4.1"
-    js-cookie "3.0.5"
-    std-env "^3.7.0"
-    swr "^2.2.0"
-
 "@clerk/shared@^3.44.0":
   version "3.44.0"
   resolved "https://registry.npmjs.org/@clerk/shared/-/shared-3.44.0.tgz"
   integrity sha512-kH+chNeZwqml3IDpWLgebWECfOZifyUQO4OISd/96w1EuCY1Bzw6cBq/ZbpsoO8jyG8/6bGr/MGXLhDzTrpPfA==
-  dependencies:
-    csstype "3.1.3"
-    dequal "2.0.3"
-    glob-to-regexp "0.4.1"
-    js-cookie "3.0.5"
-    std-env "^3.9.0"
-    swr "2.3.4"
-
-"@clerk/shared@^3.47.0", "@clerk/shared@^3.9.5":
-  version "3.47.0"
-  resolved "https://registry.yarnpkg.com/@clerk/shared/-/shared-3.47.0.tgz#df29e6c7433984201ff15871ee561d9cf064d0b2"
-  integrity sha512-EDWFysptTc58X96MGQIZ3LlcMFKLG+rhIF9kf6n+wnyQDWnfuyA8I8ge7GbjfUXMf00c//A/CGSjg7t/oupUpw==
   dependencies:
     csstype "3.1.3"
     dequal "2.0.3"
@@ -316,43 +271,19 @@
   dependencies:
     "@clerk/shared" "^3.44.0"
 
-"@clerk/types@^4.40.2", "@clerk/types@^4.46.1", "@clerk/types@^4.59.3":
-  version "4.101.18"
-  resolved "https://registry.yarnpkg.com/@clerk/types/-/types-4.101.18.tgz#ae8c8bc7d959cb35cb967a7a832b3b34016e2130"
-  integrity sha512-huTv4ESnNK5ujCSc0vUNtK2k5xMDOP5C96qOUPB0AZyOWeMYEou5tHDua2NOlgFZAS/M+dJBOffohbiO2mLAhw==
-  dependencies:
-    "@clerk/shared" "^3.47.0"
-
 "@date-fns/tz@^1.4.1":
   version "1.4.1"
   resolved "https://registry.npmjs.org/@date-fns/tz/-/tz-1.4.1.tgz"
   integrity sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==
 
-"@devlider001/washlab-backend@./devlider001-washlab-backend-1.1.52.tgz":
-  version "1.1.52"
-  uid "24442849fa18a76d489a2255533a0bb43cd50144"
-  resolved "./devlider001-washlab-backend-1.1.52.tgz#24442849fa18a76d489a2255533a0bb43cd50144"
-  dependencies:
-    "@clerk/clerk-sdk-node" "^5.1.6"
-    "@devlider001/washlab-backend" "^1.0.3"
-    convex "^1.32.0"
-
-"@devlider001/washlab-backend@^1.0.3", "@devlider001/washlab-backend@^1.1.1":
+"@devlider001/washlab-backend@1.1.51", "@devlider001/washlab-backend@^1.1.1":
   version "1.1.51"
-  resolved "https://registry.npmjs.org/@devlider001/washlab-backend/-/washlab-backend-1.1.51.tgz"
+  resolved "https://registry.yarnpkg.com/@devlider001/washlab-backend/-/washlab-backend-1.1.51.tgz#c80eb787b28e3cfe0359175faf5a9f0af73c4e1b"
   integrity sha512-IoHluOmaV3V1l86pIuPg5FvD5+KhQGjnZGExpHDTEiNJUcZ6LQkJAOYIoBn24LDaD6IbcV8zK1YtlF7T5gfFcw==
   dependencies:
     "@clerk/clerk-sdk-node" "^4.13.23"
     "@devlider001/washlab-backend" "^1.1.1"
     convex "^1.31.2"
-
-"@devlider001/washlab-backend@file:../../washlab-backend-main/washlab-backend-main/devlider001-washlab-backend-1.1.52.tgz":
-  version "1.1.52"
-  resolved "file:../../washlab-backend-main/washlab-backend-main/devlider001-washlab-backend-1.1.52.tgz#24442849fa18a76d489a2255533a0bb43cd50144"
-  dependencies:
-    "@clerk/clerk-sdk-node" "^5.1.6"
-    "@devlider001/washlab-backend" "^1.0.3"
-    convex "^1.32.0"
 
 "@emnapi/core@^1.4.3":
   version "1.8.1"
@@ -2392,24 +2323,10 @@ convex@^1.31.2:
     esbuild "0.27.0"
     prettier "^3.0.0"
 
-convex@^1.32.0:
-  version "1.32.0"
-  resolved "https://registry.yarnpkg.com/convex/-/convex-1.32.0.tgz#fcba673730844f8fbb4f908a750855fe08c2a07e"
-  integrity sha512-5FlajdLpW75pdLS+/CgGH5H6yeRuA+ru50AKJEYbJpmyILUS+7fdTvsdTaQ7ZFXMv0gE8mX4S+S3AtJ94k0mfw==
-  dependencies:
-    esbuild "0.27.0"
-    prettier "^3.0.0"
-    ws "8.18.0"
-
 cookie@0.5.0:
   version "0.5.0"
   resolved "https://registry.npmjs.org/cookie/-/cookie-0.5.0.tgz"
   integrity sha512-YZ3GUyn/o8gfKJlnlX7g7xq4gyO6OSuhGPKaaGssGB2qgDUS0gPgtTvoyZLTt9Ab6dC4hfc9dV5arkvc/OCmrw==
-
-cookie@1.0.2:
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/cookie/-/cookie-1.0.2.tgz#27360701532116bd3f1f9416929d176afe1e4610"
-  integrity sha512-9Kr/j4O16ISv8zBBhJoi4bXOYNTkFLOqSL3UDB0njXxCXNezjeyVrJyGOWtgfs/q2km1gwBcfH8q1yEGoMYunA==
 
 cross-spawn@^7.0.6:
   version "7.0.6"
@@ -4560,15 +4477,6 @@ snakecase-keys@5.4.4:
     snake-case "^3.0.4"
     type-fest "^2.5.2"
 
-snakecase-keys@8.0.1:
-  version "8.0.1"
-  resolved "https://registry.yarnpkg.com/snakecase-keys/-/snakecase-keys-8.0.1.tgz#cd75429b9b575fb79c1273334b4926bf49da2911"
-  integrity sha512-Sj51kE1zC7zh6TDlNNz0/Jn1n5HiHdoQErxO8jLtnyrkJW/M5PrI7x05uDgY3BO7OUQYKCvmeMurW6BPUdwEOw==
-  dependencies:
-    map-obj "^4.1.0"
-    snake-case "^3.0.4"
-    type-fest "^4.15.0"
-
 sonner@^1.7.4:
   version "1.7.4"
   resolved "https://registry.npmjs.org/sonner/-/sonner-1.7.4.tgz"
@@ -4592,7 +4500,7 @@ standardwebhooks@^1.0.0:
     "@stablelib/base64" "^1.0.0"
     fast-sha256 "^1.3.0"
 
-std-env@^3.7.0, std-env@^3.9.0:
+std-env@^3.9.0:
   version "3.10.0"
   resolved "https://registry.npmjs.org/std-env/-/std-env-3.10.0.tgz"
   integrity sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==
@@ -4730,14 +4638,6 @@ swr@2.3.4:
     dequal "^2.0.3"
     use-sync-external-store "^1.4.0"
 
-swr@^2.2.0:
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/swr/-/swr-2.4.0.tgz#cd11e368cb13597f61ee3334428aa20b5e81f36e"
-  integrity sha512-sUlC20T8EOt1pHmDiqueUWMmRRX03W7w5YxovWX7VR2KHEPCTMly85x05vpkP5i6Bu4h44ePSMD9Tc+G2MItFw==
-  dependencies:
-    dequal "^2.0.3"
-    use-sync-external-store "^1.6.0"
-
 tailwind-merge@^2.6.0:
   version "2.6.1"
   resolved "https://registry.npmjs.org/tailwind-merge/-/tailwind-merge-2.6.1.tgz"
@@ -4871,7 +4771,7 @@ type-fest@^2.5.2:
   resolved "https://registry.npmjs.org/type-fest/-/type-fest-2.19.0.tgz"
   integrity sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA==
 
-type-fest@^4.15.0, type-fest@^4.41.0:
+type-fest@^4.41.0:
   version "4.41.0"
   resolved "https://registry.npmjs.org/type-fest/-/type-fest-4.41.0.tgz"
   integrity sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==
@@ -5023,7 +4923,7 @@ use-sidecar@^1.1.3:
     detect-node-es "^1.1.0"
     tslib "^2.0.0"
 
-use-sync-external-store@^1.2.0, use-sync-external-store@^1.4.0, use-sync-external-store@^1.5.0, use-sync-external-store@^1.6.0:
+use-sync-external-store@^1.2.0, use-sync-external-store@^1.4.0, use-sync-external-store@^1.5.0:
   version "1.6.0"
   resolved "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz"
   integrity sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==
@@ -5135,11 +5035,6 @@ word-wrap@^1.2.5:
   version "1.2.5"
   resolved "https://registry.npmjs.org/word-wrap/-/word-wrap-1.2.5.tgz"
   integrity sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==
-
-ws@8.18.0:
-  version "8.18.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.0.tgz#0d7505a6eafe2b0e712d232b42279f53bc289bbc"
-  integrity sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==
 
 xstate@^5.20.2:
   version "5.26.0"
