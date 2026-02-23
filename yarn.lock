@@ -328,15 +328,16 @@
   resolved "https://registry.npmjs.org/@date-fns/tz/-/tz-1.4.1.tgz"
   integrity sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==
 
-"@devlider001/washlab-backend@C:\\Users\\user\\Desktop\\washlab-backend-main\\washlab-backend-main\\devlider001-washlab-backend-1.1.52.tgz":
+"@devlider001/washlab-backend@./devlider001-washlab-backend-1.1.52.tgz":
   version "1.1.52"
-  resolved "C:\\Users\\user\\Desktop\\washlab-backend-main\\washlab-backend-main\\devlider001-washlab-backend-1.1.52.tgz#24442849fa18a76d489a2255533a0bb43cd50144"
+  uid "24442849fa18a76d489a2255533a0bb43cd50144"
+  resolved "./devlider001-washlab-backend-1.1.52.tgz#24442849fa18a76d489a2255533a0bb43cd50144"
   dependencies:
     "@clerk/clerk-sdk-node" "^5.1.6"
     "@devlider001/washlab-backend" "^1.0.3"
     convex "^1.32.0"
 
-"@devlider001/washlab-backend@^1.0.3", "@devlider001/washlab-backend@^1.1.1", "@devlider001/washlab-backend@^1.1.51":
+"@devlider001/washlab-backend@^1.0.3", "@devlider001/washlab-backend@^1.1.1":
   version "1.1.51"
   resolved "https://registry.npmjs.org/@devlider001/washlab-backend/-/washlab-backend-1.1.51.tgz"
   integrity sha512-IoHluOmaV3V1l86pIuPg5FvD5+KhQGjnZGExpHDTEiNJUcZ6LQkJAOYIoBn24LDaD6IbcV8zK1YtlF7T5gfFcw==
@@ -344,6 +345,14 @@
     "@clerk/clerk-sdk-node" "^4.13.23"
     "@devlider001/washlab-backend" "^1.1.1"
     convex "^1.31.2"
+
+"@devlider001/washlab-backend@file:../../washlab-backend-main/washlab-backend-main/devlider001-washlab-backend-1.1.52.tgz":
+  version "1.1.52"
+  resolved "file:../../washlab-backend-main/washlab-backend-main/devlider001-washlab-backend-1.1.52.tgz#24442849fa18a76d489a2255533a0bb43cd50144"
+  dependencies:
+    "@clerk/clerk-sdk-node" "^5.1.6"
+    "@devlider001/washlab-backend" "^1.0.3"
+    convex "^1.32.0"
 
 "@emnapi/core@^1.4.3":
   version "1.8.1"
