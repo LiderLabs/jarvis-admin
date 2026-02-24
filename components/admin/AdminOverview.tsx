@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import {
   ShoppingBag,
-  DollarSign,
+  Banknote,
   TrendingUp,
   Clock,
   CheckCircle,
@@ -175,7 +175,7 @@ const AdminOverview = () => {
                 </div>
               </div>
               <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                <Banknote className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
           </CardContent>

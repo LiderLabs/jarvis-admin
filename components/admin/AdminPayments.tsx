@@ -21,14 +21,6 @@ import {
 } from "@/components/ui/select"
 import { PaymentTable } from "./PaymentTable"
 import { PaymentDetailsDialog } from "./PaymentDetailsDialog"
-import {
-  Search,
-  Filter,
-  Loader2,
-  CreditCard,
-  DollarSign,
-  TrendingUp,
-} from "lucide-react"
 import { format } from "date-fns"
 
 const PAYMENTS_LIMIT = 20
@@ -63,7 +55,6 @@ const AdminPayments = () => {
     }) | null
   >(null)
 
-  // Get branches for filter
   const {
     results: branchesPages,
   } = usePaginatedQuery(
@@ -73,13 +64,11 @@ const AdminPayments = () => {
   )
   const branchesList = branchesPages?.flat() || []
 
-  // Convert dates to timestamps
   const startTimestamp = startDate ? new Date(startDate).getTime() : undefined
   const endTimestamp = endDate
     ? new Date(endDate).getTime() + 24 * 60 * 60 * 1000 - 1
     : undefined
 
-  // Get payments with pagination
   const {
     results: paymentsPages,
     status: paginationStatus,
@@ -108,13 +97,13 @@ const AdminPayments = () => {
   )
 
   const allPayments = paymentsPages?.flat() || []
-  const isLoading = paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore"
+  const isLoading =
+    paginationStatus === "LoadingFirstPage" ||
+    paginationStatus === "LoadingMore"
   const hasMore = paginationStatus === "CanLoadMore"
 
-  // Payments already include order, customer, and branch details from the backend query
   const payments = allPayments
 
-  // Get summary stats
   const summary = useQuery(
     api.payments.getTransactionSummary,
     isAuthenticated
@@ -129,7 +118,6 @@ const AdminPayments = () => {
       : "skip"
   )
 
-  // Calculate stats from current payments
   const stats = {
     total: summary?.totalAmount || 0,
     count: summary?.totalTransactions || 0,
@@ -165,7 +153,6 @@ const AdminPayments = () => {
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₵{stats.total.toFixed(2)}</div>
@@ -176,7 +163,6 @@ const AdminPayments = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.count}</div>
@@ -187,7 +173,6 @@ const AdminPayments = () => {
         <Card className="border-green-200 dark:border-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.completed}</div>
@@ -198,7 +183,6 @@ const AdminPayments = () => {
         <Card className="border-yellow-200 dark:border-yellow-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Loader2 className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.pending}</div>
@@ -213,7 +197,6 @@ const AdminPayments = () => {
           <div className="flex items-center justify-between">
             <CardTitle>Filters</CardTitle>
             <Button variant="outline" size="sm" onClick={handleClearFilters}>
-              <Filter className="h-4 w-4 mr-2" />
               Clear Filters
             </Button>
           </div>
@@ -310,14 +293,7 @@ const AdminPayments = () => {
             onClick={() => loadMore(PAYMENTS_LIMIT)}
             disabled={isLoading}
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              "Load More Payments"
-            )}
+            {isLoading ? "Loading..." : "Load More Payments"}
           </Button>
         </div>
       )}
@@ -335,4 +311,3 @@ const AdminPayments = () => {
 }
 
 export default AdminPayments
-

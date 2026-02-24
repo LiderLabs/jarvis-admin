@@ -8,7 +8,6 @@ import { OrderStatusBadge } from "./OrderStatusBadge"
 import {
   Package,
   User,
-  MapPin,
   Calendar,
   DollarSign,
   MoreVertical,
@@ -39,19 +38,27 @@ export const OrderCard = ({
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold text-lg truncate">{order.orderNumber}</h3>
+              <h3 className="font-semibold text-lg truncate">
+                {order.orderNumber || "—"}
+              </h3>
               <OrderStatusBadge status={order.status} size="sm" />
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Package className="h-3.5 w-3.5" />
-              <span className="capitalize">{order.serviceType.replace(/_/g, " ")}</span>
+              <span className="capitalize">
+                {order.serviceType?.replace(/_/g, " ") || "N/A"}
+              </span>
               <span>•</span>
-              <span className="capitalize">{order.orderType.replace(/_/g, " ")}</span>
+              <span className="capitalize">
+                {order.orderType?.replace(/_/g, " ") || "N/A"}
+              </span>
             </div>
           </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -66,19 +73,25 @@ export const OrderCard = ({
               <DropdownMenuItem onClick={() => onUpdateStatus(order)}>
                 Update Status
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDelete(order)} className="text-destructive">
+              <DropdownMenuItem
+                onClick={() => onDelete(order)}
+                className="text-destructive focus:text-destructive"
+              >
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm">
             <User className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Customer:</span>
-            <span className="font-medium">{order.customerPhoneNumber}</span>
+            <span className="font-medium">
+              {order.customerPhoneNumber || "—"}
+            </span>
           </div>
 
           {(order.actualWeight || order.estimatedWeight) && (
@@ -86,7 +99,10 @@ export const OrderCard = ({
               <Package className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Weight:</span>
               <span className="font-medium">
-                {order.actualWeight || order.estimatedWeight} kg
+                {(order.actualWeight ?? order.estimatedWeight)?.toFixed?.(2) ??
+                  order.actualWeight ??
+                  order.estimatedWeight}{" "}
+                kg
               </span>
             </div>
           )}
@@ -95,15 +111,20 @@ export const OrderCard = ({
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Created:</span>
             <span className="font-medium">
-              {format(new Date(order.createdAt), "MMM d, yyyy")}
+              {order.createdAt
+                ? format(new Date(order.createdAt), "MMM d, yyyy")
+                : "—"}
             </span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="flex items-center gap-2 text-sm">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <span className="text-lg font-bold">₵{order.finalPrice.toFixed(2)}</span>
+              <span className="text-lg font-bold">
+                ₵{(order.finalPrice ?? 0).toFixed(2)}
+              </span>
             </div>
+
             {order.isDelivery && (
               <Badge variant="outline" className="text-xs">
                 Delivery
@@ -115,4 +136,3 @@ export const OrderCard = ({
     </Card>
   )
 }
-

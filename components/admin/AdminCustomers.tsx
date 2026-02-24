@@ -22,17 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -49,22 +38,15 @@ import {
   UserCheck,
   UserX,
   Ban,
-  Trash2,
   Search,
   Filter,
-  Phone,
-  Mail,
-  Calendar,
-  DollarSign,
-  ShoppingBag,
   AlertTriangle,
-  Shield,
+  MapPin,
 } from "lucide-react"
 import { CustomerTableRow } from "./CustomerTableRow"
 import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
 import { CustomersTableSkeleton } from "@/components/loaders/CustomersTableSkeleton"
 import { CustomersStatsSkeleton } from "@/components/loaders/CustomersStatsSkeleton"
-import { format } from "date-fns"
 import { Id } from "@jordan6699/washlab-backend/dataModel"
 
 const AdminCustomers = () => {
@@ -72,6 +54,7 @@ const AdminCustomers = () => {
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
+  const [branchFilter, setBranchFilter] = useState<string>("all")
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{
     id: Id<"users">
@@ -83,6 +66,9 @@ const AdminCustomers = () => {
 
   // Get customer stats
   const customerStats = useQuery(api.admin.getCustomerStats)
+
+  // Get branches for filter dropdown
+  const branches = useQuery(api.branches.getActive, {}) ?? []
 
   // Get customers with pagination (using debounced search)
   const {
@@ -103,6 +89,7 @@ const AdminCustomers = () => {
           : typeFilter === "walkin"
             ? false
             : undefined,
+      branchId: branchFilter === "all" ? undefined : branchFilter as any,
     },
     { initialNumItems: 20 }
   )
@@ -166,10 +153,7 @@ const AdminCustomers = () => {
     return <CustomersSkeleton />
   }
 
-  // Walk-in Users = customers who have NOT created an account (isRegistered === false)
-  const walkInCount = customerStats
-    ? customerStats.walkInCustomers
-    : 0
+  const walkInCount = customerStats ? customerStats.walkInCustomers : 0
 
   const stats = customerStats ? [
     {
@@ -185,7 +169,6 @@ const AdminCustomers = () => {
       color: "bg-green-500",
     },
     {
-      // Walk-in Users: only customers who have never created an account (isRegistered === false)
       label: "Walk-in Users",
       value: walkInCount.toString(),
       icon: UserX,
@@ -246,8 +229,8 @@ const AdminCustomers = () => {
       )}
 
       {/* Filters and Search */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search by name or phone number..."
@@ -257,7 +240,7 @@ const AdminCustomers = () => {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -270,7 +253,7 @@ const AdminCustomers = () => {
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Type" />
           </SelectTrigger>
           <SelectContent>
@@ -279,7 +262,38 @@ const AdminCustomers = () => {
             <SelectItem value="walkin">Walk-in Users</SelectItem>
           </SelectContent>
         </Select>
+        {/* Branch Filter */}
+        <Select value={branchFilter} onValueChange={setBranchFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <MapPin className="w-4 h-4 mr-2" />
+            <SelectValue placeholder="Branch" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Branches</SelectItem>
+            {branches.map((branch: any) => (
+              <SelectItem key={branch._id} value={branch._id}>
+                {branch.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Active branch filter indicator */}
+      {branchFilter !== "all" && (
+        <div className="mb-4 flex items-center gap-2">
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            {branches.find((b: any) => b._id === branchFilter)?.name ?? "Branch"}
+          </Badge>
+          <button
+            onClick={() => setBranchFilter("all")}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Status Change Dialog */}
       <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
@@ -369,7 +383,11 @@ const AdminCustomers = () => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
-                      <p className="text-muted-foreground">No customers found</p>
+                      <p className="text-muted-foreground">
+                        {branchFilter !== "all"
+                          ? "No customers found for this branch"
+                          : "No customers found"}
+                      </p>
                     </TableCell>
                   </TableRow>
                 )}
