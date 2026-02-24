@@ -18,7 +18,7 @@ import {
 import { User, Settings, LogOut, Menu, Bell } from "lucide-react"
 import { useMobileMenu } from "@/components/AdminLayout"
 import { useQuery } from "convex/react"
-import { api } from "@devlider001/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 
 export function DashboardHeader() {
   const { user, isLoaded } = useUser()

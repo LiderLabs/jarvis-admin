@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { usePaginatedQuery } from "convex/react"
-import { api } from "@devlider001/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {

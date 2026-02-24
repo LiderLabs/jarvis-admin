@@ -1,6 +1,6 @@
 "use client"
 
-import { Doc } from "@devlider001/washlab-backend/dataModel"
+import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
 import { PaymentStatusBadge } from "./PaymentStatusBadge"
 import { PaymentMethodBadge } from "./PaymentMethodBadge"

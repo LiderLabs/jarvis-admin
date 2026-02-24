@@ -9,7 +9,7 @@ import { DashboardHeader } from "@/components/DashboardHeader"
 import { useCurrentAdmin } from "@/hooks/use-current-admin"
 import { cn } from "@/lib/utils"
 import { useQuery } from "convex/react"
-import { api } from "@devlider001/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import {
   LayoutDashboard,
   Building2,

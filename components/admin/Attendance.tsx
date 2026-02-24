@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '@devlider001/washlab-backend/api';
+import { api } from '@jordan6699/washlab-backend/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,7 @@ import {
   Search,
 } from 'lucide-react';
 import { format, startOfToday, endOfToday } from 'date-fns';
-import { Id } from '@devlider001/washlab-backend/dataModel';
+import { Id } from '@jordan6699/washlab-backend/dataModel';
 
 const Attendance = () => {
   const [branchFilter, setBranchFilter] = useState<string>('all');

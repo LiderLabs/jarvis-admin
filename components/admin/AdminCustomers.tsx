@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useQuery, usePaginatedQuery, useMutation } from "convex/react"
 import { useDebounce } from "use-debounce"
-import { api } from "@devlider001/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -65,7 +65,7 @@ import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
 import { CustomersTableSkeleton } from "@/components/loaders/CustomersTableSkeleton"
 import { CustomersStatsSkeleton } from "@/components/loaders/CustomersStatsSkeleton"
 import { format } from "date-fns"
-import { Id } from "@devlider001/washlab-backend/dataModel"
+import { Id } from "@jordan6699/washlab-backend/dataModel"
 
 const AdminCustomers = () => {
   const [searchQuery, setSearchQuery] = useState("")

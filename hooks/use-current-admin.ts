@@ -2,8 +2,8 @@
 
 import { useUser } from "@clerk/nextjs"
 import { useQuery, useConvexAuth } from "convex/react"
-import { api } from "@devlider001/washlab-backend/api"
-import { Id } from "@devlider001/washlab-backend/dataModel"
+import { api } from "@jordan6699/washlab-backend/api"
+import { Id } from "@jordan6699/washlab-backend/dataModel"
 import { useEffect } from "react"
 
 export function useCurrentAdmin() {

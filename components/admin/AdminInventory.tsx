@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@devlider001/washlab-backend/api";
-import { Id } from "@devlider001/washlab-backend/dataModel";
+import { api } from "@jordan6699/washlab-backend/api";
+import { Id } from "@jordan6699/washlab-backend/dataModel";
 import { toast } from "sonner";
 import {
   Package,
