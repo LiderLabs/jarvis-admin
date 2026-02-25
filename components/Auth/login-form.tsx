@@ -78,7 +78,7 @@ export default function LoginForm() {
                       <div className='flex flex-col gap-8'>
                         <div className='flex flex-col gap-2'>
                           <h1 className='text-2xl font-bold tracking-tight text-foreground'>
-                            Welcome back 👋
+                            Welcome back 
                           </h1>
                           <p className='text-sm text-muted-foreground'>
                             Sign in to your WashLab admin account to continue
@@ -281,7 +281,7 @@ export default function LoginForm() {
         {/* Footer */}
         <div className='p-8 text-center'>
           <p className='text-xs text-muted-foreground'>
-            © {new Date().getFullYear()} WashLab. All rights reserved.
+            © {new Date().getFullYear()} WashLab · Powered by Lider Technologies LTD
           </p>
         </div>
       </div>
