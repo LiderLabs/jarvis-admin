@@ -287,7 +287,7 @@ const ServiceDraftsPanel = ({
 
   const handleUpdate = () => {
     if (!editId) return
-    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price } : d))
+    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price, imageDataUrl: imageDataUrl ?? d.imageDataUrl } : d))
     setEditId(null)
     resetForm()
   }

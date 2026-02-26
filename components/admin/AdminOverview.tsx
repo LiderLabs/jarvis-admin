@@ -213,7 +213,7 @@ const AdminOverview = () => {
           <CardContent className="pt-6">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Pending Orders</p>
+                <p className="text-sm font-medium text-muted-foreground">Orders in Progress</p>
                 <p className="text-3xl font-bold tracking-tight">{stats.pendingOrders}</p>
                 <p className="text-xs text-muted-foreground">Require attention</p>
               </div>

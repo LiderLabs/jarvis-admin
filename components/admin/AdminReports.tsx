@@ -1,595 +1,341 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { usePaginatedQuery, useQuery } from 'convex/react';
 import { api } from '@jordan6699/washlab-backend/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { Download, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  FileText,
-  Download,
-  DollarSign,
-  Package,
-  TrendingUp,
-  Users,
-  BarChart3,
-  RefreshCw,
-  CheckCircle,
-  Clock,
-  Store,
-  Globe,
-  Loader2,
-} from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
+} from 'recharts';
 
-const AdminReports = () => {
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return date.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [reportType, setReportType] = useState<'overview' | 'revenue' | 'customers' | 'orders' | 'daily'>('overview');
-  const [dailyExpandedId, setDailyExpandedId] = React.useState(null);
+const RANGES = [
+  { label: 'Last 7 Days', days: 7 },
+  { label: 'Last 30 Days', days: 30 },
+  { label: 'Last 90 Days', days: 90 },
+];
 
-  const startTimestamp = useMemo(() => new Date(startDate).getTime(), [startDate]);
-  const endTimestamp = useMemo(() => {
-    const date = new Date(endDate);
-    date.setHours(23, 59, 59, 999);
-    return date.getTime();
-  }, [endDate]);
-
-  const { results: ordersPages, status } = usePaginatedQuery(api.admin.getOrders, {}, { initialNumItems: 100 });
-  const orders = ordersPages?.flat() || [];
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order: any) => {
-      const orderTime = order._creationTime;
-      return orderTime >= startTimestamp && orderTime <= endTimestamp;
-    });
-  }, [orders, startTimestamp, endTimestamp]);
-
-  const stats = useMemo(() => {
-    const totalOrders = filteredOrders.length;
-    const totalRevenue = filteredOrders.reduce((sum: number, order: any) => sum + (order.finalPrice || 0), 0);
-    const completedOrders = filteredOrders.filter((o: any) => o.status === 'completed').length;
-    const pendingOrders = filteredOrders.filter((o: any) => o.status === 'pending' || o.status === 'pending_dropoff').length;
-    const walkInOrders = filteredOrders.filter((o: any) => o.orderType === 'walk_in').length;
-    const onlineOrders = filteredOrders.filter((o: any) => o.orderType === 'online').length;
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    const ordersByStatus = filteredOrders.reduce((acc: any, order: any) => {
-      acc[order.status] = (acc[order.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const dailyRevenue: any = {};
-    filteredOrders.forEach((order: any) => {
-      const date = format(new Date(order._creationTime), 'yyyy-MM-dd');
-      if (!dailyRevenue[date]) dailyRevenue[date] = { revenue: 0, orders: 0 };
-      dailyRevenue[date].revenue += order.finalPrice || 0;
-      dailyRevenue[date].orders += 1;
-    });
-
-    const revenueTrends = Object.entries(dailyRevenue)
-      .map(([date, data]: [string, any]) => ({ period: date, revenue: data.revenue, orders: data.orders }))
-      .sort((a, b) => a.period.localeCompare(b.period));
-
-    const customerStats: any = {};
-    filteredOrders.forEach((order: any) => {
-      const phone = order.customerPhoneNumber;
-      if (!customerStats[phone]) {
-        customerStats[phone] = {
-          customerId: phone,
-          name: order.customerName || phone,
-          phoneNumber: phone,
-          orderCount: 0,
-          totalRevenue: 0,
-        };
-      }
-      customerStats[phone].orderCount += 1;
-      customerStats[phone].totalRevenue += order.finalPrice || 0;
-    });
-
-    const topCustomers = Object.values(customerStats)
-      .map((c: any) => ({ ...c, averageOrderValue: c.totalRevenue / c.orderCount }))
-      .sort((a: any, b: any) => b.totalRevenue - a.totalRevenue);
-
-    return {
-      totalOrders,
-      totalRevenue,
-      completedOrders,
-      pendingOrders,
-      walkInOrders,
-      onlineOrders,
-      avgOrderValue,
-      ordersByStatus,
-      revenueTrends,
-      topCustomers,
-    };
-  }, [filteredOrders]);
-
-  const maxRevenue = useMemo(() => {
-    if (!stats.revenueTrends || stats.revenueTrends.length === 0) return 0;
-    return Math.max(...stats.revenueTrends.map((t: any) => t.revenue));
-  }, [stats.revenueTrends]);
-
-  const exportCSV = () => {
-    const csvRows = [
-      ['WashLab Reports'],
-      [`${startDate} to ${endDate}`],
-      [],
-      ['Metric', 'Value'],
-      ['Total Orders', stats.totalOrders],
-      ['Total Revenue', `₵${stats.totalRevenue.toFixed(2)}`],
-      ['Completed', stats.completedOrders],
-      ['Pending', stats.pendingOrders],
-      ['Walk-in', stats.walkInOrders],
-      ['Online', stats.onlineOrders],
-      ['Avg Order', `₵${stats.avgOrderValue.toFixed(2)}`],
-    ];
-    const csv = csvRows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `washlab-${startDate}-${endDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV downloaded');
-  };
-
-  const exportPDF = () => {
-    const w = window.open('', '_blank');
-    if (!w) return toast.error('Allow popups');
-    w.document.write(`
-      <html><head><title>WashLab Report</title>
-      <style>
-        body{font-family:Arial;padding:40px}
-        h1{border-bottom:3px solid #3b82f6;padding-bottom:10px}
-        .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin:20px 0}
-        .card{background:#f9fafb;padding:20px;border-radius:8px;border-left:4px solid #3b82f6}
-        .label{font-size:14px;color:#6b7280}
-        .value{font-size:24px;font-weight:bold}
-      </style></head><body>
-      <h1>WashLab Report</h1>
-      <p><b>Period:</b> ${format(new Date(startDate), 'MMM d, yyyy')} - ${format(new Date(endDate), 'MMM d, yyyy')}</p>
-      <div class="grid">
-        <div class="card"><div class="label">Revenue</div><div class="value">₵${stats.totalRevenue.toFixed(2)}</div></div>
-        <div class="card"><div class="label">Orders</div><div class="value">${stats.totalOrders}</div></div>
-      </div></body></html>
-    `);
-    w.document.close();
-    setTimeout(() => w.print(), 250);
-    toast.success('PDF generated');
-  };
-
-  const dailyReports = useQuery((api as any).dailyReports.getAll, reportType === 'daily' ? { startDate, endDate, limit: 100 } : 'skip') || [];
-  const exportDailyCSV = () => {
-    if (!dailyReports.length) return toast.error('No reports to export');
-    const rows = [
-      ['Date','Attendants','Washer Tokens','Dryer Tokens','Total Tokens','Cash','Mobile Money','Card','Paystack','Soap Units','Free Washes','Washing Plans','Tech Faults','Total Revenue','Status'],
-      ...dailyReports.map((r) => [r.date,(r.attendantsOnShift||[]).join('|'),r.washerTokensUsed,r.dryerTokensUsed,r.totalTokensUsed,r.cashAmount?.toFixed(2),r.mobileMoneylAmount?.toFixed(2),r.cardAmount?.toFixed(2),r.paystackAmount?.toFixed(2),r.soapUnitsUsed,r.freeWashCount,r.washingPlanCount,r.technicalFaultCount,r.totalRevenue?.toFixed(2),r.status])
-    ];
-    const csv = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href=url; a.download='washlab-daily-'+startDate+'-'+endDate+'.csv'; a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV downloaded');
-  };
-  if (status === 'LoadingFirstPage') {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
+function StatCard({ title, value, change, prefix = '' }: { title: string; value: string | number; change?: number; prefix?: string }) {
+  const isPos = (change ?? 0) >= 0;
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="text-muted-foreground mt-1">Business analytics and insights</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportCSV} size="sm">
-            <Download className="w-4 h-4 mr-2" />CSV
-          </Button>
-          <Button variant="outline" onClick={exportPDF} size="sm">
-            <FileText className="w-4 h-4 mr-2" />PDF
-          </Button>
-        </div>
-      </div>
-
-      <Card className="border-2">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Start Date</Label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label>End Date</Label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label>Report Type</Label>
-              <Select value={reportType} onValueChange={(v: any) => setReportType(v)}>
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="overview">Overview</SelectItem>
-                  <SelectItem value="revenue">Revenue Trends</SelectItem>
-                  <SelectItem value="customers">Top Customers</SelectItem>
-                  <SelectItem value="orders">All Orders</SelectItem>
-                  <SelectItem value="daily">Daily Branch Reports</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {reportType === 'overview' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-l-4 border-l-green-500">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Revenue</p>
-                    <p className="text-3xl font-bold">₵{stats.totalRevenue.toFixed(2)}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-blue-500">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Orders</p>
-                    <p className="text-3xl font-bold">{stats.totalOrders}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                    <Package className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-purple-500">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Avg Order</p>
-                    <p className="text-3xl font-bold">₵{stats.avgOrderValue.toFixed(2)}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-purple-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {stats.revenueTrends?.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />Revenue (Last 14 Days)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {stats.revenueTrends.slice(-14).map((t: any) => (
-                    <div key={t.period} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{format(new Date(t.period), 'MMM d')}</span>
-                        <div className="flex gap-3">
-                          <span className="text-xs text-muted-foreground">{t.orders} orders</span>
-                          <span className="font-semibold">₵{t.revenue.toFixed(2)}</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" style={{ width: `${maxRevenue > 0 ? (t.revenue / maxRevenue) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Package className="w-5 h-5" />Order Types</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                        <Store className="w-5 h-5 text-indigo-600" />
-                      </div>
-                      <span className="font-medium">Walk-in</span>
-                    </div>
-                    <span className="text-2xl font-bold">{stats.walkInOrders}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center">
-                        <Globe className="w-5 h-5 text-cyan-600" />
-                      </div>
-                      <span className="font-medium">Online</span>
-                    </div>
-                    <span className="text-2xl font-bold">{stats.onlineOrders}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BarChart3 className="w-5 h-5" />Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto">
-                  {Object.entries(stats.ordersByStatus || {}).map(([s, c]) => (
-                    <div key={s} className="flex justify-between p-2 hover:bg-muted/50 rounded">
-                      <span className="capitalize text-sm">{s.replace(/_/g, ' ')}</span>
-                      <Badge variant="secondary">{c as number}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5" />Top 3 Customers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.topCustomers?.length > 0 ? (
-                <div className="grid md:grid-cols-3 gap-4">
-                  {stats.topCustomers.slice(0, 3).map((c: any, i: number) => (
-                    <div key={c.customerId} className="relative bg-gradient-to-br from-muted/50 to-muted/30 rounded-lg p-5 border-2">
-                      <div className="absolute -top-3 -right-3 w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold">#{i + 1}</div>
-                      <div className="space-y-3">
-                        <div>
-                          <p className="font-bold text-lg truncate">{c.name}</p>
-                          <p className="text-sm text-muted-foreground truncate">{c.phoneNumber}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Orders</p>
-                            <p className="text-2xl font-bold">{c.orderCount}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Revenue</p>
-                            <p className="text-2xl font-bold">₵{c.totalRevenue.toFixed(2)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-12">No data</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" />Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg border">
-                  <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                  <p className="text-3xl font-bold">{stats.pendingOrders}</p>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border">
-                  <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Done</p>
-                  <p className="text-3xl font-bold">{stats.completedOrders}</p>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border">
-                  <Loader2 className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Active</p>
-                  <p className="text-3xl font-bold">
-                    {Object.entries(stats.ordersByStatus || {})
-                      .filter(([s]) => ['in_progress', 'washing', 'drying', 'folding'].includes(s))
-                      .reduce((a, [, c]) => a + (c as number), 0)}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border">
-                  <TrendingUp className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Total</p>
-                  <p className="text-3xl font-bold">{stats.totalOrders}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="bg-card border border-border rounded-xl p-4">
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">{title}</p>
+      <p className="text-2xl font-bold text-foreground">{prefix}{value}</p>
+      {change !== undefined && (
+        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${isPos ? 'text-green-600' : 'text-red-500'}`}>
+          {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {isPos ? '+' : ''}{change}%
         </div>
       )}
+    </div>
+  );
+}
 
-      {reportType === 'revenue' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><BarChart3 className="w-5 h-5" />All Revenue Trends</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.revenueTrends?.length > 0 ? (
-              <div className="space-y-3">
-                {stats.revenueTrends.map((t: any) => (
-                  <div key={t.period} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{format(new Date(t.period), 'EEEE, MMM d, yyyy')}</span>
-                      <div className="flex gap-4">
-                        <span className="text-muted-foreground">{t.orders} orders</span>
-                        <span className="font-bold text-lg">₵{t.revenue.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-3">
-                      <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full" style={{ width: `${maxRevenue > 0 ? (t.revenue / maxRevenue) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No data</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {reportType === 'customers' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5" />Top 10 Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.topCustomers?.length > 0 ? (
-              <div className="space-y-4">
-                {stats.topCustomers.slice(0, 10).map((c: any, i: number) => (
-                  <div key={c.customerId} className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg border hover:bg-muted/50">
-                    <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/70 text-primary-foreground rounded-full flex items-center justify-center font-bold text-lg">#{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-lg truncate">{c.name}</p>
-                      <p className="text-sm text-muted-foreground truncate">{c.phoneNumber}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-6 text-right">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Orders</p>
-                        <p className="text-xl font-bold">{c.orderCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Revenue</p>
-                        <p className="text-xl font-bold">₵{c.totalRevenue.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Avg</p>
-                        <p className="text-xl font-bold">₵{c.averageOrderValue.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-12">No data</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {reportType === 'daily' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div><h2 className="text-lg font-semibold">Daily Branch Reports</h2><p className="text-sm text-muted-foreground">End-of-day reports submitted by attendants</p></div>
-            <Button variant="outline" size="sm" onClick={exportDailyCSV}><Download className="w-4 h-4 mr-2" />Export CSV</Button>
-          </div>
-          {dailyReports.length === 0 ? (
-            <Card><CardContent className="py-16 text-center text-muted-foreground">No daily reports found for this date range.</CardContent></Card>
-          ) : (
-            <div className="space-y-3">
-              {dailyReports.map((r) => (
-                <Card key={r._id} className="overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 cursor-pointer hover:bg-muted/30" onClick={() => setDailyExpandedId(dailyExpandedId === r._id ? null : r._id)}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center"><FileText className="w-5 h-5 text-primary" /></div>
-                      <div><p className="font-semibold text-sm">{r.date}</p><p className="text-xs text-muted-foreground">{(r.attendantsOnShift||[]).join(', ')||'No attendants listed'}</p></div>
-                    </div>
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <div className="text-center"><p className="text-xs text-muted-foreground">Tokens</p><p className="font-bold text-sm">{r.totalTokensUsed}</p></div>
-                      <div className="text-center"><p className="text-xs text-muted-foreground">Revenue</p><p className="font-bold text-sm text-primary">GHS {r.totalRevenue?.toFixed(2)}</p></div>
-                      <Badge variant={r.status === 'submitted' ? 'default' : 'secondary'} className="capitalize">{r.status}</Badge>
-                      <ChevronDown className={"w-4 h-4 transition-transform " + (dailyExpandedId === r._id ? 'rotate-180' : '')} />
-                    </div>
-                  </div>
-                  {dailyExpandedId === r._id && (
-                    <div className="border-t bg-muted/20 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {[['Washer Tokens',r.washerTokensUsed],['Dryer Tokens',r.dryerTokensUsed],['Cash','GHS '+r.cashAmount?.toFixed(2)],['Mobile Money','GHS '+r.mobileMoneylAmount?.toFixed(2)],['Card','GHS '+r.cardAmount?.toFixed(2)],['Paystack','GHS '+r.paystackAmount?.toFixed(2)],['Soap Units',r.soapUnitsUsed],['Free Washes',r.freeWashCount],['Washing Plans',r.washingPlanCount],['Tech Faults',r.technicalFaultCount]].map(([label,value]) => (
-                        <div key={String(label)} className="bg-card border rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{label}</p><p className="font-semibold text-sm">{value}</p></div>
-                      ))}
-                      {r.serviceBreakdown?.length > 0 && (<div className="col-span-2 sm:col-span-3 md:col-span-4 bg-card border rounded-lg p-3"><p className="text-xs text-muted-foreground mb-2">Service Breakdown</p><div className="flex flex-wrap gap-2">{r.serviceBreakdown.map((s) => (<span key={s.serviceType} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">{s.label}: {s.count} orders · {s.tokensUsed} tokens</span>))}</div></div>)}
-                      {r.technicalFaultNotes && (<div className="col-span-2 sm:col-span-3 md:col-span-4 bg-destructive/5 border border-destructive/20 rounded-lg p-3"><p className="text-xs text-destructive mb-1">Fault Notes</p><p className="text-sm">{r.technicalFaultNotes}</p></div>)}
-                      {r.notes && (<div className="col-span-2 sm:col-span-3 md:col-span-4 bg-muted/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Notes</p><p className="text-sm">{r.notes}</p></div>)}
-                    </div>
-                  )}
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {reportType === 'orders' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Orders ({filteredOrders.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredOrders.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-2">Order #</th>
-                      <th className="text-left py-3 px-2">Customer</th>
-                      <th className="text-left py-3 px-2">Date</th>
-                      <th className="text-left py-3 px-2">Status</th>
-                      <th className="text-right py-3 px-2">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredOrders.map((o: any) => (
-                      <tr key={o._id} className="border-b hover:bg-muted/50">
-                        <td className="py-3 px-2 font-medium">{o.orderNumber}</td>
-                        <td className="py-3 px-2">{o.customerName || o.customerPhoneNumber}</td>
-                        <td className="py-3 px-2">{format(new Date(o._creationTime), 'MMM d, yyyy')}</td>
-                        <td className="py-3 px-2">
-                          <Badge variant="secondary">{o.status.replace(/_/g, ' ')}</Badge>
-                        </td>
-                        <td className="text-right py-3 px-2 font-semibold">₵{(o.finalPrice || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No orders</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+      <p className="text-xs text-muted-foreground mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="text-sm font-semibold" style={{ color: p.color }}>
+          {p.name}: {p.dataKey === 'revenue' ? `GHS ${p.value.toFixed(2)}` : p.value}
+        </p>
+      ))}
     </div>
   );
 };
 
-export default AdminReports;
+const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) => void }) => {
+  const [rangeDays, setRangeDays] = useState(30);
+  const [selectedBranch, setSelectedBranch] = useState('all');
+
+  const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
+  const branches = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? [];
+  const { results: ordersPages } = usePaginatedQuery(api.admin.getOrders, {} as any, { initialNumItems: 200 });
+  const orders = ordersPages?.flat() ?? [];
+
+  const dailyReports = useQuery(
+    (api as any).dailyReports.getAll,
+    {
+      startDate: format(subDays(new Date(), rangeDays), 'yyyy-MM-dd'),
+      endDate: format(new Date(), 'yyyy-MM-dd'),
+      limit: 50,
+    }
+  ) ?? [];
+
+  const startTs = subDays(new Date(), rangeDays).getTime();
+  const endTs = new Date().getTime();
+
+  const filtered = useMemo(() =>
+    orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs &&
+      (selectedBranch === 'all' || o.branchId === selectedBranch)),
+    [orders, startTs, endTs, selectedBranch]
+  );
+
+  const prevFiltered = useMemo(() => {
+    const prevStart = subDays(new Date(), rangeDays * 2).getTime();
+    return orders.filter((o: any) => o._creationTime >= prevStart && o._creationTime < startTs);
+  }, [orders, startTs, rangeDays]);
+
+  const stats = useMemo(() => {
+    const totalRevenue = filtered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const prevRevenue = prevFiltered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const revChange = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : 0;
+
+    const mobileMoney = filtered.filter((o: any) => o.paymentMethod === 'mobile_money').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const card = filtered.filter((o: any) => o.paymentMethod === 'card').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const cash = filtered.filter((o: any) => o.paymentMethod === 'cash').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+
+    // Build daily chart data
+    const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
+    for (let i = rangeDays - 1; i >= 0; i--) {
+      const d = format(subDays(new Date(), i), 'MMM d');
+      dayMap[d] = { revenue: 0, orders: 0, mobileMoney: 0, cash: 0, card: 0 };
+    }
+    filtered.forEach((o: any) => {
+      const d = format(new Date(o._creationTime), 'MMM d');
+      if (dayMap[d]) {
+        dayMap[d].revenue += o.finalPrice || 0;
+        dayMap[d].orders += 1;
+        if (o.paymentMethod === 'mobile_money') dayMap[d].mobileMoney += o.finalPrice || 0;
+        if (o.paymentMethod === 'cash') dayMap[d].cash += o.finalPrice || 0;
+        if (o.paymentMethod === 'card') dayMap[d].card += o.finalPrice || 0;
+      }
+    });
+
+    const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }));
+    // Show only every Nth label to avoid crowding
+    const step = rangeDays <= 7 ? 1 : rangeDays <= 30 ? 5 : 10;
+    const chartDataLabeled = chartData.map((d, i) => ({ ...d, displayDate: i % step === 0 ? d.date : '' }));
+
+    // Token counts from daily reports
+    const totalTokens = dailyReports.reduce((s: number, r: any) => s + (r.totalTokensUsed || 0), 0);
+
+    return { totalRevenue, revChange, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
+  }, [filtered, prevFiltered, rangeDays, dailyReports]);
+
+  const exportCSV = () => {
+    const rows = [
+      ['Date', 'Branch', 'Attendant', 'Tokens', 'Revenue', 'Status'],
+      ...dailyReports.map((r: any) => [
+        r.date,
+        r.branchName || '',
+        (r.attendantsOnShift || []).join('|'),
+        r.totalTokensUsed,
+        r.totalRevenue?.toFixed(2),
+        r.status,
+      ]),
+    ];
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `washlab-reports-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exported');
+  };
+
+  return (
+    <div className="space-y-6 pb-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Report Overview</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Monitor station performance and revenue across all branches.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={String(rangeDays)} onValueChange={v => setRangeDays(Number(v))}>
+            <SelectTrigger className="w-36 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RANGES.map(r => (
+                <SelectItem key={r.days} value={String(r.days)}>{r.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-36 text-sm">
+              <SelectValue placeholder="All Branches" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Branches</SelectItem>
+              {branches.map((b: any) => (
+                <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={exportCSV}>
+            <Download className="w-4 h-4 mr-1.5" /> Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatCard title="Tokens Sold" value={stats.totalTokens} change={12} />
+        <StatCard title="Total Revenue" value={`GHS ${stats.totalRevenue.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={stats.revChange} />
+        <StatCard title="Total Mobile Money" value={`GHS ${stats.mobileMoney.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={-5} />
+        <StatCard title="Card Total" value={`GHS ${stats.card.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={15} />
+        <StatCard title="Cash Total" value={`GHS ${stats.cash.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={15} />
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Revenue Over Time - Area Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">Revenue Over Time</CardTitle>
+                <CardDescription className="text-xs">Daily financial growth tracking</CardDescription>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-green-600">GHS {stats.totalRevenue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Total this period</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="displayDate" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} tickFormatter={v => `${v}`} width={50} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#revenueGrad)" dot={false} activeDot={{ r: 4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Payment Distribution - Bar Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">Payment Distribution</CardTitle>
+                <CardDescription className="text-xs">Mobile Money vs Card vs Cash</CardDescription>
+              </div>
+              {stats.totalRevenue > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {Math.round(((stats.mobileMoney + stats.card) / stats.totalRevenue) * 100)}% DIGITAL
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={stats.chartData.filter((_, i) => i % Math.max(1, Math.floor(stats.chartData.length / 14)) === 0)} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="displayDate" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={40} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Bar dataKey="mobileMoney" name="Mobile Money" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="card" name="Card" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="cash" name="Cash" fill="#10b981" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Daily Reports Table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Recent Daily Reports</CardTitle>
+            <Button variant="link" size="sm" className="text-primary text-xs p-0 h-auto">View All Reports</Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  {['Date', 'Branch', 'Attendants on Duty', 'Tokens', 'Revenue', 'Status', 'Action'].map(h => (
+                    <th key={h} className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {((dailyReports as any[]) || []).slice(0, 10).map((r: any) => (
+                  <tr key={r._id} className="border-b border-border hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-foreground">
+                      {format(new Date(r.date), 'MMM d, yyyy')}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-foreground">{r.branchName || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                      {(r.attendantsOnShift || []).join(', ') || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-foreground">{r.totalTokensUsed ?? 0}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-foreground">
+                      GHS {(r.totalRevenue || 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant={r.status === 'submitted' ? 'default' : 'secondary'}
+                        className={`text-xs capitalize ${r.status === 'submitted' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}
+                      >
+                        {r.status === 'submitted' ? 'Closed' : 'Open'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => onViewReport?.(r._id)}
+                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" /> View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {dailyReports.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                      No reports found for this period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {dailyReports.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <p className="text-xs text-muted-foreground">Showing 1 to {Math.min(10, dailyReports.length)} of {dailyReports.length} reports</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled className="text-xs">Previous</Button>
+                <Button variant="outline" size="sm" className="text-xs">Next</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default AdminReportsOverview;
