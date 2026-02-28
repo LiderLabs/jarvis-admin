@@ -78,7 +78,7 @@ export default function LoginForm() {
                       <div className='flex flex-col gap-8'>
                         <div className='flex flex-col gap-2'>
                           <h1 className='text-2xl font-bold tracking-tight text-foreground'>
-                            Welcome back 
+                            Welcome back
                           </h1>
                           <p className='text-sm text-muted-foreground'>
                             Sign in to your WashLab admin account to continue
@@ -162,44 +162,6 @@ export default function LoginForm() {
                     <SignIn.Step name='verifications'>
                       <Clerk.GlobalError className='text-sm text-destructive mb-4' />
 
-                      <SignIn.Strategy name='password'>
-                        <div className='flex flex-col gap-8'>
-                          <div className='flex flex-col gap-2'>
-                            <h1 className='text-2xl font-bold tracking-tight'>
-                              Welcome back, <SignIn.SafeIdentifier />
-                            </h1>
-                            <p className='text-sm text-muted-foreground'>Enter your password to continue</p>
-                          </div>
-                          <div className='flex flex-col gap-5'>
-                            <Clerk.Field name='password' className='flex flex-col gap-2'>
-                              <Clerk.Label asChild>
-                                <Label className='text-sm font-medium'>Password</Label>
-                              </Clerk.Label>
-                              <Clerk.Input type='password' placeholder='Enter your password' asChild>
-                                <PasswordInput className='h-11' />
-                              </Clerk.Input>
-                              <Clerk.FieldError className='text-xs text-destructive' />
-                            </Clerk.Field>
-
-                            <SignIn.Action submit asChild>
-                              <Button disabled={isGlobalLoading} className='h-11 w-full font-medium'>
-                                <Clerk.Loading>
-                                  {(isLoading) =>
-                                    isLoading ? <Loader className='size-4 animate-spin' /> : "Sign in"
-                                  }
-                                </Clerk.Loading>
-                              </Button>
-                            </SignIn.Action>
-
-                            <SignIn.Action navigate='choose-strategy' asChild>
-                              <Button type='button' size='sm' variant='ghost' className='text-muted-foreground'>
-                                Use another method
-                              </Button>
-                            </SignIn.Action>
-                          </div>
-                        </div>
-                      </SignIn.Strategy>
-
                       <SignIn.Strategy name='email_code'>
                         <Clerk.GlobalError className='text-sm text-destructive mb-4' />
                         <div className='flex flex-col gap-8'>
@@ -270,6 +232,45 @@ export default function LoginForm() {
                           </div>
                         </div>
                       </SignIn.Strategy>
+
+                      <SignIn.Strategy name='password'>
+                        <div className='flex flex-col gap-8'>
+                          <div className='flex flex-col gap-2'>
+                            <h1 className='text-2xl font-bold tracking-tight'>
+                              Welcome back, <SignIn.SafeIdentifier />
+                            </h1>
+                            <p className='text-sm text-muted-foreground'>Enter your password to continue</p>
+                          </div>
+                          <div className='flex flex-col gap-5'>
+                            <Clerk.Field name='password' className='flex flex-col gap-2'>
+                              <Clerk.Label asChild>
+                                <Label className='text-sm font-medium'>Password</Label>
+                              </Clerk.Label>
+                              <Clerk.Input type='password' placeholder='Enter your password' asChild>
+                                <PasswordInput className='h-11' />
+                              </Clerk.Input>
+                              <Clerk.FieldError className='text-xs text-destructive' />
+                            </Clerk.Field>
+
+                            <SignIn.Action submit asChild>
+                              <Button disabled={isGlobalLoading} className='h-11 w-full font-medium'>
+                                <Clerk.Loading>
+                                  {(isLoading) =>
+                                    isLoading ? <Loader className='size-4 animate-spin' /> : "Sign in"
+                                  }
+                                </Clerk.Loading>
+                              </Button>
+                            </SignIn.Action>
+
+                            <SignIn.Action navigate='choose-strategy' asChild>
+                              <Button type='button' size='sm' variant='ghost' className='text-muted-foreground'>
+                                Use another method
+                              </Button>
+                            </SignIn.Action>
+                          </div>
+                        </div>
+                      </SignIn.Strategy>
+
                     </SignIn.Step>
                   </>
                 )}

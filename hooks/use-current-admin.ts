@@ -4,7 +4,6 @@ import { useUser } from "@clerk/nextjs"
 import { useQuery, useConvexAuth } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import { Id } from "@jordan6699/washlab-backend/dataModel"
-import { useEffect } from "react"
 
 export function useCurrentAdmin() {
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser()
@@ -17,24 +16,8 @@ export function useCurrentAdmin() {
   // Pass undefined to skip the query when not authenticated (prevents "Authentication required" errors)
   const convexUser = useQuery(
     api.admin.getCurrentUser,
-    clerkUser && isConvexAuthenticated && !isConvexAuthLoading ? {} : undefined
+    clerkUser && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip"
   )
-
-  // Debug logging
-  useEffect(() => {
-    console.log("🔍 useCurrentAdmin Debug:", {
-      clerkUser: clerkUser?.id,
-      isClerkLoaded,
-      convexUser: convexUser
-        ? {
-            _id: convexUser._id,
-            email: convexUser.email,
-            role: convexUser.role,
-            clerkUserId: convexUser.clerkUserId,
-          }
-        : null,
-    })
-  }, [clerkUser, isClerkLoaded, convexUser])
 
   // const isLoading = !isClerkLoaded || (clerkUser && convexUser === undefined)
   const isLoading = (clerkUser && convexUser === undefined) || !isClerkLoaded
