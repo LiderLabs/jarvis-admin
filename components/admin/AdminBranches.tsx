@@ -75,13 +75,24 @@ interface ServiceDraft {
   price: number
 }
 
+interface FormData {
+  name: string
+  code: string
+  address: string
+  city: string
+  country: string
+  phoneNumber: string
+  email: string
+  deliveryFee: number
+  stationPin: string
+}
+
 const BRANCHES_LIMIT = 20
 
-// Auto-generate a code from a service name: "Wash & Dry" → "wash_and_dry"
 const toServiceCode = (name: string) =>
   name.toLowerCase().trim().replace(/&/g, "and").replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
 
-// ─── Branch Services Panel (shown inside edit dialog for existing branches) ──
+// ─── Branch Services Panel ────────────────────────────────────────────────────
 const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const services = useQuery(api.admin.getBranchServices, { branchId })
   const createBranchService = useMutation(api.admin.createBranchService)
@@ -95,52 +106,31 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const resetForm = () => setForm({ name: "", price: 0 })
 
   const handleAdd = async () => {
-    if (!form.name || form.price <= 0) {
-      toast.error("Service name and price are required")
-      return
-    }
+    if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
     try {
-      await createBranchService({
-        branchId,
-        name: form.name.trim(),
-        code: toServiceCode(form.name),
-        price: form.price,
-      })
+      await createBranchService({ branchId, name: form.name.trim(), code: toServiceCode(form.name), price: form.price })
       toast.success("Service added")
       setShowAdd(false)
       resetForm()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to add service")
-    }
+    } catch (e: any) { toast.error(e.message || "Failed to add service") }
   }
 
   const handleUpdate = async () => {
     if (!editingId) return
-    if (!form.name || form.price <= 0) {
-      toast.error("Service name and price are required")
-      return
-    }
+    if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
     try {
-      await updateBranchService({
-        serviceId: editingId,
-        name: form.name.trim(),
-        price: form.price,
-      })
+      await updateBranchService({ serviceId: editingId, name: form.name.trim(), price: form.price })
       toast.success("Service updated")
       setEditingId(null)
       resetForm()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update service")
-    }
+    } catch (e: any) { toast.error(e.message || "Failed to update service") }
   }
 
   const handleDelete = async (serviceId: Id<"branchServices">) => {
     try {
       await deleteBranchService({ serviceId })
       toast.success("Service deleted")
-    } catch (e: any) {
-      toast.error(e.message || "Failed to delete service")
-    }
+    } catch (e: any) { toast.error(e.message || "Failed to delete service") }
   }
 
   const startEdit = (s: any) => {
@@ -152,34 +142,17 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   return (
     <div className="space-y-3">
       {services === undefined ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : services.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-3">
-          No services yet. Add the services offered at this branch.
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-3">No services yet. Add the services offered at this branch.</p>
       ) : (
         <div className="space-y-2">
           {services.map((s: any) => (
             <div key={s._id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
               {editingId === s._id ? (
                 <div className="flex-1 grid grid-cols-2 gap-2 mr-2">
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Service name"
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    value={form.price}
-                    onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
-                    placeholder="Price"
-                    className="h-8 text-sm"
-                    min="0"
-                    step="0.01"
-                  />
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
+                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
                 </div>
               ) : (
                 <div className="flex-1">
@@ -197,12 +170,8 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
                   <>
                     <span className="font-bold text-primary text-sm">&#8373;{s.price.toFixed(2)}</span>
                     <span className="text-xs text-muted-foreground">/ load</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}>
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s._id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </>
                 )}
               </div>
@@ -210,29 +179,16 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           ))}
         </div>
       )}
-
       {showAdd ? (
         <div className="border rounded-lg p-3 space-y-2 bg-background">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Service Name *</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g., Wash & Dry"
-                className="h-8 text-sm"
-              />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Wash & Dry" className="h-8 text-sm" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
-                min="0"
-                step="0.01"
-                className="h-8 text-sm"
-              />
+              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
           <div className="flex gap-2 pt-1">
@@ -241,28 +197,16 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           </div>
         </div>
       ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full h-8 text-xs border-dashed"
-          onClick={() => { setShowAdd(true); setEditingId(null) }}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          Add Service
+        <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+          <Plus className="h-3.5 w-3.5 mr-1.5" />Add Service
         </Button>
       )}
     </div>
   )
 }
 
-// ─── Service Drafts Panel (for new branches before they're saved) ────────────
-const ServiceDraftsPanel = ({
-  drafts,
-  onChange,
-}: {
-  drafts: ServiceDraft[]
-  onChange: (drafts: ServiceDraft[]) => void
-}) => {
+// ─── Service Drafts Panel ─────────────────────────────────────────────────────
+const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onChange: (drafts: ServiceDraft[]) => void }) => {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: "", price: 0 })
   const [editId, setEditId] = useState<string | null>(null)
@@ -270,24 +214,15 @@ const ServiceDraftsPanel = ({
   const resetForm = () => setForm({ name: "", price: 0 })
 
   const handleAdd = () => {
-    if (!form.name || form.price <= 0) {
-      toast.error("Service name and price are required")
-      return
-    }
-    const newDraft: ServiceDraft = {
-      id: `draft_${Date.now()}`,
-      name: form.name.trim(),
-      code: toServiceCode(form.name),
-      price: form.price,
-    }
-    onChange([...drafts, newDraft])
+    if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
+    onChange([...drafts, { id: `draft_${Date.now()}`, name: form.name.trim(), code: toServiceCode(form.name), price: form.price }])
     setShowAdd(false)
     resetForm()
   }
 
   const handleUpdate = () => {
     if (!editId) return
-    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price, imageDataUrl: imageDataUrl ?? d.imageDataUrl } : d))
+    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price } : d))
     setEditId(null)
     resetForm()
   }
@@ -303,9 +238,7 @@ const ServiceDraftsPanel = ({
   return (
     <div className="space-y-3">
       {drafts.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-3">
-          No services yet. Add the services offered at this branch.
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-3">No services yet. Add the services offered at this branch.</p>
       ) : (
         <div className="space-y-2">
           {drafts.map((d) => (
@@ -316,9 +249,7 @@ const ServiceDraftsPanel = ({
                   <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
                 </div>
               ) : (
-                <div className="flex-1">
-                  <span className="font-medium text-sm">{d.name}</span>
-                </div>
+                <div className="flex-1"><span className="font-medium text-sm">{d.name}</span></div>
               )}
               <div className="flex items-center gap-2 shrink-0">
                 {editId === d.id ? (
@@ -339,29 +270,16 @@ const ServiceDraftsPanel = ({
           ))}
         </div>
       )}
-
       {showAdd ? (
         <div className="border rounded-lg p-3 space-y-2 bg-background">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Service Name *</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g., Wash & Dry"
-                className="h-8 text-sm"
-              />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Wash & Dry" className="h-8 text-sm" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
-                min="0"
-                step="0.01"
-                className="h-8 text-sm"
-              />
+              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
           <div className="flex gap-2 pt-1">
@@ -371,13 +289,87 @@ const ServiceDraftsPanel = ({
         </div>
       ) : (
         <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditId(null) }}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          Add Service
+          <Plus className="h-3.5 w-3.5 mr-1.5" />Add Service
         </Button>
       )}
     </div>
   )
 }
+
+// ─── Branch Form Fields (outside main component to prevent focus loss) ────────
+const BranchFormFields = ({
+  prefix = "",
+  formData,
+  setFormData,
+  selectedBranch,
+}: {
+  prefix?: string
+  formData: FormData
+  setFormData: (data: FormData) => void
+  selectedBranch: Branch | null
+}) => (
+  <>
+    <div className='grid grid-cols-2 gap-4'>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}name`}>Branch Name *</Label>
+        <Input id={`${prefix}name`} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder='e.g., Independence Hall' />
+      </div>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}code`}>Branch Code *</Label>
+        <Input id={`${prefix}code`} value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })} placeholder='e.g., IND' maxLength={10} />
+      </div>
+    </div>
+    <div className='space-y-2'>
+      <Label htmlFor={`${prefix}address`}>Address *</Label>
+      <Input id={`${prefix}address`} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder='Street address' />
+    </div>
+    <div className='grid grid-cols-2 gap-4'>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}city`}>City *</Label>
+        <Input id={`${prefix}city`} value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} placeholder='e.g., Accra' />
+      </div>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}country`}>Country</Label>
+        <Input id={`${prefix}country`} value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} placeholder='e.g., Ghana' />
+      </div>
+    </div>
+    <div className='grid grid-cols-2 gap-4'>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}phoneNumber`}>Phone Number *</Label>
+        <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder='0XX XXX XXXX' />
+      </div>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}email`}>Email</Label>
+        <Input id={`${prefix}email`} type='email' value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder='branch@washlab.com' />
+      </div>
+    </div>
+    <Separator />
+    <div className='space-y-2'>
+      <Label htmlFor={`${prefix}deliveryFee`}>Delivery Fee (&#8373;)</Label>
+      <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
+    </div>
+    <Separator />
+    <div className='space-y-2'>
+      <Label htmlFor={`${prefix}stationPin`} className='flex items-center gap-2'>
+        <Lock className='h-4 w-4' />
+        Station PIN {prefix === "" ? "*" : (selectedBranch && !(selectedBranch as any).stationPinHash ? "*" : "")}
+      </Label>
+      <Input
+        id={`${prefix}stationPin`}
+        type='password'
+        placeholder={prefix !== "" && selectedBranch && (selectedBranch as any).stationPinHash ? 'Leave empty to keep current PIN' : 'Enter 4-6 digit PIN'}
+        value={formData.stationPin}
+        onChange={(e) => setFormData({ ...formData, stationPin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+        maxLength={6}
+      />
+      <p className='text-xs text-muted-foreground'>
+        {prefix !== "" && selectedBranch && (selectedBranch as any).stationPinHash
+          ? 'Leave empty to keep current PIN, or enter new PIN (4-6 digits) to change'
+          : '4-6 digits. Required to secure station login.'}
+      </p>
+    </div>
+  </>
+)
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const AdminBranches = () => {
@@ -390,7 +382,7 @@ const AdminBranches = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>([])
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     code: "",
     address: "",
@@ -402,11 +394,7 @@ const AdminBranches = () => {
     stationPin: "",
   })
 
-  const {
-    results: branchesPages,
-    status: paginationStatus,
-    loadMore,
-  } = usePaginatedQuery(
+  const { results: branchesPages, status: paginationStatus, loadMore } = usePaginatedQuery(
     api.admin.getBranches,
     isAuthenticated ? { includeInactive: includeInactive || undefined } : "skip",
     { initialNumItems: BRANCHES_LIMIT }
@@ -427,10 +415,7 @@ const AdminBranches = () => {
     setServiceDrafts([])
   }
 
-  const handleOpenAddDialog = () => {
-    resetForm()
-    setShowAddDialog(true)
-  }
+  const handleOpenAddDialog = () => { resetForm(); setShowAddDialog(true) }
 
   const handleOpenEditDialog = (branch: Branch) => {
     setSelectedBranch(branch)
@@ -457,14 +442,11 @@ const AdminBranches = () => {
 
   const handleCreateBranch = async () => {
     if (!formData.name || !formData.code || !formData.address || !formData.city || !formData.phoneNumber) {
-      toast.error("Please fill in all required fields")
-      return
+      toast.error("Please fill in all required fields"); return
     }
     if (!formData.stationPin || formData.stationPin.trim().length < 4) {
-      toast.error("Station PIN is required and must be at least 4 characters")
-      return
+      toast.error("Station PIN is required and must be at least 4 characters"); return
     }
-
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       const branchId = await createBranch({
@@ -479,16 +461,9 @@ const AdminBranches = () => {
         deliveryFee: formData.deliveryFee,
         stationPin: formData.stationPin.trim(),
       } as any)
-
       for (const draft of serviceDrafts) {
-        await createBranchService({
-          branchId: branchId as Id<"branches">,
-          name: draft.name,
-          code: draft.code,
-          price: draft.price,
-        })
+        await createBranchService({ branchId: branchId as Id<"branches">, name: draft.name, code: draft.code, price: draft.price })
       }
-
       toast.success("Branch created successfully!")
       handleCloseDialogs()
     } catch (error: unknown) {
@@ -499,18 +474,14 @@ const AdminBranches = () => {
   const handleUpdateBranch = async () => {
     if (!selectedBranch) return
     if (!formData.name || !formData.code || !formData.address || !formData.city || !formData.phoneNumber) {
-      toast.error("Please fill in all required fields")
-      return
+      toast.error("Please fill in all required fields"); return
     }
     if (formData.stationPin && formData.stationPin.trim().length < 4) {
-      toast.error("Station PIN must be at least 4 characters")
-      return
+      toast.error("Station PIN must be at least 4 characters"); return
     }
     if (!formData.stationPin && !(selectedBranch as any).stationPinHash) {
-      toast.error("Station PIN is required. Please enter a PIN for this branch")
-      return
+      toast.error("Station PIN is required. Please enter a PIN for this branch"); return
     }
-
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       await updateBranch({
@@ -553,70 +524,6 @@ const AdminBranches = () => {
     }
   }
 
-  const BranchFormFields = ({ prefix = "" }: { prefix?: string }) => (
-    <>
-      <div className='grid grid-cols-2 gap-4'>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}name`}>Branch Name *</Label>
-          <Input id={`${prefix}name`} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder='e.g., Independence Hall' />
-        </div>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}code`}>Branch Code *</Label>
-          <Input id={`${prefix}code`} value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })} placeholder='e.g., IND' maxLength={10} />
-        </div>
-      </div>
-      <div className='space-y-2'>
-        <Label htmlFor={`${prefix}address`}>Address *</Label>
-        <Input id={`${prefix}address`} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder='Street address' />
-      </div>
-      <div className='grid grid-cols-2 gap-4'>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}city`}>City *</Label>
-          <Input id={`${prefix}city`} value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} placeholder='e.g., Accra' />
-        </div>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}country`}>Country</Label>
-          <Input id={`${prefix}country`} value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} placeholder='e.g., Ghana' />
-        </div>
-      </div>
-      <div className='grid grid-cols-2 gap-4'>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}phoneNumber`}>Phone Number *</Label>
-          <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder='0XX XXX XXXX' />
-        </div>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}email`}>Email</Label>
-          <Input id={`${prefix}email`} type='email' value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder='branch@washlab.com' />
-        </div>
-      </div>
-      <Separator />
-      <div className='space-y-2'>
-        <Label htmlFor={`${prefix}deliveryFee`}>Delivery Fee (&#8373;)</Label>
-        <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
-      </div>
-      <Separator />
-      <div className='space-y-2'>
-        <Label htmlFor={`${prefix}stationPin`} className='flex items-center gap-2'>
-          <Lock className='h-4 w-4' />
-          Station PIN {prefix === "" ? "*" : (selectedBranch && !(selectedBranch as any).stationPinHash ? "*" : "")}
-        </Label>
-        <Input
-          id={`${prefix}stationPin`}
-          type='password'
-          placeholder={prefix !== "" && selectedBranch && (selectedBranch as any).stationPinHash ? 'Leave empty to keep current PIN' : 'Enter 4-6 digit PIN'}
-          value={formData.stationPin}
-          onChange={(e) => setFormData({ ...formData, stationPin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-          maxLength={6}
-        />
-        <p className='text-xs text-muted-foreground'>
-          {prefix !== "" && selectedBranch && (selectedBranch as any).stationPinHash
-            ? 'Leave empty to keep current PIN, or enter new PIN (4-6 digits) to change'
-            : '4-6 digits. Required to secure station login.'}
-        </p>
-      </div>
-    </>
-  )
-
   return (
     <div>
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8'>
@@ -629,8 +536,7 @@ const AdminBranches = () => {
             {includeInactive ? "Show Active Only" : "Show All"}
           </Button>
           <Button onClick={handleOpenAddDialog} className='gap-2 w-full sm:w-auto'>
-            <Plus className='w-4 h-4 shrink-0' />
-            <span>Add Branch</span>
+            <Plus className='w-4 h-4 shrink-0' /><span>Add Branch</span>
           </Button>
         </div>
       </div>
@@ -707,16 +613,14 @@ const AdminBranches = () => {
             <DialogDescription>Create a new WashLab branch location</DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-4'>
-            <BranchFormFields prefix="" />
+            <BranchFormFields prefix="" formData={formData} setFormData={setFormData} selectedBranch={selectedBranch} />
             <Separator />
             <div>
               <div className='flex items-center gap-2 mb-3'>
                 <Tag className='h-4 w-4 text-primary' />
                 <Label className='text-base font-semibold'>Services & Pricing</Label>
               </div>
-              <p className='text-xs text-muted-foreground mb-3'>
-                Add the services this branch offers. Each service is priced per load.
-              </p>
+              <p className='text-xs text-muted-foreground mb-3'>Add the services this branch offers. Each service is priced per load.</p>
               <ServiceDraftsPanel drafts={serviceDrafts} onChange={setServiceDrafts} />
             </div>
           </div>
@@ -735,16 +639,14 @@ const AdminBranches = () => {
             <DialogDescription>Update branch information</DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-4'>
-            <BranchFormFields prefix="edit-" />
+            <BranchFormFields prefix="edit-" formData={formData} setFormData={setFormData} selectedBranch={selectedBranch} />
             <Separator />
             <div>
               <div className='flex items-center gap-2 mb-3'>
                 <Tag className='h-4 w-4 text-primary' />
                 <Label className='text-base font-semibold'>Services & Pricing</Label>
               </div>
-              <p className='text-xs text-muted-foreground mb-3'>
-                Manage the services this branch offers. Changes apply immediately.
-              </p>
+              <p className='text-xs text-muted-foreground mb-3'>Manage the services this branch offers. Changes apply immediately.</p>
               {selectedBranch && <BranchServicesPanel branchId={selectedBranch._id} />}
             </div>
           </div>
