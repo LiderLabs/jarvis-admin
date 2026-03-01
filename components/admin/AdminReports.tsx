@@ -24,6 +24,7 @@ import {
 } from 'recharts';
 
 const RANGES = [
+  { label: 'Today', days: 1 },
   { label: 'Last 7 Days', days: 7 },
   { label: 'Last 30 Days', days: 30 },
   { label: 'Last 90 Days', days: 90 },
@@ -60,7 +61,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) => void }) => {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState(1);
   const [selectedBranch, setSelectedBranch] = useState('all');
 
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
