@@ -253,90 +253,30 @@ const AdminOrders = () => {
             </Button>
 
             {/* Calendar trigger */}
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-9 min-w-[200px] justify-start gap-2 font-medium border-2 border-primary/30 hover:border-primary/60 transition-colors"
-                >
-                  <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
-                  <span>
-                    {isSelectedToday
-                      ? "Today · " + format(selectedDate, "MMM d, yyyy")
-                      : format(selectedDate, "EEE, MMM d, yyyy")}
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="w-auto p-0 shadow-lg border rounded-xl overflow-hidden"
-                align="start"
-                sideOffset={6}
-              >
-                {/* Calendar header */}
-                <div className="bg-primary px-4 py-3">
-                  <p className="text-xs font-semibold text-primary-foreground/70 uppercase tracking-wider">
-                    Select Date
-                  </p>
-                  <p className="text-lg font-bold text-primary-foreground mt-0.5">
-                    {format(selectedDate, "EEEE, MMMM d")}
-                  </p>
-                </div>
-
-                {/* Calendar widget */}
-                <div className="p-3">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setSelectedDate(date)
-                        setCalendarOpen(false)
-                      }
+            <div className="flex items-center gap-2">
+                <div className="relative flex items-center">
+                  <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
+                  <input
+                    type="date"
+                    value={format(selectedDate, "yyyy-MM-dd")}
+                    max={format(new Date(), "yyyy-MM-dd")}
+                    onChange={(e) => {
+                      if (e.target.value) setSelectedDate(new Date(e.target.value + "T12:00:00"))
                     }}
-                    disabled={(date) => date > new Date()}
-                    initialFocus
-                    classNames={{
-                      months: "flex flex-col space-y-4",
-                      month: "space-y-4",
-                      caption: "flex justify-center pt-1 relative items-center",
-                      caption_label: "text-sm font-semibold",
-                      nav: "space-x-1 flex items-center",
-                      nav_button: "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 hover:bg-muted rounded-md inline-flex items-center justify-center",
-                      nav_button_previous: "absolute left-1",
-                      nav_button_next: "absolute right-1",
-                      table: "w-full border-collapse",
-                      head_row: "grid grid-cols-7",
-                      head_cell: "text-muted-foreground rounded-md w-9 font-medium text-[0.8rem] flex items-center justify-center",
-                      row: "grid grid-cols-7 w-full mt-2",
-                      cell: "h-9 w-9 text-center text-sm relative p-0 focus-within:relative focus-within:z-20",
-                      day: "h-9 w-9 p-0 font-normal rounded-md hover:bg-muted inline-flex items-center justify-center",
-                      day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md font-semibold",
-                      day_today: "bg-accent text-accent-foreground font-semibold",
-                      day_outside: "text-muted-foreground opacity-40",
-                      day_disabled: "text-muted-foreground opacity-25 cursor-not-allowed",
-                      day_hidden: "invisible",
-                    }}
+                    className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
                   />
                 </div>
-
-                {/* Footer: Today shortcut */}
                 {!isSelectedToday && (
-                  <div className="border-t px-3 py-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full h-8 text-xs font-medium text-primary hover:text-primary"
-                      onClick={() => {
-                        setSelectedDate(new Date())
-                        setCalendarOpen(false)
-                      }}
-                    >
-                      Jump to Today
-                    </Button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
+                    onClick={() => setSelectedDate(new Date())}
+                  >
+                    Today
+                  </Button>
                 )}
-              </PopoverContent>
-            </Popover>
+            </div>
 
             {/* Next */}
             <Button
