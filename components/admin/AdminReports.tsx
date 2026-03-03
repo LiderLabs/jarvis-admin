@@ -1,4 +1,5 @@
 'use client';
+import AdminReportDetail from './AdminReportDetail';
 
 import { useState, useMemo } from 'react';
 import { usePaginatedQuery, useQuery } from 'convex/react';
@@ -339,4 +340,14 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   );
 };
 
-export default AdminReportsOverview;
+const AdminReports = () => {
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
+  if (selectedReportId) {
+    return <AdminReportDetail reportId={selectedReportId} onBack={() => setSelectedReportId(null)} />;
+  }
+
+  return <AdminReportsOverview onViewReport={(id) => setSelectedReportId(id)} />;
+};
+
+export default AdminReports;
