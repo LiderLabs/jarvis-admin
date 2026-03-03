@@ -67,6 +67,7 @@ export const OrderTable = ({
               <TableHead className="w-[120px] whitespace-nowrap">Payment Method</TableHead>
               <TableHead className="w-[80px] whitespace-nowrap">Weight</TableHead>
               <TableHead className="w-[100px] whitespace-nowrap">Amount</TableHead>
+              <TableHead className="w-[110px] whitespace-nowrap">Final Paid</TableHead>
               <TableHead className="w-[110px] whitespace-nowrap">Date</TableHead>
               <TableHead className="w-[70px] text-right whitespace-nowrap">Actions</TableHead>
             </TableRow>

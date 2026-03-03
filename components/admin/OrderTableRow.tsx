@@ -136,7 +136,16 @@ export const OrderTableRow = ({
       <TableCell className="whitespace-nowrap">
         <div className="flex items-center gap-1">
           <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-semibold">₵{order.finalPrice.toFixed(2)}</span>
+          <span className="font-semibold">₵{(order.totalPrice ?? order.finalPrice ?? 0).toFixed(2)}</span>
+        </div>
+      </TableCell>
+      {/* Final Paid */}
+      <TableCell className="whitespace-nowrap">
+        <div className="flex flex-col">
+          <span className="font-semibold text-green-600">₵{(order.finalPrice ?? order.totalPrice ?? 0).toFixed(2)}</span>
+          {(order.totalPrice ?? 0) > (order.finalPrice ?? 0) && (
+            <span className="text-xs text-muted-foreground line-through">₵{(order.totalPrice ?? 0).toFixed(2)}</span>
+          )}
         </div>
       </TableCell>
 

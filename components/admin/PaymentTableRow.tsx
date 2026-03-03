@@ -66,11 +66,16 @@ export const PaymentTableRow = ({
 
       {/* Amount */}
       <TableCell className="whitespace-nowrap">
-        <div className="flex items-center gap-1">
-          <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-semibold">
-            {payment.currency} {payment.amount.toFixed(2)}
-          </span>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1">
+            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-semibold text-green-600">
+              {payment.currency} {(payment.order?.finalPrice ?? payment.amount ?? 0).toFixed(2)}
+            </span>
+          </div>
+          {payment.order?.totalPrice && payment.order.totalPrice > (payment.order?.finalPrice ?? payment.amount) && (
+            <span className="text-xs text-muted-foreground line-through ml-4">₵{payment.order.totalPrice.toFixed(2)}</span>
+          )}
         </div>
       </TableCell>
 

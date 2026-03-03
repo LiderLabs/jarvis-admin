@@ -60,12 +60,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+import AdminReportDetail from './AdminReportDetail';
+
 const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) => void }) => {
   const [rangeDays, setRangeDays] = useState(1);
   const [selectedBranch, setSelectedBranch] = useState('all');
 
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
   const branches = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? [];
+  const branchMap = Object.fromEntries(branches.map((b: any) => [b._id, b.name]));
   const { results: ordersPages } = usePaginatedQuery(api.admin.getOrders, {} as any, { initialNumItems: 200 });
   const orders = ordersPages?.flat() ?? [];
 
@@ -74,7 +77,8 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     {
       startDate: format(subDays(new Date(), rangeDays), 'yyyy-MM-dd'),
       endDate: format(new Date(), 'yyyy-MM-dd'),
-      limit: 50,
+      ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
+      limit: 100,
     }
   ) ?? [];
 
@@ -93,13 +97,14 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   }, [orders, startTs, rangeDays]);
 
   const stats = useMemo(() => {
-    const totalRevenue = filtered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const drRevenue = dailyReports.reduce((s: number, r: any) => s + (r.totalRevenue || 0), 0);
+    const totalRevenue = drRevenue > 0 ? drRevenue : filtered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
     const prevRevenue = prevFiltered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
     const revChange = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : 0;
 
-    const mobileMoney = filtered.filter((o: any) => o.paymentMethod === 'mobile_money').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const card = filtered.filter((o: any) => o.paymentMethod === 'card').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const cash = filtered.filter((o: any) => o.paymentMethod === 'cash').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const mobileMoney = dailyReports.reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'mobile_money').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const card = dailyReports.reduce((s: number, r: any) => s + (r.cardAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'card').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    const cash = dailyReports.reduce((s: number, r: any) => s + (r.cashAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'cash').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
 
     // Build daily chart data
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
@@ -288,7 +293,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">
                       {format(new Date(r.date), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-4 py-3 text-sm text-foreground">{r.branchName || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-foreground">{r.branchName || branchMap[r.branchId] || '—'}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {(r.attendantsOnShift || []).join(', ') || '—'}
                     </td>
@@ -339,4 +344,11 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   );
 };
 
-export default AdminReportsOverview;
+const AdminReports = () => {
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  if (selectedReportId) {
+    return <AdminReportDetail reportId={selectedReportId} onBack={() => setSelectedReportId(null)} />;
+  }
+  return <AdminReportsOverview onViewReport={(id) => setSelectedReportId(id)} />;
+};
+export default AdminReports;
