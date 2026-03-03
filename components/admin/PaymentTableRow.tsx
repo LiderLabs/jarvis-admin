@@ -66,15 +66,22 @@ export const PaymentTableRow = ({
 
       {/* Amount */}
       <TableCell className="whitespace-nowrap">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1">
-            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-semibold text-green-600">
-              {payment.currency} {(payment.order?.finalPrice ?? payment.amount ?? 0).toFixed(2)}
-            </span>
-          </div>
-          {payment.order?.totalPrice && payment.order.totalPrice > (payment.order?.finalPrice ?? payment.amount) && (
-            <span className="text-xs text-muted-foreground line-through ml-4">₵{payment.order.totalPrice.toFixed(2)}</span>
+        <div className="flex flex-col gap-0.5">
+          {(payment.order?.finalPrice != null ? payment.order.finalPrice : payment.amount) === 0 ? (
+            <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 w-fit">FREE</span>
+          ) : (
+            <div className="flex items-center gap-1">
+              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="font-semibold text-green-600">
+                {payment.currency} {(payment.order?.finalPrice != null ? payment.order.finalPrice : (payment.amount ?? 0)).toFixed(2)}
+              </span>
+            </div>
+          )}
+          {payment.order?.finalPrice != null && payment.order?.totalPrice != null && payment.order.totalPrice > payment.order.finalPrice && (
+            <span className="text-xs text-muted-foreground line-through ml-1">₵{payment.order.totalPrice.toFixed(2)}</span>
+          )}
+          {payment.order && (payment.order as any).voucherCode && (
+            <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-1 w-fit">{(payment.order as any).voucherCode}</span>
           )}
         </div>
       </TableCell>
