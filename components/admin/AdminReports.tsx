@@ -98,9 +98,10 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     const prevRevenue = prevFiltered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
     const revChange = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : 0;
 
-    const mobileMoney = filtered.filter((o: any) => o.paymentMethod === 'mobile_money').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const card = filtered.filter((o: any) => o.paymentMethod === 'card').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const cash = filtered.filter((o: any) => o.paymentMethod === 'cash').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    // Read payment breakdown from daily reports (accurate — sourced from payments table)
+    const mobileMoney = dailyReports.reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0);
+    const card = dailyReports.reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
+    const cash = dailyReports.reduce((s: number, r: any) => s + (r.cashAmount || 0), 0);
 
     // Build daily chart data
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
