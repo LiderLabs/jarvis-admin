@@ -53,13 +53,7 @@ const sidebarItems = [
     path: "/dashboard/orders",
     group: "management",
   },
-  {
-    id: "inventory",
-    label: "Inventory",
-    icon: Boxes,
-    path: "/dashboard/inventory",
-    group: "management",
-  },
+  // HIDDEN: inventory - not ready for production
   {
     id: "payments",
     label: "Payments",
@@ -88,13 +82,7 @@ const sidebarItems = [
     path: "/dashboard/station-attendance",
     group: "management",
   },
-  {
-    id: "vouchers",
-    label: "Vouchers",
-    icon: Ticket,
-    path: "/dashboard/vouchers",
-    group: "features",
-  },
+  // HIDDEN: vouchers - not ready for production
   {
     id: "loyalty",
     label: "Loyalty",
@@ -109,13 +97,7 @@ const sidebarItems = [
     path: "/dashboard/reports",
     group: "features",
   },
-  {
-    id: "whatsapp",
-    label: "WhatsApp",
-    icon: MessageSquare,
-    path: "/dashboard/whatsapp",
-    group: "features",
-  },
+  // HIDDEN: whatsapp - not ready for production
   {
     id: "settings",
     label: "Settings",
@@ -130,13 +112,7 @@ const sidebarItems = [
     path: "/dashboard/notifications",
     group: "notifications",
   },
-  {
-    id: "audit-logs",
-    label: "Audit Logs",
-    icon: FileText,
-    path: "/dashboard/audit-logs",
-    group: "system",
-  },
+  // HIDDEN: audit-logs - not ready for production
   {
     id: "customers",
     label: "Customers",

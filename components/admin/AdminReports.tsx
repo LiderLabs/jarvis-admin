@@ -1,4 +1,5 @@
 'use client';
+import AdminReportDetail from './AdminReportDetail';
 
 import { useState, useMemo } from 'react';
 import { usePaginatedQuery, useQuery } from 'convex/react';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { Download, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -60,8 +61,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-import AdminReportDetail from './AdminReportDetail';
-
 const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) => void }) => {
   const [rangeDays, setRangeDays] = useState(1);
   const [selectedBranch, setSelectedBranch] = useState('all');
@@ -97,39 +96,43 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   }, [orders, startTs, rangeDays]);
 
   const stats = useMemo(() => {
-    const drRevenue = dailyReports.reduce((s: number, r: any) => s + (r.totalRevenue || 0), 0);
-    const totalRevenue = drRevenue > 0 ? drRevenue : filtered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const prevRevenue = prevFiltered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const revChange = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : 0;
+    // All revenue from daily reports (accurate — only completed payments)
+    const totalRevenue = (dailyReports as any[]).reduce((s: number, r: any) =>
+      s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
+    const revChange = 0;
 
-    const mobileMoney = dailyReports.reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'mobile_money').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const card = dailyReports.reduce((s: number, r: any) => s + (r.cardAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'card').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const cash = dailyReports.reduce((s: number, r: any) => s + (r.cashAmount || 0), 0) || filtered.filter((o: any) => o.paymentMethod === 'cash').reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+    // Payment breakdown from daily reports
+    const mobileMoney = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0);
+    const card = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
+    const cash = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cashAmount || 0), 0);
 
-    // Build daily chart data
+    // Build daily chart data from daily reports
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
     for (let i = rangeDays - 1; i >= 0; i--) {
       const d = format(subDays(new Date(), i), 'MMM d');
       dayMap[d] = { revenue: 0, orders: 0, mobileMoney: 0, cash: 0, card: 0 };
     }
-    filtered.forEach((o: any) => {
-      const d = format(new Date(o._creationTime), 'MMM d');
+
+    (dailyReports as any[]).forEach((r: any) => {
+      const d = format(new Date(r.date), 'MMM d');
       if (dayMap[d]) {
-        dayMap[d].revenue += o.finalPrice || 0;
-        dayMap[d].orders += 1;
-        if (o.paymentMethod === 'mobile_money') dayMap[d].mobileMoney += o.finalPrice || 0;
-        if (o.paymentMethod === 'cash') dayMap[d].cash += o.finalPrice || 0;
-        if (o.paymentMethod === 'card') dayMap[d].card += o.finalPrice || 0;
+        dayMap[d].revenue += (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0);
+        dayMap[d].mobileMoney += r.mobileMoneylAmount || 0;
+        dayMap[d].cash += r.cashAmount || 0;
+        dayMap[d].card += (r.cardAmount || 0) + (r.paystackAmount || 0);
       }
     });
 
+    filtered.forEach((o: any) => {
+      const d = format(new Date(o._creationTime), 'MMM d');
+      if (dayMap[d]) dayMap[d].orders += 1;
+    });
+
     const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }));
-    // Show only every Nth label to avoid crowding
     const step = rangeDays <= 7 ? 1 : rangeDays <= 30 ? 5 : 10;
     const chartDataLabeled = chartData.map((d, i) => ({ ...d, displayDate: i % step === 0 ? d.date : '' }));
 
-    // Token counts from daily reports
-    const totalTokens = dailyReports.reduce((s: number, r: any) => s + (r.totalTokensUsed || 0), 0);
+    const totalTokens = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.totalTokensUsed || 0), 0);
 
     return { totalRevenue, revChange, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
   }, [filtered, prevFiltered, rangeDays, dailyReports]);
@@ -137,7 +140,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   const exportCSV = () => {
     const rows = [
       ['Date', 'Branch', 'Attendant', 'Tokens', 'Revenue', 'Status'],
-      ...dailyReports.map((r: any) => [
+      ...(dailyReports as any[]).map((r: any) => [
         r.date,
         r.branchName || '',
         (r.attendantsOnShift || []).join('|'),
@@ -159,7 +162,6 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Report Overview</h1>
@@ -167,24 +169,16 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
         </div>
         <div className="flex items-center gap-2">
           <Select value={String(rangeDays)} onValueChange={v => setRangeDays(Number(v))}>
-            <SelectTrigger className="w-36 text-sm">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-36 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {RANGES.map(r => (
-                <SelectItem key={r.days} value={String(r.days)}>{r.label}</SelectItem>
-              ))}
+              {RANGES.map(r => (<SelectItem key={r.days} value={String(r.days)}>{r.label}</SelectItem>))}
             </SelectContent>
           </Select>
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-36 text-sm">
-              <SelectValue placeholder="All Branches" />
-            </SelectTrigger>
+            <SelectTrigger className="w-36 text-sm"><SelectValue placeholder="All Branches" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Branches</SelectItem>
-              {branches.map((b: any) => (
-                <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>
-              ))}
+              {branches.map((b: any) => (<SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={exportCSV}>
@@ -193,24 +187,21 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
         </div>
       </div>
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard title="Tokens Sold" value={stats.totalTokens} change={12} />
-        <StatCard title="Total Revenue" value={`GHS ${stats.totalRevenue.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={stats.revChange} />
-        <StatCard title="Total Mobile Money" value={`GHS ${stats.mobileMoney.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={-5} />
-        <StatCard title="Card Total" value={`GHS ${stats.card.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={15} />
-        <StatCard title="Cash Total" value={`GHS ${stats.cash.toLocaleString('en', { minimumFractionDigits: 0 })}`} change={15} />
+        <StatCard title="Tokens Sold" value={stats.totalTokens} />
+        <StatCard title="Total Revenue" value={`GHS ${stats.totalRevenue.toLocaleString('en', { minimumFractionDigits: 0 })}`} />
+        <StatCard title="Mobile Money" value={`GHS ${stats.mobileMoney.toLocaleString('en', { minimumFractionDigits: 0 })}`} />
+        <StatCard title="Card Total" value={`GHS ${stats.card.toLocaleString('en', { minimumFractionDigits: 0 })}`} />
+        <StatCard title="Cash Total" value={`GHS ${stats.cash.toLocaleString('en', { minimumFractionDigits: 0 })}`} />
       </div>
 
-      {/* Charts Row */}
       <div className="grid lg:grid-cols-2 gap-5">
-        {/* Revenue Over Time - Area Chart */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base font-semibold">Revenue Over Time</CardTitle>
-                <CardDescription className="text-xs">Daily financial growth tracking</CardDescription>
+                <CardDescription className="text-xs">Daily received payments</CardDescription>
               </div>
               <div className="text-right">
                 <p className="text-xl font-bold text-green-600">GHS {stats.totalRevenue.toLocaleString()}</p>
@@ -229,7 +220,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="displayDate" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} tickFormatter={v => `${v}`} width={50} />
+                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={50} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#revenueGrad)" dot={false} activeDot={{ r: 4 }} />
               </AreaChart>
@@ -237,7 +228,6 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
           </CardContent>
         </Card>
 
-        {/* Payment Distribution - Bar Chart */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -254,7 +244,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={stats.chartData.filter((_, i) => i % Math.max(1, Math.floor(stats.chartData.length / 14)) === 0)} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+              <BarChart data={stats.chartData.filter((_: any, i: number) => i % Math.max(1, Math.floor(stats.chartData.length / 14)) === 0)} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="displayDate" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={40} />
@@ -269,7 +259,6 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
         </Card>
       </div>
 
-      {/* Recent Daily Reports Table */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -290,48 +279,32 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
               <tbody>
                 {((dailyReports as any[]) || []).slice(0, 10).map((r: any) => (
                   <tr key={r._id} className="border-b border-border hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-foreground">
-                      {format(new Date(r.date), 'MMM d, yyyy')}
-                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-foreground">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                     <td className="px-4 py-3 text-sm text-foreground">{r.branchName || branchMap[r.branchId] || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {(r.attendantsOnShift || []).join(', ') || '—'}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{(r.attendantsOnShift || []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{r.totalTokensUsed ?? 0}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground">
-                      GHS {(r.totalRevenue || 0).toFixed(2)}
-                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-foreground">GHS {(r.totalRevenue || 0).toFixed(2)}</td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant={r.status === 'submitted' ? 'default' : 'secondary'}
-                        className={`text-xs capitalize ${r.status === 'submitted' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}
-                      >
+                      <Badge variant={r.status === 'submitted' ? 'default' : 'secondary'} className={`text-xs capitalize ${r.status === 'submitted' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                         {r.status === 'submitted' ? 'Closed' : 'Open'}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => onViewReport?.(r._id)}
-                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                      >
+                      <button onClick={() => onViewReport?.(r._id)} className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
                         <Eye className="w-3 h-3" /> View Details
                       </button>
                     </td>
                   </tr>
                 ))}
-                {dailyReports.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                      No reports found for this period.
-                    </td>
-                  </tr>
+                {(dailyReports as any[]).length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">No reports found for this period.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          {dailyReports.length > 0 && (
+          {(dailyReports as any[]).length > 0 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <p className="text-xs text-muted-foreground">Showing 1 to {Math.min(10, dailyReports.length)} of {dailyReports.length} reports</p>
+              <p className="text-xs text-muted-foreground">Showing 1 to {Math.min(10, (dailyReports as any[]).length)} of {(dailyReports as any[]).length} reports</p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled className="text-xs">Previous</Button>
                 <Button variant="outline" size="sm" className="text-xs">Next</Button>
@@ -346,9 +319,12 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
 
 const AdminReports = () => {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
   if (selectedReportId) {
     return <AdminReportDetail reportId={selectedReportId} onBack={() => setSelectedReportId(null)} />;
   }
+
   return <AdminReportsOverview onViewReport={(id) => setSelectedReportId(id)} />;
 };
+
 export default AdminReports;

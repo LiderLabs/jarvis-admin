@@ -36,6 +36,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   }
 
   const totalRevenue = (report.cashAmount || 0) + (report.mobileMoneylAmount || 0) + (report.cardAmount || 0) + (report.paystackAmount || 0);
+  const cardTotal = (report.cardAmount || 0) + (report.paystackAmount || 0);
   const totalPaymentRecorded = (report.cashAmount || 0) + (report.mobileMoneylAmount || 0) + (report.cardAmount || 0) + (report.paystackAmount || 0);
   const hasDiscrepancy = Math.abs(totalRevenue - (report.totalRevenue || 0)) > 0.01;
 
@@ -109,7 +110,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   });
 
   return (
-    <div className="space-y-5 pb-8 max-w-3xl">
+    <div className="space-y-5 pb-8 max-w-4xl mx-auto px-4">
       {/* Breadcrumb + header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -139,24 +140,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </Button>
       </div>
 
-      {/* Soap usage warning (example threshold) */}
-      {(report.soapUnitsUsed || 0) > 3 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-amber-800 text-sm">Soap Usage Warning</p>
-              <p className="text-amber-700 text-sm mt-0.5">
-                Soap consumption is higher than the historical average for this volume of laundry.
-              </p>
-              <button className="text-amber-600 text-sm font-semibold mt-1 hover:underline flex items-center gap-1">
-                Check Inventory <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main 3-col card row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Sales Summary */}
@@ -171,15 +154,13 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Wash Token</p>
-              <p className="text-base font-bold text-foreground">
-                GHS {((report.washerTokensUsed || 0) * 25).toFixed(2)}
-              </p>
+              <p className="text-xl font-bold text-foreground">{report.washerTokensUsed || 0}</p>
+              <p className="text-xs text-muted-foreground">GHS {((report.washerTokensUsed || 0) * 25).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dry Tokens</p>
-              <p className="text-base font-bold text-foreground">
-                GHS {((report.dryerTokensUsed || 0) * 25).toFixed(2)}
-              </p>
+              <p className="text-xl font-bold text-foreground">{report.dryerTokensUsed || 0}</p>
+              <p className="text-xs text-muted-foreground">GHS {((report.dryerTokensUsed || 0) * 25).toFixed(2)}</p>
             </div>
           </div>
         </div>
@@ -190,9 +171,9 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           <div className="space-y-2.5">
             {[
               { label: 'Mobile Money', value: report.mobileMoneylAmount || 0, icon: Smartphone, color: 'text-blue-500' },
-              { label: 'Card', value: report.cardAmount || 0, icon: CreditCard, color: 'text-indigo-500' },
+              { label: 'Card', value: cardTotal, icon: CreditCard, color: 'text-indigo-500' },
               { label: 'Cash', value: report.cashAmount || 0, icon: Banknote, color: 'text-green-500' },
-              ...(report.paystackAmount ? [{ label: 'Paystack', value: report.paystackAmount, icon: CreditCard, color: 'text-purple-500' }] : []),
+
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
