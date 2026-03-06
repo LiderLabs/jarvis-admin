@@ -94,38 +94,45 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   }, [orders, startTs, rangeDays]);
 
   const stats = useMemo(() => {
-    const totalRevenue = filtered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const prevRevenue = prevFiltered.reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
-    const revChange = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : 0;
+    // All revenue from daily reports (accurate — only completed payments)
+    const totalRevenue = dailyReports.reduce((s: number, r: any) =>
+      s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
+    const prevTotalRevenue = 0; // No prev period daily reports available, skip comparison
+    const revChange = 0;
 
-    // Read payment breakdown from daily reports (accurate — sourced from payments table)
+    // Payment breakdown from daily reports
     const mobileMoney = dailyReports.reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0);
     const card = dailyReports.reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
     const cash = dailyReports.reduce((s: number, r: any) => s + (r.cashAmount || 0), 0);
 
-    // Build daily chart data
+    // Build daily chart data from daily reports (accurate payment breakdown per day)
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
     for (let i = rangeDays - 1; i >= 0; i--) {
       const d = format(subDays(new Date(), i), 'MMM d');
       dayMap[d] = { revenue: 0, orders: 0, mobileMoney: 0, cash: 0, card: 0 };
     }
-    filtered.forEach((o: any) => {
-      const d = format(new Date(o._creationTime), 'MMM d');
+
+    // Revenue and payment breakdown per day from daily reports
+    dailyReports.forEach((r: any) => {
+      const d = format(new Date(r.date), 'MMM d');
       if (dayMap[d]) {
-        dayMap[d].revenue += o.finalPrice || 0;
-        dayMap[d].orders += 1;
-        if (o.paymentMethod === 'mobile_money') dayMap[d].mobileMoney += o.finalPrice || 0;
-        if (o.paymentMethod === 'cash') dayMap[d].cash += o.finalPrice || 0;
-        if (o.paymentMethod === 'card') dayMap[d].card += o.finalPrice || 0;
+        dayMap[d].revenue += (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0);
+        dayMap[d].mobileMoney += r.mobileMoneylAmount || 0;
+        dayMap[d].cash += r.cashAmount || 0;
+        dayMap[d].card += (r.cardAmount || 0) + (r.paystackAmount || 0);
       }
     });
 
+    // Order counts still from orders (correct — orders by creation date)
+    filtered.forEach((o: any) => {
+      const d = format(new Date(o._creationTime), 'MMM d');
+      if (dayMap[d]) dayMap[d].orders += 1;
+    });
+
     const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }));
-    // Show only every Nth label to avoid crowding
     const step = rangeDays <= 7 ? 1 : rangeDays <= 30 ? 5 : 10;
     const chartDataLabeled = chartData.map((d, i) => ({ ...d, displayDate: i % step === 0 ? d.date : '' }));
 
-    // Token counts from daily reports
     const totalTokens = dailyReports.reduce((s: number, r: any) => s + (r.totalTokensUsed || 0), 0);
 
     return { totalRevenue, revChange, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
