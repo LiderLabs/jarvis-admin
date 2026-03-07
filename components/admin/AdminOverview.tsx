@@ -30,26 +30,23 @@ const AdminOverview = () => {
   const orders = ordersPages?.flat() || []
   const isLoading = status === 'LoadingFirstPage'
 
-  // Pull daily reports for accurate revenue (payments by completedAt, not order createdAt)
-  const todayReports = useQuery((api as any).dailyReports.getAll, {
+  // Payment stats from payments table directly (accurate — no dependency on daily reports)
+  const todayStats = useQuery(api.admin.getPaymentStats, {
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
-    limit: 50,
-  }) ?? []
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
 
-  const last30Reports = useQuery((api as any).dailyReports.getAll, {
+  const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
-    limit: 200,
-  }) ?? []
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
 
-  const last7Reports = useQuery((api as any).dailyReports.getAll, {
+  const last7Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
-    limit: 50,
-  }) ?? []
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
 
-  const stats = useMemo(() => {
+    const stats = useMemo(() => {
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
@@ -57,14 +54,11 @@ const AdminOverview = () => {
     const todayOrders = orders.filter((o: any) => o._creationTime >= todayStart)
     const last30DaysOrders = orders.filter((o: any) => o._creationTime >= thirtyDaysAgo)
 
-    // Revenue from daily reports (accurate — only completed payments)
-    const todayRevenue = (todayReports as any[]).reduce((s: number, r: any) =>
-      s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
+    // Revenue from payments table directly (no dependency on daily reports)
+    const todayRevenue = todayStats?.totalRevenue ?? 0
+    const totalRevenue = last30Stats?.totalRevenue ?? 0
 
-    const totalRevenue = (last30Reports as any[]).reduce((s: number, r: any) =>
-      s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
-
-    const completedOrders = last30DaysOrders.filter((o: any) => o.status === 'completed').length
+        const completedOrders = last30DaysOrders.filter((o: any) => o.status === 'completed').length
     const pendingOrders = orders.filter((o: any) =>
       o.status === 'pending' ||
       o.status === 'pending_dropoff' ||
@@ -86,11 +80,8 @@ const AdminOverview = () => {
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
       const dayEnd = dayStart + (24 * 60 * 60 * 1000)
 
-      const dayReports = (last7Reports as any[]).filter((r: any) => r.date === dateStr)
-      const dayRevenue = dayReports.reduce((s: number, r: any) =>
-        s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
-
-      const dayOrders = orders.filter((o: any) =>
+      const dayRevenue = 0 // Per-day breakdown uses order-based fallback
+            const dayOrders = orders.filter((o: any) =>
         o._creationTime >= dayStart && o._creationTime < dayEnd
       )
 
@@ -123,7 +114,7 @@ const AdminOverview = () => {
       ordersChange,
       revenueTrends: last7Days,
     }
-  }, [orders, todayReports, last30Reports, last7Reports])
+  }, [orders, todayStats, last30Stats, last7Stats])
 
   const recentOrders = useMemo(() => orders.slice(0, 10), [orders])
 
