@@ -81,11 +81,14 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     }
   ) ?? [];
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const startDateStr = rangeDays === 1 ? todayStr : format(subDays(new Date(), rangeDays), 'yyyy-MM-dd');
+
   const dailyReports = useQuery(
     (api as any).dailyReports.getAll,
     {
-      startDate: format(subDays(new Date(), rangeDays), 'yyyy-MM-dd'),
-      endDate: format(new Date(), 'yyyy-MM-dd'),
+      startDate: startDateStr,
+      endDate: todayStr,
       ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
       limit: 100,
     }
@@ -118,7 +121,8 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
 
     // Build daily chart data from daily reports
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
-    for (let i = rangeDays - 1; i >= 0; i--) {
+    const daysToShow = rangeDays === 1 ? 1 : rangeDays;
+    for (let i = daysToShow - 1; i >= 0; i--) {
       const d = format(subDays(new Date(), i), 'MMM d');
       dayMap[d] = { revenue: 0, orders: 0, mobileMoney: 0, cash: 0, card: 0 };
     }

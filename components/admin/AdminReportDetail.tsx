@@ -69,8 +69,8 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         <h2>Sales Summary</h2>
         <div style="font-size:28px;font-weight:800;margin-bottom:8px">${fmt(totalRevenue)}</div>
         <div class="grid">
-          <div class="stat"><div class="stat-label">Wash Tokens</div><div class="stat-value">GHS ${((report.washerTokensUsed || 0) * 25).toFixed(2)}</div></div>
-          <div class="stat"><div class="stat-label">Dry Tokens</div><div class="stat-value">GHS ${((report.dryerTokensUsed || 0) * 25).toFixed(2)}</div></div>
+          <div class="stat"><div class="stat-label">Wash Tokens</div><div class="stat-value">GHS ${((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</div></div>
+          <div class="stat"><div class="stat-label">Dry Tokens</div><div class="stat-value">GHS ${((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</div></div>
         </div>
       </div>
 
@@ -155,12 +155,12 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Wash Token</p>
               <p className="text-xl font-bold text-foreground">{report.washerTokensUsed || 0}</p>
-              <p className="text-xs text-muted-foreground">GHS {((report.washerTokensUsed || 0) * 25).toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground">GHS {((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dry Tokens</p>
               <p className="text-xl font-bold text-foreground">{report.dryerTokensUsed || 0}</p>
-              <p className="text-xs text-muted-foreground">GHS {((report.dryerTokensUsed || 0) * 25).toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground">GHS {((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</p>
             </div>
           </div>
         </div>
