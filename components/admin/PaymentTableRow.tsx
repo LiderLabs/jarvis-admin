@@ -78,10 +78,10 @@ export const PaymentTableRow = ({
             </div>
           )}
           {payment.order?.finalPrice != null && payment.order?.totalPrice != null && payment.order.totalPrice > payment.order.finalPrice && (
-            <span className="text-xs text-muted-foreground line-through ml-1">₵{payment.order.totalPrice.toFixed(2)}</span>
-          )}
-          {payment.order && (payment.order as any).voucherCode && (
-            <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-1 w-fit">{(payment.order as any).voucherCode}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground line-through">₵{payment.order.totalPrice.toFixed(2)}</span>
+              <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-1 w-fit">-₵{(payment.order.totalPrice - payment.order.finalPrice).toFixed(2)} off</span>
+            </div>
           )}
         </div>
       </TableCell>

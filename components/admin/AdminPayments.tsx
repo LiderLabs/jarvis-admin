@@ -118,14 +118,16 @@ const AdminPayments = () => {
       : "skip"
   )
 
+  const completedPayments = payments.filter((p: any) => p.status === "completed")
   const stats = {
-    total: summary?.totalAmount || 0,
+    total: completedPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0),
     count: summary?.totalTransactions || 0,
-    completed: payments.filter((p) => p.status === "completed").length,
-    pending: payments.filter((p) => p.status === "pending").length,
+    mobileMoney: completedPayments.filter((p: any) => p.paymentMethod === "mobile_money").reduce((s: number, p: any) => s + (p.amount || 0), 0),
+    card: completedPayments.filter((p: any) => p.paymentMethod === "card").reduce((s: number, p: any) => s + (p.amount || 0), 0),
+    cash: completedPayments.filter((p: any) => p.paymentMethod === "cash").reduce((s: number, p: any) => s + (p.amount || 0), 0),
   }
 
-  const handleViewDetails = (payment: Doc<"payments">) => {
+    const handleViewDetails = (payment: Doc<"payments">) => {
     const paymentWithDetails = payments.find((p) => p._id === payment._id)
     setSelectedPayment(paymentWithDetails || payment)
   }
@@ -149,14 +151,14 @@ const AdminPayments = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₵{stats.total.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <p className="text-xs text-muted-foreground">Received payments</p>
           </CardContent>
         </Card>
 
@@ -170,28 +172,38 @@ const AdminPayments = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-green-200 dark:border-green-800">
+        <Card className="border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CardTitle className="text-sm font-medium">Mobile Money</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground">Successful payments</p>
+            <div className="text-2xl font-bold text-orange-600">₵{stats.mobileMoney.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">MoMo payments</p>
           </CardContent>
         </Card>
 
-        <Card className="border-yellow-200 dark:border-yellow-800">
+        <Card className="border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium">Card</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Awaiting completion</p>
+            <div className="text-2xl font-bold text-purple-600">₵{stats.card.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Card payments</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cash</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">₵{stats.cash.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Cash payments</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+            {/* Filters */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -280,7 +292,7 @@ const AdminPayments = () => {
 
       {/* Payments Table */}
       <PaymentTable
-        payments={payments}
+        payments={payments as any}
         isLoading={isLoading && payments.length === 0}
         onViewDetails={handleViewDetails}
       />

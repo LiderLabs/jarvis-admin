@@ -80,7 +80,7 @@ const AdminOverview = () => {
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
       const dayEnd = dayStart + (24 * 60 * 60 * 1000)
 
-      const dayRevenue = 0 // Per-day breakdown uses order-based fallback
+      const dayRevenue = (last7Stats as any)?.byDay?.[dateStr] ?? 0
             const dayOrders = orders.filter((o: any) =>
         o._creationTime >= dayStart && o._creationTime < dayEnd
       )

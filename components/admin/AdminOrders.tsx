@@ -289,17 +289,6 @@ const AdminOrders = () => {
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            {/* Today pill — only when on a past date */}
-            {!isSelectedToday && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={goToToday}
-                className="h-9 px-4 font-medium"
-              >
-                Back to Today
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>

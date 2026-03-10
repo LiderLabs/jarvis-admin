@@ -71,6 +71,16 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   const { results: ordersPages } = usePaginatedQuery(api.admin.getOrders, {} as any, { initialNumItems: 200 });
   const orders = ordersPages?.flat() ?? [];
 
+  const allRecentReports = useQuery(
+    (api as any).dailyReports.getAll,
+    {
+      startDate: format(subDays(new Date(), 365), 'yyyy-MM-dd'),
+      endDate: format(new Date(), 'yyyy-MM-dd'),
+      ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
+      limit: 200,
+    }
+  ) ?? [];
+
   const dailyReports = useQuery(
     (api as any).dailyReports.getAll,
     {
@@ -200,7 +210,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">Revenue Over Time</CardTitle>
+                <CardTitle className="text-base font-semibold">Revenue Over {RANGES.find(r => r.days === rangeDays)?.label || 'Period'}</CardTitle>
                 <CardDescription className="text-xs">Daily received payments</CardDescription>
               </div>
               <div className="text-right">
@@ -277,7 +287,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                 </tr>
               </thead>
               <tbody>
-                {((dailyReports as any[]) || []).slice(0, 10).map((r: any) => (
+                {((allRecentReports as any[]) || []).slice(0, 10).map((r: any) => (
                   <tr key={r._id} className="border-b border-border hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                     <td className="px-4 py-3 text-sm text-foreground">{r.branchName || branchMap[r.branchId] || '—'}</td>

@@ -26,6 +26,7 @@ import {
   Package,
   CreditCard,
   Boxes,
+  Tag,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -69,20 +70,19 @@ const sidebarItems = [
     group: "management",
   },
   {
-    id: "attendance",
-    label: "Attendance",
-    icon: Clock,
-    path: "/dashboard/attendance",
-    group: "management",
-  },
-  {
     id: "station-attendance",
     label: "Station Attendance",
     icon: Building2,
     path: "/dashboard/station-attendance",
     group: "management",
   },
-  // HIDDEN: vouchers - not ready for production
+  {
+    id: "vouchers",
+    label: "Vouchers",
+    icon: Tag,
+    path: "/dashboard/vouchers",
+    group: "features",
+  },
   {
     id: "loyalty",
     label: "Loyalty",
@@ -105,13 +105,6 @@ const sidebarItems = [
     path: "/dashboard/settings",
     group: "system",
   },
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: Bell,
-    path: "/dashboard/notifications",
-    group: "notifications",
-  },
   // HIDDEN: audit-logs - not ready for production
   {
     id: "customers",
@@ -127,7 +120,6 @@ const groupLabels: Record<string, string> = {
   management: "Management",
   features: "Features",
   system: "System",
-  notifications: "Notifications",
 }
 
 // Context for mobile menu state

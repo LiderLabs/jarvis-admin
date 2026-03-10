@@ -99,7 +99,7 @@ const AdminStaff = () => {
 
   const [actionDialog, setActionDialog] = useState<{
     open: boolean
-    type: "suspend" | "activate" | "lock" | "reset" | "revoke" | "delete" | null
+    type: "suspend" | "activate" | "lock" | "reset" | "revoke" | "delete" | "password_reset" | null
     attendant: Attendant | null
   }>({ open: false, type: null, attendant: null })
   const [actionReason, setActionReason] = useState("")
@@ -144,6 +144,7 @@ const AdminStaff = () => {
   const revokeSessions = useMutation(api.admin.revokeAttendantSessions)
   const updateAttendant = useMutation(api.admin.updateAttendant)
   const deleteAttendant = useMutation(api.admin.deleteAttendant)
+  const sendPasswordReset = useMutation((api as any).admin.sendAttendantPasswordReset)
 
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message
@@ -247,7 +248,7 @@ const AdminStaff = () => {
   }
 
   const openActionDialog = (
-    type: "suspend" | "activate" | "lock" | "reset" | "revoke" | "delete",
+    type: "suspend" | "activate" | "lock" | "reset" | "revoke" | "delete" | "password_reset",
     attendant: Attendant
   ) => {
     setActionDialog({ open: true, type, attendant })
@@ -289,6 +290,18 @@ const AdminStaff = () => {
         case "delete":
           result = await deleteAttendant({ attendantId })
           toast.success(`${actionDialog.attendant.name} has been deleted successfully`)
+          break
+        case "password_reset":
+          result = await sendPasswordReset({ attendantId })
+          // Open WhatsApp with reset instructions
+          const attendantPhone = actionDialog.attendant.phoneNumber
+          const attendantName = actionDialog.attendant.name
+          const resetUrl = "https://staging.attendant.washlab.app/sign-in"
+          const resetMsg = `Hi ${attendantName}! 👋\n\nYour WashLab password reset has been initiated.\n\nPlease follow these steps:\n1. Go to: ${resetUrl}\n2. Click *"Forgot Password"*\n3. Enter your email: ${actionDialog.attendant.email}\n4. Check your email for the reset link\n\nIf you need help, contact your branch manager.`
+          const formattedPhone = attendantPhone.startsWith("+") ? attendantPhone.slice(1) : attendantPhone.startsWith("0") ? `233${attendantPhone.slice(1)}` : attendantPhone
+          const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(resetMsg)}`
+          window.open(waUrl, "_blank")
+          toast.success(`Password reset sent & WhatsApp opened for ${attendantName}`)
           break
       }
       closeActionDialog()
@@ -585,6 +598,9 @@ const AdminStaff = () => {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openActionDialog("password_reset", attendant)} className='text-blue-600'>
+                              <Lock className='w-4 h-4 mr-2' />Send Password Reset
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openActionDialog("delete", attendant)} className='text-red-600'>
                               <Ban className='w-4 h-4 mr-2' />Delete Attendant
                             </DropdownMenuItem>
@@ -693,6 +709,7 @@ const AdminStaff = () => {
               {actionDialog.type === "reset" && "Reset Verification Failures"}
               {actionDialog.type === "revoke" && "Revoke All Sessions"}
               {actionDialog.type === "delete" && "Delete Attendant"}
+              {actionDialog.type === "password_reset" && "Send Password Reset"}
             </DialogTitle>
             <DialogDescription>
               {actionDialog.type === "suspend" && `Are you sure you want to suspend ${actionDialog.attendant?.name}? They will be unable to log in until reactivated.`}
@@ -701,6 +718,7 @@ const AdminStaff = () => {
               {actionDialog.type === "reset" && `Reset verification failures for ${actionDialog.attendant?.name}? This will clear the consecutive failure count.`}
               {actionDialog.type === "revoke" && `Revoke all active sessions for ${actionDialog.attendant?.name}? They will need to log in again.`}
               {actionDialog.type === "delete" && `Are you sure you want to delete ${actionDialog.attendant?.name}? This action cannot be undone.`}
+              {actionDialog.type === "password_reset" && `Send a password reset email to ${actionDialog.attendant?.email}. They will receive a link to set a new password.`}
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-4 py-4'>
@@ -748,6 +766,7 @@ const AdminStaff = () => {
               {actionDialog.type === "reset" && "Reset"}
               {actionDialog.type === "revoke" && "Revoke"}
               {actionDialog.type === "delete" && "Delete"}
+              {actionDialog.type === "password_reset" && "Send Reset Email"}
             </Button>
           </DialogFooter>
         </DialogContent>
