@@ -85,7 +85,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         <div class="grid">
           <div class="stat"><div class="stat-label">Wash Tokens</div><div class="stat-value">GHS ${((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</div></div>
           <div class="stat"><div class="stat-label">Dry Tokens</div><div class="stat-value">GHS ${((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</div></div>
-          <div class="stat"><div class="stat-label">Free Washes</div><div class="stat-value">${report.freeWashCount || 0}</div></div>
         </div>
       </div>
       <div class="section">
@@ -250,17 +249,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                 {report.technicalFaultCount || parsedFaults.length || 0}
               </span>
             </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-green-100 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10-4.5 10-10 10z"/><path d="M8 12l3 3 5-5"/></svg>
-                </div>
-                <span className="text-sm text-muted-foreground">Free Washes</span>
-              </div>
-              <span className="text-sm font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-md">
-                {report.freeWashCount || 0}
-              </span>
-            </div>
+
           </div>
         </div>
       </div>

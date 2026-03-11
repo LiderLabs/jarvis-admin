@@ -16,8 +16,8 @@ const Vouchers = () => {
     code: '',
     name: '',
     discountType: 'percentage' as DiscountType,
-    discountValue: 10,
-    usageLimit: 100,
+    discountValue: '' as any,
+    usageLimit: '' as any,
     description: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -157,12 +157,12 @@ const Vouchers = () => {
             {form.discountType !== 'free_wash' && (
               <div>
                 <Label>{form.discountType === 'percentage' ? 'Percentage (%)' : 'Amount (GHS)'} *</Label>
-                <Input type="number" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: parseFloat(e.target.value) || 0 })} className="mt-1" min={1} max={form.discountType === 'percentage' ? 100 : undefined} />
+                <Input type="number" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: e.target.value === '' ? '' as any : parseFloat(e.target.value) || 0 })} className="mt-1" placeholder="e.g. 10" />
               </div>
             )}
             <div>
               <Label>Usage Limit *</Label>
-              <Input type="number" value={form.usageLimit} onChange={(e) => setForm({ ...form, usageLimit: parseInt(e.target.value) || 1 })} className="mt-1" min={1} />
+              <Input type="number" value={form.usageLimit} onChange={(e) => setForm({ ...form, usageLimit: e.target.value === '' ? '' as any : parseInt(e.target.value) || 1 })} className="mt-1" placeholder="e.g. 100" />
             </div>
             <div>
               <Label>Description (optional)</Label>
@@ -208,12 +208,12 @@ const Vouchers = () => {
               {editForm.discountType !== "free_wash" && (
                 <div>
                   <Label>{editForm.discountType === "percentage" ? "Percentage (%)" : "Amount (GHS)"}</Label>
-                  <Input type="number" value={editForm.discountValue} onChange={(e) => setEditForm({ ...editForm, discountValue: parseFloat(e.target.value) || 0 })} className="mt-1" min={1} max={editForm.discountType === "percentage" ? 100 : undefined} />
+                  <Input type="number" value={editForm.discountValue} onChange={(e) => setEditForm({ ...editForm, discountValue: e.target.value === '' ? '' as any : parseFloat(e.target.value) || 0 })} className="mt-1" placeholder="e.g. 10" />
                 </div>
               )}
               <div>
                 <Label>Usage Limit</Label>
-                <Input type="number" value={editForm.usageLimit} onChange={(e) => setEditForm({ ...editForm, usageLimit: parseInt(e.target.value) || 1 })} className="mt-1" min={1} />
+                <Input type="number" value={editForm.usageLimit} onChange={(e) => setEditForm({ ...editForm, usageLimit: e.target.value === '' ? '' as any : parseInt(e.target.value) || 1 })} className="mt-1" placeholder="e.g. 100" />
               </div>
               <div>
                 <Label>Description (optional)</Label>
