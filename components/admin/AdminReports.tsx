@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, subDays } from 'date-fns';
+import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Download, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -23,13 +24,6 @@ import {
   Bar,
   Legend,
 } from 'recharts';
-
-const RANGES = [
-  { label: 'Today', days: 1 },
-  { label: 'Last 7 Days', days: 7 },
-  { label: 'Last 30 Days', days: 30 },
-  { label: 'Last 90 Days', days: 90 },
-];
 
 function StatCard({ title, value, change, prefix = '' }: { title: string; value: string | number; change?: number; prefix?: string }) {
   const isPos = (change ?? 0) >= 0;
@@ -62,7 +56,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) => void }) => {
-  const [rangeDays, setRangeDays] = useState(1);
+  const [dateFrom, setDateFrom] = useState<Date>(new Date());
+  const [dateTo, setDateTo] = useState<Date>(new Date());
   const [selectedBranch, setSelectedBranch] = useState('all');
 
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
@@ -81,21 +76,21 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     }
   ) ?? [];
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const startDateStr = rangeDays === 1 ? todayStr : format(subDays(new Date(), rangeDays), 'yyyy-MM-dd');
+  const startDateStr = format(dateFrom, 'yyyy-MM-dd');
+  const endDateStr = format(dateTo, 'yyyy-MM-dd');
 
   const dailyReports = useQuery(
     (api as any).dailyReports.getAll,
     {
       startDate: startDateStr,
-      endDate: todayStr,
+      endDate: endDateStr,
       ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
       limit: 100,
     }
   ) ?? [];
 
-  const startTs = subDays(new Date(), rangeDays).getTime();
-  const endTs = new Date().getTime();
+  const startTs = new Date(dateFrom).setHours(0, 0, 0, 0);
+  const endTs = new Date(dateTo).setHours(23, 59, 59, 999);
 
   const filtered = useMemo(() =>
     orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs &&
@@ -104,26 +99,23 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
   );
 
   const prevFiltered = useMemo(() => {
-    const prevStart = subDays(new Date(), rangeDays * 2).getTime();
+    const rangeMs = dateTo.getTime() - dateFrom.getTime();
+    const prevStart = new Date(dateFrom.getTime() - rangeMs).getTime();
     return orders.filter((o: any) => o._creationTime >= prevStart && o._creationTime < startTs);
-  }, [orders, startTs, rangeDays]);
+  }, [orders, startTs, dateFrom, dateTo]);
 
   const stats = useMemo(() => {
-    // All revenue from daily reports (accurate — only completed payments)
     const totalRevenue = (dailyReports as any[]).reduce((s: number, r: any) =>
       s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
-    const revChange = 0;
 
-    // Payment breakdown from daily reports
     const mobileMoney = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0);
     const card = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
     const cash = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cashAmount || 0), 0);
 
-    // Build daily chart data from daily reports
     const dayMap: Record<string, { revenue: number; orders: number; mobileMoney: number; cash: number; card: number }> = {};
-    const daysToShow = rangeDays === 1 ? 1 : rangeDays;
-    for (let i = daysToShow - 1; i >= 0; i--) {
-      const d = format(subDays(new Date(), i), 'MMM d');
+    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    for (let i = dDiff - 1; i >= 0; i--) {
+      const d = format(subDays(dateTo, i), 'MMM d');
       dayMap[d] = { revenue: 0, orders: 0, mobileMoney: 0, cash: 0, card: 0 };
     }
 
@@ -143,13 +135,12 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     });
 
     const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }));
-    const step = rangeDays <= 7 ? 1 : rangeDays <= 30 ? 5 : 10;
+    const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10;
     const chartDataLabeled = chartData.map((d, i) => ({ ...d, displayDate: i % step === 0 ? d.date : '' }));
-
     const totalTokens = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.totalTokensUsed || 0), 0);
 
-    return { totalRevenue, revChange, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
-  }, [filtered, prevFiltered, rangeDays, dailyReports]);
+    return { totalRevenue, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
+  }, [filtered, prevFiltered, dateFrom, dateTo, dailyReports]);
 
   const exportCSV = () => {
     const rows = [
@@ -181,13 +172,8 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
           <h1 className="text-2xl font-bold text-foreground">Report Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Monitor station performance and revenue across all branches.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={String(rangeDays)} onValueChange={v => setRangeDays(Number(v))}>
-            <SelectTrigger className="w-36 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {RANGES.map(r => (<SelectItem key={r.days} value={String(r.days)}>{r.label}</SelectItem>))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePicker from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} />
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
             <SelectTrigger className="w-36 text-sm"><SelectValue placeholder="All Branches" /></SelectTrigger>
             <SelectContent>
@@ -214,7 +200,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">Revenue Over {RANGES.find(r => r.days === rangeDays)?.label || 'Period'}</CardTitle>
+                <CardTitle className="text-base font-semibold">Revenue: {format(dateFrom, 'MMM d')} – {format(dateTo, 'MMM d, yyyy')}</CardTitle>
                 <CardDescription className="text-xs">Daily received payments</CardDescription>
               </div>
               <div className="text-right">
@@ -310,21 +296,12 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                     </td>
                   </tr>
                 ))}
-                {(dailyReports as any[]).length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">No reports found for this period.</td></tr>
+                {(allRecentReports as any[]).length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">No reports found.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          {(dailyReports as any[]).length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <p className="text-xs text-muted-foreground">Showing 1 to {Math.min(10, (dailyReports as any[]).length)} of {(dailyReports as any[]).length} reports</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled className="text-xs">Previous</Button>
-                <Button variant="outline" size="sm" className="text-xs">Next</Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
