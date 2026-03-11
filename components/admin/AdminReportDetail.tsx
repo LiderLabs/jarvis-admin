@@ -76,7 +76,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       <nav style="font-size:12px;color:#6b7280;margin-bottom:16px">Reports › ${report.branchName}</nav>
       <h1>${report.branchName} - ${format(new Date(report.date), 'd MMM yyyy')}</h1>
       <div class="meta">
-        Status: ${report.status === 'submitted' ? 'Closed' : 'Open'} &nbsp;|&nbsp; 
+        Status: ${report.status === 'submitted_with_outstanding' ? 'Outstanding' : report.status === 'submitted' ? 'Closed' : 'Open'} &nbsp;|&nbsp; 
         Attendants: ${(report.attendantsOnShift || []).join(', ')}
       </div>
       <div class="section">
@@ -131,6 +131,21 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
   return (
     <div className="space-y-5 pb-8 max-w-4xl mx-auto px-4">
+      {/* Outstanding payments warning */}
+      {(report.status === 'submitted_with_outstanding') && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+          <svg className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-300">Outstanding Payments at Submission</p>
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
+              {report.outstandingOrderCount ?? 0} order{(report.outstandingOrderCount ?? 0) !== 1 ? 's' : ''} were unpaid when this report was submitted.
+              Expected outstanding amount: <span className="font-bold">GHS {(report.outstandingAmount ?? 0).toFixed(2)}</span>.
+              These payments may have been collected on a subsequent day.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb + header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -143,8 +158,12 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             {report.branchName} - {format(new Date(report.date), 'd MMM yyyy')}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            <Badge className={`text-xs ${report.status === 'submitted' ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-              Status: {report.status === 'submitted' ? 'Closed' : 'Open'}
+            <Badge className={`text-xs ${
+                report.status === 'submitted_with_outstanding' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                report.status === 'submitted' ? 'bg-gray-100 text-gray-600 border-gray-200' :
+                'bg-amber-100 text-amber-700 border-amber-200'
+              }`}>
+              Status: {report.status === 'submitted_with_outstanding' ? 'Outstanding' : report.status === 'submitted' ? 'Closed' : 'Open'}
             </Badge>
             <span className="text-xs text-muted-foreground">
               Last updated: {format(new Date(report._creationTime), 'h:mm a')}

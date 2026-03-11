@@ -285,8 +285,12 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{r.totalTokensUsed ?? 0}</td>
                     <td className="px-4 py-3 text-sm font-semibold text-foreground">GHS {(r.totalRevenue || 0).toFixed(2)}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={r.status === 'submitted' ? 'default' : 'secondary'} className={`text-xs capitalize ${r.status === 'submitted' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                        {r.status === 'submitted' ? 'Closed' : 'Open'}
+                      <Badge variant="secondary" className={`text-xs capitalize ${
+                          r.status === 'submitted_with_outstanding' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                          r.status === 'submitted' ? 'bg-green-100 text-green-700 border-green-200' :
+                          'bg-amber-100 text-amber-700 border-amber-200'
+                        }`}>
+                        {r.status === 'submitted_with_outstanding' ? 'Outstanding' : r.status === 'submitted' ? 'Closed' : 'Open'}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
