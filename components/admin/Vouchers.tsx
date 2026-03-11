@@ -21,6 +21,10 @@ const Vouchers = () => {
     description: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingVoucher, setEditingVoucher] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>(null);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const vouchersData = useQuery((api as any).vouchers.getAll, { includeInactive: true });
   const vouchers = vouchersData?.page ?? [];
@@ -39,6 +43,54 @@ const Vouchers = () => {
       toast.success(`Voucher ${!isActive ? 'enabled' : 'disabled'}`);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update voucher');
+    }
+  };
+
+  const handleDelete = async (voucherId: string) => {
+    if (!confirm("Delete this voucher? This cannot be undone.")) return;
+    setDeletingId(voucherId);
+    try {
+      await updateVoucher({ voucherId: voucherId as any, isDeleted: true });
+      toast.success("Voucher deleted");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to delete voucher");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const openEdit = (voucher: any) => {
+    setEditingVoucher(voucher);
+    setEditForm({
+      code: voucher.code,
+      name: voucher.name || "",
+      discountType: voucher.discountType,
+      discountValue: voucher.discountValue,
+      usageLimit: voucher.usageLimit,
+      description: voucher.description || "",
+    });
+  };
+
+  const handleEdit = async () => {
+    if (!editingVoucher || !editForm) return;
+    setIsEditSubmitting(true);
+    try {
+      await updateVoucher({
+        voucherId: editingVoucher._id as any,
+        name: editForm.name || undefined,
+        discountType: editForm.discountType,
+        discountValue: editForm.discountValue,
+        usageLimit: editForm.usageLimit,
+        description: editForm.description || undefined,
+        isActive: editingVoucher.isActive,
+      });
+      toast.success("Voucher updated!");
+      setEditingVoucher(null);
+      setEditForm(null);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update voucher");
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -127,6 +179,58 @@ const Vouchers = () => {
         </div>
       )}
 
+      {/* Edit modal */}
+      {editingVoucher && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-semibold text-lg">Edit Voucher</h2>
+              <button onClick={() => { setEditingVoucher(null); setEditForm(null); }}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label>Code</Label>
+                <Input value={editForm.code} disabled className="mt-1 uppercase opacity-60" />
+                <p className="text-xs text-muted-foreground mt-1">Code cannot be changed</p>
+              </div>
+              <div>
+                <Label>Name (optional)</Label>
+                <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="e.g. Welcome Offer" className="mt-1" />
+              </div>
+              <div>
+                <Label>Discount Type</Label>
+                <select value={editForm.discountType} onChange={(e) => setEditForm({ ...editForm, discountType: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount (GHS)</option>
+                  <option value="free_wash">Free Wash</option>
+                </select>
+              </div>
+              {editForm.discountType !== "free_wash" && (
+                <div>
+                  <Label>{editForm.discountType === "percentage" ? "Percentage (%)" : "Amount (GHS)"}</Label>
+                  <Input type="number" value={editForm.discountValue} onChange={(e) => setEditForm({ ...editForm, discountValue: parseFloat(e.target.value) || 0 })} className="mt-1" min={1} max={editForm.discountType === "percentage" ? 100 : undefined} />
+                </div>
+              )}
+              <div>
+                <Label>Usage Limit</Label>
+                <Input type="number" value={editForm.usageLimit} onChange={(e) => setEditForm({ ...editForm, usageLimit: parseInt(e.target.value) || 1 })} className="mt-1" min={1} />
+              </div>
+              <div>
+                <Label>Description (optional)</Label>
+                <Input value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} placeholder="Internal notes" className="mt-1" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => { setEditingVoucher(null); setEditForm(null); }}>Cancel</Button>
+              <Button onClick={handleEdit} disabled={isEditSubmitting}>
+                {isEditSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Voucher list */}
       {vouchersData === undefined ? (
         <div className="flex items-center justify-center py-20">
@@ -159,11 +263,27 @@ const Vouchers = () => {
                 {voucher.discountType === 'fixed' && `GHS ${voucher.discountValue} off`}
                 {voucher.discountType === 'free_wash' && 'Free wash'}
               </p>
-              <div className="flex items-center justify-between pt-4 border-t border-border">
-                <span className="text-sm text-muted-foreground">{voucher.usedCount} / {voucher.usageLimit} used</span>
-                <Button variant="ghost" size="sm" onClick={() => toggleVoucher(voucher._id, voucher.isActive)} className={voucher.isActive ? 'text-destructive' : 'text-green-600'}>
-                  {voucher.isActive ? 'Disable' : 'Enable'}
-                </Button>
+              <div className="pt-4 border-t border-border space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-muted-foreground">{voucher.usedCount ?? 0} / {voucher.usageLimit} used</span>
+                    <span className="text-xs text-muted-foreground">{Math.round(((voucher.usedCount ?? 0) / voucher.usageLimit) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1.5">
+                    <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, Math.round(((voucher.usedCount ?? 0) / voucher.usageLimit) * 100))}%` }} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => toggleVoucher(voucher._id, voucher.isActive)} className={voucher.isActive ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}>
+                    {voucher.isActive ? "Disable" : "Enable"}
+                  </Button>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(voucher)} className="text-muted-foreground hover:text-foreground">Edit</Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(voucher._id)} disabled={deletingId === voucher._id} className="text-destructive hover:text-destructive">
+                      {deletingId === voucher._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}

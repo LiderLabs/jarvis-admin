@@ -468,10 +468,10 @@
   resolved "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz"
   integrity sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw==
 
-"@jordan6699/washlab-backend@^1.1.59":
-  version "1.1.59"
-  resolved "https://registry.npmjs.org/@jordan6699/washlab-backend/-/washlab-backend-1.1.59.tgz"
-  integrity sha512-42BkPOrhku2J8i5l9xeT5Eq1yri6piDt+8j+cA4Hy4IcV3DlCq9B1yBConIyxq1t0KNHEU9xsaJEKSiTys3oTQ==
+"@jordan6699/washlab-backend@^1.1.61":
+  version "1.1.61"
+  resolved "https://registry.npmjs.org/@jordan6699/washlab-backend/-/washlab-backend-1.1.61.tgz"
+  integrity sha512-vKbtVQS37JI0gwftnxn5I5tkJJZl+Q+eSKKUCCS+E9rOKveTEl4Ioh/AmZcwaqIWEMmOo1UJdE1Ml2T4kLm+UA==
   dependencies:
     "@clerk/clerk-sdk-node" "^5.1.6"
     "@devlider001/washlab-backend" "^1.0.3"
