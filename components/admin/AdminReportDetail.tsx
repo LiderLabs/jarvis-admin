@@ -280,7 +280,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground">{v.count}×</p>
                     <p className="text-xs text-muted-foreground">
-                      {v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : fmt(v.totalDiscount)}
+                      {v.discountType === 'loyalty' ? fmt(v.totalDiscount) : v.discountType === 'percentage' ? `${v.discountValue ?? ''}% → ${fmt(v.totalDiscount)}` : fmt(v.totalDiscount)}
                     </p>
                   </div>
                 </div>
@@ -309,7 +309,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                       </td>
                       <td className="py-2.5 pr-4 text-sm font-bold text-foreground">{v.count}</td>
                       <td className="py-2.5 text-sm font-semibold text-foreground">
-                        {v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : fmt(v.totalDiscount)}
+                        {v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : v.discountType === 'percentage' ? `${v.discountValue ?? ''}% → ${fmt(v.totalDiscount)}` : fmt(v.totalDiscount)}
                       </td>
                     </tr>
                   );
