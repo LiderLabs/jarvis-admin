@@ -88,7 +88,11 @@ export const PaymentTableRow = ({
 
       {/* Payment Method */}
       <TableCell className="whitespace-nowrap">
-        <PaymentMethodBadge method={payment.paymentMethod} />
+        {(payment.order?.finalPrice != null ? payment.order.finalPrice : payment.amount) === 0 ? (
+          <span className="text-xs text-muted-foreground italic">Free</span>
+        ) : (
+          <PaymentMethodBadge method={payment.paymentMethod} />
+        )}
       </TableCell>
 
       {/* Status */}
