@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { usePaginatedQuery, useMutation, useQuery, useConvexAuth } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import { Id } from "@jordan6699/washlab-backend/dataModel"
@@ -35,6 +35,8 @@ import {
   MoreVertical,
   Lock,
   Tag,
+  ImagePlus,
+  X,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -73,6 +75,7 @@ interface ServiceDraft {
   name: string
   code: string
   price: number
+  imageUrl?: string
 }
 
 interface FormData {
@@ -89,8 +92,109 @@ interface FormData {
 
 const BRANCHES_LIMIT = 20
 
+const DEFAULT_IMAGES = [
+  { label: "Wash & Dry", url: "/assets/laundry-hero-1.jpg" },
+  { label: "Wash Only", url: "/assets/laundry-hero-2.jpg" },
+  { label: "Dry Only",  url: "/assets/stacked-clothes.jpg" },
+]
+
 const toServiceCode = (name: string) =>
   name.toLowerCase().trim().replace(/&/g, "and").replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
+
+// ─── Image Picker ─────────────────────────────────────────────────────────────
+const ServiceImagePicker = ({
+  value,
+  onChange,
+  generateUploadUrl,
+}: {
+  value?: string
+  onChange: (url: string) => void
+  generateUploadUrl: () => Promise<string>
+}) => {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const uploadUrl = await generateUploadUrl()
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      })
+      const { storageId } = await res.json()
+      // Build a public URL from storageId — use getServiceImageUrl pattern
+      // We store the storageId as a special marker and resolve it on save
+      onChange(`convex-storage:${storageId}`)
+    } catch {
+      toast.error("Failed to upload image")
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  const preview = value?.startsWith("convex-storage:")
+    ? null // Can't preview until saved
+    : value
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">Service Image (optional)</Label>
+      {/* Default image picks */}
+      <div className="flex gap-2 flex-wrap">
+        {DEFAULT_IMAGES.map((img) => (
+          <button
+            key={img.url}
+            type="button"
+            onClick={() => onChange(img.url)}
+            className={`relative rounded-lg overflow-hidden border-2 transition-all w-16 h-16 ${value === img.url ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"}`}
+          >
+            <img src={img.url} alt={img.label} className="w-full h-full object-cover" />
+            {value === img.url && (
+              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-primary" />
+              </div>
+            )}
+          </button>
+        ))}
+        {/* Upload from device */}
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="w-16 h-16 rounded-lg border-2 border-dashed border-muted-foreground/40 flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-muted/50 transition-all"
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4 text-muted-foreground" />}
+          <span className="text-[9px] text-muted-foreground">Upload</span>
+        </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="w-16 h-16 rounded-lg border-2 border-dashed border-destructive/40 flex flex-col items-center justify-center gap-1 hover:bg-destructive/10 transition-all"
+          >
+            <X className="h-4 w-4 text-destructive" />
+            <span className="text-[9px] text-destructive">Clear</span>
+          </button>
+        )}
+      </div>
+      {/* Preview uploaded image */}
+      {preview && !DEFAULT_IMAGES.find(d => d.url === preview) && (
+        <div className="mt-1">
+          <img src={preview} alt="Preview" className="h-16 w-24 object-cover rounded-lg border" />
+        </div>
+      )}
+      {value?.startsWith("convex-storage:") && (
+        <p className="text-xs text-muted-foreground">Image uploaded — will be saved with service</p>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+    </div>
+  )
+}
 
 // ─── Branch Services Panel ────────────────────────────────────────────────────
 const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
@@ -98,17 +202,32 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const createBranchService = useMutation(api.admin.createBranchService)
   const updateBranchService = useMutation(api.admin.updateBranchService)
   const deleteBranchService = useMutation(api.admin.deleteBranchService)
-
+  const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<Id<"branchServices"> | null>(null)
-  const [form, setForm] = useState({ name: "", price: 0 })
+  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "" })
 
-  const resetForm = () => setForm({ name: "", price: 0 })
+  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "" })
+
+  const resolveImageUrl = async (imageUrl: string): Promise<string | undefined> => {
+    if (!imageUrl) return undefined
+    if (imageUrl.startsWith("convex-storage:")) {
+      const storageId = imageUrl.replace("convex-storage:", "")
+      // Return storageId to let the backend resolve — store as imageUrl with storageId format
+      // Actually we pass the URL directly, so we need to get the URL first
+      // For now store the storageId as a reference — the attendant will need to use getUrl
+      return storageId // backend stores storageId, attendant resolves it
+    }
+    return imageUrl
+  }
 
   const handleAdd = async () => {
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
     try {
-      await createBranchService({ branchId, name: form.name.trim(), code: toServiceCode(form.name), price: form.price })
+      const imageUrl = form.imageUrl?.startsWith("convex-storage:")
+        ? form.imageUrl.replace("convex-storage:", "")
+        : form.imageUrl || undefined
+      await (createBranchService as any)({ branchId, name: form.name.trim(), code: toServiceCode(form.name), price: form.price, imageUrl })
       toast.success("Service added")
       setShowAdd(false)
       resetForm()
@@ -119,7 +238,10 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
     if (!editingId) return
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
     try {
-      await updateBranchService({ serviceId: editingId, name: form.name.trim(), price: form.price })
+      const imageUrl = form.imageUrl?.startsWith("convex-storage:")
+        ? form.imageUrl.replace("convex-storage:", "")
+        : form.imageUrl || undefined
+      await (updateBranchService as any)({ serviceId: editingId, name: form.name.trim(), price: form.price, imageUrl })
       toast.success("Service updated")
       setEditingId(null)
       resetForm()
@@ -135,8 +257,14 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
 
   const startEdit = (s: any) => {
     setEditingId(s._id)
-    setForm({ name: s.name, price: s.price })
+    setForm({ name: s.name, price: s.price, imageUrl: s.imageUrl || "" })
     setShowAdd(false)
+  }
+
+  const getDisplayImage = (s: any) => {
+    if (s.imageUrl) return s.imageUrl
+    const match = DEFAULT_IMAGES.find(d => s.name?.toLowerCase().includes(d.label.toLowerCase().split(" ")[0]))
+    return match?.url || DEFAULT_IMAGES[0].url
   }
 
   return (
@@ -150,14 +278,20 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           {services.map((s: any) => (
             <div key={s._id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
               {editingId === s._id ? (
-                <div className="flex-1 grid grid-cols-2 gap-2 mr-2">
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                <div className="flex-1 space-y-2 mr-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
+                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                  </div>
+                  <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 </div>
               ) : (
-                <div className="flex-1">
-                  <span className="font-medium text-sm">{s.name}</span>
-                  {!s.isActive && <Badge variant="outline" className="text-xs ml-2">Inactive</Badge>}
+                <div className="flex items-center gap-3 flex-1">
+                  <img src={getDisplayImage(s)} alt={s.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <div>
+                    <span className="font-medium text-sm">{s.name}</span>
+                    {!s.isActive && <Badge variant="outline" className="text-xs ml-2">Inactive</Badge>}
+                  </div>
                 </div>
               )}
               <div className="flex items-center gap-2 shrink-0">
@@ -191,6 +325,7 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
               <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
+          <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Service</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
@@ -206,23 +341,31 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
 }
 
 // ─── Service Drafts Panel ─────────────────────────────────────────────────────
-const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onChange: (drafts: ServiceDraft[]) => void }) => {
+const ServiceDraftsPanel = ({
+  drafts,
+  onChange,
+  generateUploadUrl,
+}: {
+  drafts: ServiceDraft[]
+  onChange: (drafts: ServiceDraft[]) => void
+  generateUploadUrl: () => Promise<string>
+}) => {
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ name: "", price: 0 })
+  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "" })
   const [editId, setEditId] = useState<string | null>(null)
 
-  const resetForm = () => setForm({ name: "", price: 0 })
+  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "" })
 
   const handleAdd = () => {
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
-    onChange([...drafts, { id: `draft_${Date.now()}`, name: form.name.trim(), code: toServiceCode(form.name), price: form.price }])
+    onChange([...drafts, { id: `draft_${Date.now()}`, name: form.name.trim(), code: toServiceCode(form.name), price: form.price, imageUrl: form.imageUrl || undefined }])
     setShowAdd(false)
     resetForm()
   }
 
   const handleUpdate = () => {
     if (!editId) return
-    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price } : d))
+    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price, imageUrl: form.imageUrl || undefined } : d))
     setEditId(null)
     resetForm()
   }
@@ -231,8 +374,14 @@ const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onCh
 
   const startEdit = (d: ServiceDraft) => {
     setEditId(d.id)
-    setForm({ name: d.name, price: d.price })
+    setForm({ name: d.name, price: d.price, imageUrl: d.imageUrl || "" })
     setShowAdd(false)
+  }
+
+  const getDisplayImage = (d: ServiceDraft) => {
+    if (d.imageUrl && !d.imageUrl.startsWith("convex-storage:")) return d.imageUrl
+    const match = DEFAULT_IMAGES.find(img => d.name?.toLowerCase().includes(img.label.toLowerCase().split(" ")[0]))
+    return match?.url || DEFAULT_IMAGES[0].url
   }
 
   return (
@@ -244,12 +393,18 @@ const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onCh
           {drafts.map((d) => (
             <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
               {editId === d.id ? (
-                <div className="flex-1 grid grid-cols-2 gap-2 mr-2">
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
+                <div className="flex-1 space-y-2 mr-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
+                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
+                  </div>
+                  <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 </div>
               ) : (
-                <div className="flex-1"><span className="font-medium text-sm">{d.name}</span></div>
+                <div className="flex items-center gap-3 flex-1">
+                  <img src={getDisplayImage(d)} alt={d.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <span className="font-medium text-sm">{d.name}</span>
+                </div>
               )}
               <div className="flex items-center gap-2 shrink-0">
                 {editId === d.id ? (
@@ -282,6 +437,7 @@ const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onCh
               <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
+          <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Service</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
@@ -296,7 +452,7 @@ const ServiceDraftsPanel = ({ drafts, onChange }: { drafts: ServiceDraft[]; onCh
   )
 }
 
-// ─── Branch Form Fields (outside main component to prevent focus loss) ────────
+// ─── Branch Form Fields ───────────────────────────────────────────────────────
 const BranchFormFields = ({
   prefix = "",
   formData,
@@ -409,6 +565,7 @@ const AdminBranches = () => {
   const toggleBranchStatus = useMutation(api.admin.toggleBranchStatus)
   const deleteBranch = useMutation(api.admin.deleteBranch)
   const createBranchService = useMutation(api.admin.createBranchService)
+  const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
 
   const resetForm = () => {
     setFormData({ name: "", code: "", address: "", city: "", country: "Ghana", phoneNumber: "", email: "", deliveryFee: 10, stationPin: "" })
@@ -462,7 +619,10 @@ const AdminBranches = () => {
         stationPin: formData.stationPin.trim(),
       } as any)
       for (const draft of serviceDrafts) {
-        await createBranchService({ branchId: branchId as Id<"branches">, name: draft.name, code: draft.code, price: draft.price })
+        const imageUrl = draft.imageUrl?.startsWith("convex-storage:")
+          ? draft.imageUrl.replace("convex-storage:", "")
+          : draft.imageUrl || undefined
+        await (createBranchService as any)({ branchId: branchId as Id<"branches">, name: draft.name, code: draft.code, price: draft.price, imageUrl })
       }
       toast.success("Branch created successfully!")
       handleCloseDialogs()
@@ -621,7 +781,7 @@ const AdminBranches = () => {
                 <Label className='text-base font-semibold'>Services & Pricing</Label>
               </div>
               <p className='text-xs text-muted-foreground mb-3'>Add the services this branch offers. Each service is priced per load.</p>
-              <ServiceDraftsPanel drafts={serviceDrafts} onChange={setServiceDrafts} />
+              <ServiceDraftsPanel drafts={serviceDrafts} onChange={setServiceDrafts} generateUploadUrl={generateUploadUrl} />
             </div>
           </div>
           <DialogFooter>
