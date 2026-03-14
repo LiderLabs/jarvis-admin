@@ -276,16 +276,20 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
       ) : (
         <div className="space-y-2">
           {services.map((s: any) => (
-            <div key={s._id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
-              {editingId === s._id ? (
-                <div className="flex-1 space-y-2 mr-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
-                  </div>
-                  <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+            editingId === s._id ? (
+              <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
+                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
                 </div>
-              ) : (
+                <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div key={s._id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
                 <div className="flex items-center gap-3 flex-1">
                   <img src={getDisplayImage(s)} alt={s.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                   <div>
@@ -293,23 +297,14 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
                     {!s.isActive && <Badge variant="outline" className="text-xs ml-2">Inactive</Badge>}
                   </div>
                 </div>
-              )}
-              <div className="flex items-center gap-2 shrink-0">
-                {editingId === s._id ? (
-                  <>
-                    <Button size="sm" className="h-7 px-2 text-xs" onClick={handleUpdate}>Save</Button>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-bold text-primary text-sm">&#8373;{s.price.toFixed(2)}</span>
-                    <span className="text-xs text-muted-foreground">/ load</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold text-primary text-sm">&#8373;{s.price.toFixed(2)}</span>
+                  <span className="text-xs text-muted-foreground">/ load</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
               </div>
-            </div>
+            )
           ))}
         </div>
       )}
