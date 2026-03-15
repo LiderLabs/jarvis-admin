@@ -34,6 +34,10 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
     (api as any).dailyReports.getById,
     reportId ? { reportId } : 'skip'
   );
+  const liveData = useQuery(
+    (api as any).dailyReports.getAutoData,
+    report ? { branchId: report.branchId, date: report.date } : 'skip'
+  );
 
   if (!report) {
     return (
@@ -43,7 +47,9 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
     );
   }
 
-  const totalRevenue = (report.cashAmount || 0) + (report.mobileMoneylAmount || 0) + (report.cardAmount || 0) + (report.paystackAmount || 0);
+  const totalRevenue = liveData
+    ? (liveData.cashAmount || 0) + (liveData.mobileMoneylAmount || 0) + (liveData.cardAmount || 0) + (liveData.paystackAmount || 0)
+    : (report.cashAmount || 0) + (report.mobileMoneylAmount || 0) + (report.cardAmount || 0) + (report.paystackAmount || 0);
   const cardTotal = (report.cardAmount || 0) + (report.paystackAmount || 0);
   const totalPaymentRecorded = totalRevenue;
   const voucherBreakdown: any[] = report.voucherBreakdown || [];
@@ -199,14 +205,27 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           </div>
         </div>
 
+        {/* Tokens Used Value + Expected Revenue */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
+            <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Tokens Used Value</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">{(report.washerTokensUsed || 0) + (report.dryerTokensUsed || 0)} tokens</p>
+            <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{fmt(((report.washerTokensUsed || 0) * (report.washerPrice || 25)) + ((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)))}</p>
+          </div>
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-3">
+            <p className="text-xs font-medium text-green-700 dark:text-green-300">Expected Revenue</p>
+            <p className="text-xs text-green-600 dark:text-green-400 mb-1">Paid orders excl. free</p>
+            <p className="text-lg font-bold text-green-700 dark:text-green-300">{fmt(liveData?.expectedRevenue ?? totalRevenue)}</p>
+          </div>
+        </div>
         {/* Payment Breakdown */}
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-3">Payment Breakdown</h2>
           <div className="space-y-2.5">
             {[
-              { label: 'Mobile Money', value: report.mobileMoneylAmount || 0, icon: Smartphone, color: 'text-blue-500' },
-              { label: 'Card', value: cardTotal, icon: CreditCard, color: 'text-indigo-500' },
-              { label: 'Cash', value: report.cashAmount || 0, icon: Banknote, color: 'text-green-500' },
+              { label: 'Mobile Money', value: liveData?.mobileMoneylAmount ?? report.mobileMoneylAmount ?? 0, icon: Smartphone, color: 'text-blue-500' },
+              { label: 'Card', value: (liveData ? (liveData.cardAmount || 0) + (liveData.paystackAmount || 0) : cardTotal), icon: CreditCard, color: 'text-indigo-500' },
+              { label: 'Cash', value: liveData?.cashAmount ?? report.cashAmount ?? 0, icon: Banknote, color: 'text-green-500' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
