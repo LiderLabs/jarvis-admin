@@ -45,8 +45,9 @@ const AdminPayments = () => {
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [selectedMethod, setSelectedMethod] = useState<string>("all")
-  const [startDate, setStartDate] = useState<string>("")
-  const [endDate, setEndDate] = useState<string>("")
+  const todayStr = new Date().toISOString().split("T")[0]
+  const [startDate, setStartDate] = useState<string>(todayStr)
+  const [endDate, setEndDate] = useState<string>(todayStr)
   const [selectedPayment, setSelectedPayment] = useState<
     (Doc<"payments"> & {
       order?: Doc<"orders"> | null
