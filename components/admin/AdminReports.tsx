@@ -283,7 +283,7 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
                     <td className="px-4 py-3 text-sm text-foreground">{r.branchName || branchMap[r.branchId] || '—'}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">{(r.attendantsOnShift || []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{r.totalTokensUsed ?? 0}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground">GHS {(r.totalRevenue || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-foreground">GHS {((r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0)).toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <Badge variant="secondary" className={`text-xs capitalize ${
                           r.status === 'submitted_with_outstanding' ? 'bg-orange-100 text-orange-700 border-orange-200' :
