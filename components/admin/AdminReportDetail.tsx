@@ -130,17 +130,26 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
   return (
     <div className="space-y-5 pb-8 max-w-4xl mx-auto px-4">
-      {/* Outstanding payments warning */}
-      {(report.status === 'submitted_with_outstanding') && (
+      {/* Outstanding payments warning — live, updates when orders are paid */}
+      {(report.status === 'submitted_with_outstanding') && (report.outstandingOrderCount ?? 0) > 0 && (
         <div className="flex items-start gap-3 p-4 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
           <svg className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-orange-700 dark:text-orange-300">Outstanding Payments at Submission</p>
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-300">Outstanding Payments</p>
             <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-              {report.outstandingOrderCount ?? 0} order{(report.outstandingOrderCount ?? 0) !== 1 ? 's' : ''} were unpaid when this report was submitted.
-              Expected outstanding amount: <span className="font-bold">GHS {(report.outstandingAmount ?? 0).toFixed(2)}</span>.
-              These payments may have been collected on a subsequent day.
+              {report.outstandingOrderCount} order{(report.outstandingOrderCount ?? 0) !== 1 ? 's' : ''} still unpaid.
+              Outstanding amount: <span className="font-bold">GHS {(report.outstandingAmount ?? 0).toFixed(2)}</span>.
+              This updates automatically when customers pay.
             </p>
+          </div>
+        </div>
+      )}
+      {(report.status === 'submitted_with_outstanding') && (report.outstandingOrderCount ?? 0) === 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+          <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-green-700 dark:text-green-300">All Outstanding Payments Cleared</p>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">All previously outstanding orders have been paid. Revenue totals have been updated.</p>
           </div>
         </div>
       )}
