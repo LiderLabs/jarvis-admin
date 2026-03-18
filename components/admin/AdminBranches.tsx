@@ -88,6 +88,7 @@ interface FormData {
   email: string
   deliveryFee: number
   stationPin: string
+  weeklyOrderTarget: number
 }
 
 const BRANCHES_LIMIT = 20
@@ -501,6 +502,12 @@ const BranchFormFields = ({
     </div>
     <Separator />
     <div className='space-y-2'>
+      <Label htmlFor={`${prefix}weeklyOrderTarget`}>Weekly Order Target</Label>
+      <Input id={`${prefix}weeklyOrderTarget`} type='number' min='0' value={formData.weeklyOrderTarget ?? 0} onChange={(e) => setFormData({ ...formData, weeklyOrderTarget: parseInt(e.target.value) || 0 })} placeholder='e.g., 150' />
+      <p className='text-xs text-muted-foreground'>Target number of orders per week for this branch.</p>
+    </div>
+    <Separator />
+    <div className='space-y-2'>
       <Label htmlFor={`${prefix}stationPin`} className='flex items-center gap-2'>
         <Lock className='h-4 w-4' />
         Station PIN {prefix === "" ? "*" : (selectedBranch && !(selectedBranch as any).stationPinHash ? "*" : "")}
@@ -543,6 +550,7 @@ const AdminBranches = () => {
     email: "",
     deliveryFee: 10,
     stationPin: "",
+    weeklyOrderTarget: 0,
   })
 
   const { results: branchesPages, status: paginationStatus, loadMore } = usePaginatedQuery(
@@ -563,7 +571,7 @@ const AdminBranches = () => {
   const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
 
   const resetForm = () => {
-    setFormData({ name: "", code: "", address: "", city: "", country: "Ghana", phoneNumber: "", email: "", deliveryFee: 10, stationPin: "" })
+    setFormData({ name: "", code: "", address: "", city: "", country: "Ghana", phoneNumber: "", email: "", deliveryFee: 10, stationPin: "", weeklyOrderTarget: 0 })
     setServiceDrafts([])
   }
 
@@ -581,6 +589,7 @@ const AdminBranches = () => {
       email: branch.email || "",
       deliveryFee: branch.deliveryFee,
       stationPin: "",
+      weeklyOrderTarget: (branch as any).weeklyOrderTarget || 0,
     })
     setShowEditDialog(true)
   }
@@ -612,6 +621,7 @@ const AdminBranches = () => {
         pricingPerKg: 0,
         deliveryFee: formData.deliveryFee,
         stationPin: formData.stationPin.trim(),
+        weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       for (const draft of serviceDrafts) {
         const imageUrl = draft.imageUrl?.startsWith("convex-storage:")
@@ -650,6 +660,7 @@ const AdminBranches = () => {
         email: formData.email?.trim() || undefined,
         deliveryFee: formData.deliveryFee,
         stationPin: formData.stationPin?.trim() || undefined,
+        weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       toast.success("Branch updated successfully!")
       handleCloseDialogs()

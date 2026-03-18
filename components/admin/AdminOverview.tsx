@@ -1,393 +1,423 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { usePaginatedQuery, useQuery } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import {
   ShoppingBag,
-  Banknote,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  Package,
-  BarChart3,
   ArrowUpRight,
   ArrowDownRight,
-  Calendar,
+  Zap,
+  Target,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
 import { format, subDays } from "date-fns"
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+
+function StatCard({ title, value, change, sub, color }: {
+  title: string
+  value: string | number
+  change?: number
+  sub?: string
+  color: string
+}) {
+  const isPos = (change ?? 0) >= 0
+  return (
+    <div className={`bg-card border-l-4 ${color} border border-border rounded-xl p-4`}>
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">{title}</p>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      {change !== undefined && (
+        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${isPos ? "text-green-600" : "text-red-500"}`}>
+          {isPos ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+          {isPos ? "+" : ""}{change.toFixed(1)}% vs avg
+        </div>
+      )}
+      {sub && change === undefined && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+      <p className="text-xs text-muted-foreground mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="text-sm font-semibold" style={{ color: p.color }}>
+          {p.name}: {p.dataKey === "revenue" ? `GHS ${p.value.toFixed(2)}` : p.value}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function WeeklyTargetCard({ branchName, weeklyOrders, weeklyTarget }: {
+  branchName: string
+  weeklyOrders: number
+  weeklyTarget: number
+}) {
+  const pct = weeklyTarget > 0 ? Math.min((weeklyOrders / weeklyTarget) * 100, 100) : 0
+  const isComplete = pct >= 100
+  const isClose = pct >= 75
+  const color = isComplete ? "bg-green-500" : isClose ? "bg-yellow-400" : "bg-blue-500"
+  const textColor = isComplete ? "text-green-600" : isClose ? "text-yellow-600" : "text-blue-600"
+  const bgColor = isComplete
+    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+    : isClose
+    ? "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
+    : "bg-card border-border"
+
+  return (
+    <div className={`border rounded-xl p-4 ${bgColor} transition-all flex-shrink-0 w-64`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="min-w-0 flex-1 mr-2">
+          <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
+          <p className="text-xs text-muted-foreground">
+            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget} orders` : "No target set"}
+          </p>
+        </div>
+        <div className={`text-right flex-shrink-0 ${textColor}`}>
+          <p className="text-xl font-bold">{pct.toFixed(0)}%</p>
+          {isComplete && <p className="text-xs font-medium">🎯 Hit!</p>}
+        </div>
+      </div>
+
+      {weeklyTarget > 0 ? (
+        <div className="relative">
+          <div className="flex items-center gap-1">
+            <div className="flex-1 h-4 bg-muted rounded-lg overflow-hidden border border-border relative">
+              <div
+                className={`h-full ${color} rounded-lg transition-all duration-1000 ease-out relative overflow-hidden`}
+                style={{ width: `${pct}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+              </div>
+              {[25, 50, 75].map(s => (
+                <div key={s} className="absolute top-0 bottom-0 w-px bg-background/40" style={{ left: `${s}%` }} />
+              ))}
+            </div>
+            <div className={`w-1.5 h-3 ${color} rounded-r-sm opacity-70`} />
+          </div>
+          <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+            <span>0</span>
+            <span>{Math.round(weeklyTarget * 0.5)}</span>
+            <span>{weeklyTarget}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="h-4 bg-muted rounded-lg flex items-center justify-center">
+          <p className="text-[10px] text-muted-foreground">Set target in branch settings</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const AdminOverview = () => {
+  const [selectedBranch, setSelectedBranch] = useState("all")
+  const [dateFrom, setDateFrom] = useState<Date>(new Date())
+  const [dateTo, setDateTo] = useState<Date>(new Date())
+
+  const startDateStr = format(dateFrom, "yyyy-MM-dd")
+  const endDateStr = format(dateTo, "yyyy-MM-dd")
+
   const { results: ordersPages, status } = usePaginatedQuery(
     api.admin.getOrders,
-    {},
-    { initialNumItems: 100 }
+    selectedBranch === "all" ? {} : { branchId: selectedBranch as any },
+    { initialNumItems: 200 }
   )
 
   const orders = ordersPages?.flat() || []
-  const isLoading = status === 'LoadingFirstPage'
+  const isLoading = status === "LoadingFirstPage"
 
-  // Payment stats from payments table directly (accurate — no dependency on daily reports)
-  const todayStats = useQuery(api.admin.getPaymentStats, {
-    startDate: format(new Date(), 'yyyy-MM-dd'),
-    endDate: format(new Date(), 'yyyy-MM-dd'),
-  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
+  const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
+  const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
+
+  const selectedStats = useQuery(api.admin.getPaymentStats, {
+    startDate: startDateStr,
+    endDate: endDateStr,
+    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
+  }) ?? { totalRevenue: 0, byDay: {} }
 
   const last30Stats = useQuery(api.admin.getPaymentStats, {
-    startDate: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
-    endDate: format(new Date(), 'yyyy-MM-dd'),
-  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
+    startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
+  }) ?? { totalRevenue: 0 }
 
-  const last7Stats = useQuery(api.admin.getPaymentStats, {
-    startDate: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
-    endDate: format(new Date(), 'yyyy-MM-dd'),
-  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0 }
+  const todayStats = useQuery(api.admin.getPaymentStats, {
+    startDate: format(new Date(), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
+  }) ?? { totalRevenue: 0 }
 
-    const stats = useMemo(() => {
+  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
+
+  const stats = useMemo(() => {
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
+    const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
+    const endTs = new Date(dateTo).setHours(23, 59, 59, 999)
 
     const todayOrders = orders.filter((o: any) => o._creationTime >= todayStart)
-    const last30DaysOrders = orders.filter((o: any) => o._creationTime >= thirtyDaysAgo)
-
-    // Revenue from payments table directly (no dependency on daily reports)
+    const selectedOrders = orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs)
     const todayRevenue = todayStats?.totalRevenue ?? 0
-    const totalRevenue = last30Stats?.totalRevenue ?? 0
+    const totalRevenue30 = last30Stats?.totalRevenue ?? 0
 
-        const completedOrders = last30DaysOrders.filter((o: any) => o.status === 'completed').length
     const pendingOrders = orders.filter((o: any) =>
-      o.status === 'pending' ||
-      o.status === 'pending_dropoff' ||
-      o.status === 'in_progress' ||
-      o.status === 'washing' ||
-      o.status === 'drying' ||
-      o.status === 'folding' ||
-      o.status === 'sorting' ||
-      o.status === 'checked_in'
+      ["pending", "pending_dropoff", "in_progress", "washing", "drying", "folding", "sorting", "checked_in"].includes(o.status)
     ).length
 
-    const todayCompletedOrders = todayOrders.filter((o: any) => o.status === 'completed').length
+    const todayCompletedOrders = todayOrders.filter((o: any) => o.status === "completed").length
 
-    // Revenue trend from daily reports per day (last 7 days)
-    const last7Days = []
-    for (let i = 6; i >= 0; i--) {
-      const date = subDays(new Date(), i)
-      const dateStr = format(date, 'yyyy-MM-dd')
+    const avgDailyRevenue = totalRevenue30 / 30
+    const revenueChange = avgDailyRevenue > 0 ? ((todayRevenue - avgDailyRevenue) / avgDailyRevenue) * 100 : 0
+
+    const avgDailyOrders = orders.length / 30
+    const ordersChange = avgDailyOrders > 0 ? ((todayOrders.length - avgDailyOrders) / avgDailyOrders) * 100 : 0
+
+    // Build chart data for selected date range
+    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    const chartData = []
+    for (let i = dDiff - 1; i >= 0; i--) {
+      const date = subDays(dateTo, i)
+      const dateStr = format(date, "yyyy-MM-dd")
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-      const dayEnd = dayStart + (24 * 60 * 60 * 1000)
-
-      const dayRevenue = (last7Stats as any)?.byDay?.[dateStr] ?? 0
-            const dayOrders = orders.filter((o: any) =>
-        o._creationTime >= dayStart && o._creationTime < dayEnd
-      )
-
-      last7Days.push({
-        period: date.toISOString(),
+      const dayEnd = dayStart + 86400000
+      const dayRevenue = (selectedStats as any)?.byDay?.[dateStr] ?? 0
+      const dayOrders = orders.filter((o: any) => o._creationTime >= dayStart && o._creationTime < dayEnd).length
+      chartData.push({
+        date: format(date, dDiff <= 14 ? "MMM d" : "MMM d"),
         revenue: dayRevenue,
-        orders: dayOrders.length,
+        orders: dayOrders,
       })
     }
-
-    const avgDailyRevenue = totalRevenue / 30
-    const revenueChange = avgDailyRevenue > 0
-      ? ((todayRevenue - avgDailyRevenue) / avgDailyRevenue) * 100
-      : 0
-
-    const avgDailyOrders = last30DaysOrders.length / 30
-    const ordersChange = avgDailyOrders > 0
-      ? ((todayOrders.length - avgDailyOrders) / avgDailyOrders) * 100
-      : 0
 
     return {
       todayOrders: todayOrders.length,
       todayRevenue,
-      totalOrders: last30DaysOrders.length,
-      totalRevenue,
-      completedOrders,
       pendingOrders,
       todayCompletedOrders,
       revenueChange,
       ordersChange,
-      revenueTrends: last7Days,
+      chartData,
+      selectedRevenue: selectedStats?.totalRevenue ?? 0,
+      selectedOrders: selectedOrders.length,
     }
-  }, [orders, todayStats, last30Stats, last7Stats])
+  }, [orders, todayStats, last30Stats, selectedStats, dateFrom, dateTo])
 
-  const recentOrders = useMemo(() => orders.slice(0, 10), [orders])
+  const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
-  const maxRevenue = useMemo(() => {
-    if (stats.revenueTrends.length === 0) return 0
-    return Math.max(...stats.revenueTrends.map((t: any) => t.revenue))
-  }, [stats.revenueTrends])
+  const filteredWeeklyStats = useMemo(() => {
+    if (selectedBranch === "all") return weeklyStats as any[]
+    return (weeklyStats as any[]).filter((s: any) => s.branchId === selectedBranch)
+  }, [weeklyStats, selectedBranch])
+
+  const isToday = startDateStr === endDateStr && startDateStr === format(new Date(), "yyyy-MM-dd")
 
   const statusColors: Record<string, string> = {
-    completed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    ready_for_pickup: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    ready: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    in_progress: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    pending_dropoff: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    checked_in: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-    sorting: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    washing: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
-    drying: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-    folding: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-    delivered: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+    completed: "bg-green-100 text-green-700",
+    ready: "bg-blue-100 text-blue-700",
+    in_progress: "bg-yellow-100 text-yellow-700",
+    pending: "bg-yellow-100 text-yellow-700",
+    pending_dropoff: "bg-yellow-100 text-yellow-700",
+    checked_in: "bg-cyan-100 text-cyan-700",
+    sorting: "bg-purple-100 text-purple-700",
+    washing: "bg-indigo-100 text-indigo-700",
+    drying: "bg-sky-100 text-sky-700",
+    folding: "bg-violet-100 text-violet-700",
+    cancelled: "bg-gray-100 text-gray-700",
   }
 
-  const formatStatus = (status: string) => {
-    return status
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ")
-  }
+  const formatStatus = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 
-  if (isLoading) {
-    return <DashboardSkeleton />
-  }
+  if (isLoading) return <DashboardSkeleton />
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
-        <p className="text-muted-foreground mt-1">Welcome to WashLab Admin</p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard Overview</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Welcome to WashLab Admin</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
+          />
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-36 text-sm">
+              <SelectValue placeholder="All Branches" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Branches</SelectItem>
+              {branches.map((b: any) => (
+                <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Today's Revenue</p>
-                <p className="text-3xl font-bold tracking-tight">₵{stats.todayRevenue.toFixed(2)}</p>
-                <div className="flex items-center gap-1 text-xs">
-                  {stats.revenueChange >= 0 ? (
-                    <><ArrowUpRight className="w-3 h-3 text-green-600" /><span className="text-green-600 font-medium">+{stats.revenueChange.toFixed(1)}%</span></>
-                  ) : (
-                    <><ArrowDownRight className="w-3 h-3 text-red-600" /><span className="text-red-600 font-medium">{stats.revenueChange.toFixed(1)}%</span></>
-                  )}
-                  <span className="text-muted-foreground">vs avg • received only</span>
+      {/* Stat Cards — always show today's live stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard title="Today's Revenue" value={`₵${stats.todayRevenue.toFixed(2)}`} change={stats.revenueChange} color="border-l-green-500" />
+        <StatCard title="Today's Orders" value={stats.todayOrders} change={stats.ordersChange} color="border-l-blue-500" />
+        <StatCard title="In Progress" value={stats.pendingOrders} sub="Require attention" color="border-l-yellow-500" />
+        <StatCard title="Completed Today" value={stats.todayCompletedOrders} sub="Successfully done" color="border-l-emerald-500" />
+      </div>
+
+      {/* Charts: Weekly Target + Revenue */}
+      <div className="grid lg:grid-cols-2 gap-5 items-stretch">
+
+        {/* Weekly Target - horizontal scroll */}
+        <Card className="flex flex-col">
+          <CardHeader className="pb-2 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Target className="w-4 h-4" /> Weekly Order Target
+                </CardTitle>
+                <CardDescription className="text-xs">Orders this week vs branch target</CardDescription>
+              </div>
+              <div className="flex items-center gap-1">
+                <Zap className="w-4 h-4 text-yellow-500" />
+                <span className="text-xs text-muted-foreground">
+                  {(filteredWeeklyStats as any[]).reduce((s: number, b: any) => s + b.weeklyOrders, 0)} total
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col min-h-0">
+            {filteredWeeklyStats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center flex-1 py-8 text-muted-foreground">
+                <Target className="w-8 h-8 mb-2 opacity-30" />
+                <p className="text-sm">No branch data available</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                  {filteredWeeklyStats.map((b: any) => (
+                    <WeeklyTargetCard
+                      key={b.branchId}
+                      branchName={b.branchName}
+                      weeklyOrders={b.weeklyOrders}
+                      weeklyTarget={b.weeklyTarget}
+                    />
+                  ))}
                 </div>
-              </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                <Banknote className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
+                {filteredWeeklyStats.length > 2 && (
+                  <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                    ← scroll to see all {filteredWeeklyStats.length} branches →
+                  </p>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Today's Orders</p>
-                <p className="text-3xl font-bold tracking-tight">{stats.todayOrders}</p>
-                <div className="flex items-center gap-1 text-xs">
-                  {stats.ordersChange >= 0 ? (
-                    <><ArrowUpRight className="w-3 h-3 text-green-600" /><span className="text-green-600 font-medium">+{stats.ordersChange.toFixed(1)}%</span></>
-                  ) : (
-                    <><ArrowDownRight className="w-3 h-3 text-red-600" /><span className="text-red-600 font-medium">{stats.ordersChange.toFixed(1)}%</span></>
-                  )}
-                  <span className="text-muted-foreground">vs avg</span>
-                </div>
+        {/* Revenue Chart — responds to date range */}
+        <Card className="flex flex-col">
+          <CardHeader className="pb-2 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Revenue: {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d, yyyy")}
+                </CardTitle>
+                <CardDescription className="text-xs">Daily received payments</CardDescription>
               </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                <ShoppingBag className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="text-right">
+                <p className="text-xl font-bold text-green-600">₵{stats.selectedRevenue.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">{isToday ? "Today" : "This period"}</p>
               </div>
             </div>
+          </CardHeader>
+          <CardContent className="flex-1 min-h-0 pt-0">
+            <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+              <AreaChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={50} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#revGrad)" dot={false} activeDot={{ r: 4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-yellow-500">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Orders in Progress</p>
-                <p className="text-3xl font-bold tracking-tight">{stats.pendingOrders}</p>
-                <p className="text-xs text-muted-foreground">Require attention</p>
-              </div>
-              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Orders Completed Today</p>
-                <p className="text-3xl font-bold tracking-tight">{stats.todayCompletedOrders}</p>
-                <p className="text-xs text-muted-foreground">Successfully delivered</p>
-              </div>
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Revenue (30d)</p>
-                <p className="text-2xl font-bold">₵{stats.totalRevenue.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Received payments only</p>
-              </div>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3" /><span>Last 30 days</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Orders (30d)</p>
-                <p className="text-2xl font-bold">{stats.totalOrders}</p>
-              </div>
-              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
-                <Package className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3" /><span>Last 30 days</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Orders Completed (30d)</p>
-                <p className="text-2xl font-bold">{stats.completedOrders}</p>
-              </div>
-              <div className="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/20 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3" /><span>Last 30 days</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Recent Orders */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <BarChart3 className="w-5 h-5" />
-                Performance Trend (Last 7 Days)
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">Daily received revenue and order volume</CardDescription>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-violet-500" /><span>Revenue</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-cyan-400" /><span>Orders</span></div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {stats.revenueTrends.length > 0 ? (
-            <div className="space-y-3">
-              {stats.revenueTrends.map((trend: any) => {
-                const revenuePercentage = maxRevenue > 0 ? (trend.revenue / maxRevenue) * 100 : 0
-                const maxOrders = Math.max(...stats.revenueTrends.map((t: any) => t.orders), 1)
-                const ordersPercentage = (trend.orders / maxOrders) * 100
-                return (
-                  <div key={trend.period} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium text-muted-foreground w-24">{format(new Date(trend.period), 'EEE, MMM d')}</span>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="text-muted-foreground">{trend.orders} orders</span>
-                        <span className="font-bold text-foreground tabular-nums">₵{trend.revenue.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-                    <div className="relative h-7 bg-muted/40 rounded-lg overflow-hidden border border-border/30">
-                      <div
-                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
-                        style={{ width: `${Math.max(revenuePercentage, 2)}%` }}
-                      >
-                        {revenuePercentage > 20 && (
-                          <span className="text-[10px] font-semibold text-white">₵{trend.revenue.toLocaleString('en', { minimumFractionDigits: 0 })}</span>
-                        )}
-                      </div>
-                      <div
-                        className="absolute inset-y-0 left-0 bg-cyan-400/20 border-r-2 border-cyan-400 transition-all duration-700"
-                        style={{ width: `${Math.max(ordersPercentage, 1)}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <BarChart3 className="w-10 h-10 mb-2 opacity-30" />
-              <p className="text-sm">No data available</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Recent Orders</span>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4" /> Recent Orders
+            </CardTitle>
             <Badge variant="secondary">{recentOrders.length}</Badge>
-          </CardTitle>
-          <CardDescription>Latest customer orders and their status</CardDescription>
+          </div>
+          <CardDescription>Latest customer orders</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {recentOrders.length > 0 ? (
-              recentOrders.map((order: any) => (
-                <div key={order._id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="flex-1 min-w-0 mr-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-lg">{order.orderNumber}</p>
-                      <Badge variant="secondary" className={`text-xs ${statusColors[order.status] || 'bg-yellow-100 text-yellow-700'}`}>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  {["Order", "Customer", "Branch", "Status", "Amount"].map(h => (
+                    <th key={h} className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recentOrders.length > 0 ? recentOrders.map((order: any) => (
+                  <tr key={order._id} className="border-b border-border hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-bold">{order.orderNumber}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(order._creationTime), "MMM d, h:mm a")}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{order.customerName || order.customerPhoneNumber || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{branches.find((b: any) => b._id === order.branchId)?.name ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary" className={`text-xs ${statusColors[order.status] || "bg-yellow-100 text-yellow-700"}`}>
                         {formatStatus(order.status)}
                       </Badge>
-                      {order.paymentStatus !== 'paid' && (
-                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">Unpaid</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className={`text-sm font-bold ${order.paymentStatus !== "paid" ? "text-muted-foreground" : ""}`}>
+                        ₵{(order.finalPrice || 0).toFixed(2)}
+                      </p>
+                      {order.paymentStatus !== "paid" && (
+                        <p className="text-xs text-orange-500">Unpaid</p>
                       )}
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">{order.customerName || order.customerPhoneNumber}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(order._creationTime), 'MMM d, yyyy • h:mm a')}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-2xl font-bold ${order.paymentStatus !== 'paid' ? 'text-muted-foreground' : ''}`}>
-                      ₵{(order.finalPrice || 0).toFixed(2)}
-                    </p>
-                    {order.paymentStatus !== 'paid' && (
-                      <p className="text-xs text-orange-500">Not counted in revenue</p>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground">No orders yet</p>
-              </div>
-            )}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">No orders yet</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

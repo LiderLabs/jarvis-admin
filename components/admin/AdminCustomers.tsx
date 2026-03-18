@@ -37,10 +37,8 @@ import {
   Users,
   UserCheck,
   UserX,
-  Ban,
   Search,
   Filter,
-  AlertTriangle,
   MapPin,
 } from "lucide-react"
 import { CustomerTableRow } from "./CustomerTableRow"
@@ -48,6 +46,17 @@ import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
 import { CustomersTableSkeleton } from "@/components/loaders/CustomersTableSkeleton"
 import { CustomersStatsSkeleton } from "@/components/loaders/CustomersStatsSkeleton"
 import { Id } from "@jordan6699/washlab-backend/dataModel"
+
+const BRANCH_COLORS = [
+  "bg-orange-500",
+  "bg-indigo-500",
+  "bg-pink-500",
+  "bg-teal-500",
+  "bg-yellow-500",
+  "bg-cyan-500",
+  "bg-rose-500",
+  "bg-violet-500",
+]
 
 const AdminCustomers = () => {
   const [searchQuery, setSearchQuery] = useState("")
@@ -64,13 +73,15 @@ const AdminCustomers = () => {
   } | null>(null)
   const [statusNote, setStatusNote] = useState("")
 
-  // Get customer stats
-  const customerStats = useQuery(api.admin.getCustomerStats)
+  // Get customer stats — filtered by branch when one is selected
+  const customerStats = useQuery(api.admin.getCustomerStats, {
+    branchId: branchFilter === "all" ? undefined : branchFilter as any,
+  } as any)
 
   // Get branches for filter dropdown
   const branches = useQuery(api.branches.getActive, {}) ?? []
 
-  // Get customers with pagination (using debounced search)
+  // Get customers with pagination
   const {
     results: customersPages,
     status: paginationStatus,
@@ -97,7 +108,6 @@ const AdminCustomers = () => {
   const customers = customersPages?.flat() || []
   const hasMore = paginationStatus === "CanLoadMore"
 
-  // Mutations
   const changeCustomerStatus = useMutation(api.admin.changeCustomerStatus)
   const deleteCustomer = useMutation(api.admin.deleteCustomer)
 
@@ -153,46 +163,7 @@ const AdminCustomers = () => {
     return <CustomersSkeleton />
   }
 
-  const walkInCount = customerStats ? customerStats.walkInCustomers : 0
-
-  const stats = customerStats ? [
-    {
-      label: "Total Customers",
-      value: customerStats.totalCustomers.toString(),
-      icon: Users,
-      color: "bg-blue-500",
-    },
-    {
-      label: "Online Users",
-      value: customerStats.registeredCustomers.toString(),
-      icon: UserCheck,
-      color: "bg-green-500",
-    },
-    {
-      label: "Walk-in Users",
-      value: walkInCount.toString(),
-      icon: UserX,
-      color: "bg-purple-500",
-    },
-    {
-      label: "Active",
-      value: customerStats.activeCustomers.toString(),
-      icon: UserCheck,
-      color: "bg-emerald-500",
-    },
-    {
-      label: "Blocked",
-      value: customerStats.blockedCustomers.toString(),
-      icon: Ban,
-      color: "bg-red-500",
-    },
-    {
-      label: "Suspended",
-      value: customerStats.suspendedCustomers.toString(),
-      icon: AlertTriangle,
-      color: "bg-orange-500",
-    },
-  ] : []
+  const branchCounts = (customerStats as any)?.branchCustomerCounts ?? []
 
   return (
     <div>
@@ -207,26 +178,90 @@ const AdminCustomers = () => {
       {/* Stats Grid */}
       {isStatsLoading ? (
         <CustomersStatsSkeleton />
-      ) : (
+      ) : customerStats ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, i) => {
-            const Icon = stat.icon
+
+          {/* Total Customers — clicking clears branch filter */}
+          <div
+            onClick={() => setBranchFilter("all")}
+            className={`bg-card rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md ${branchFilter === "all" ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary"}`}
+          >
+            <div className="flex items-center gap-4">
+              <div className="bg-blue-500 p-3 rounded-lg">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Customers</p>
+                <p className="text-2xl font-bold text-foreground">{customerStats.totalCustomers}</p>
+                {branchFilter === "all" && <p className="text-xs text-primary font-medium mt-0.5">All branches</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Online Users */}
+          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="bg-green-500 p-3 rounded-lg">
+                <UserCheck className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Online Users</p>
+                <p className="text-2xl font-bold text-foreground">{customerStats.registeredCustomers}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Walk-in Users */}
+          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="bg-purple-500 p-3 rounded-lg">
+                <UserX className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Walk-in Users</p>
+                <p className="text-2xl font-bold text-foreground">{customerStats.walkInCustomers}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Active */}
+          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="bg-emerald-500 p-3 rounded-lg">
+                <UserCheck className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Active</p>
+                <p className="text-2xl font-bold text-foreground">{customerStats.activeCustomers}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Per-branch cards — one per branch, clickable to filter */}
+          {branchCounts.map((b: any, i: number) => {
+            const isActive = branchFilter === b.branchId
             return (
-              <div key={i} className="bg-card rounded-xl p-6 border border-border shadow-sm">
+              <div
+                key={b.branchId}
+                onClick={() => setBranchFilter(isActive ? "all" : b.branchId)}
+                className={`bg-card rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md ${isActive ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary"}`}
+              >
                 <div className="flex items-center gap-4">
-                  <div className={`${stat.color} p-3 rounded-lg`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`${BRANCH_COLORS[i % BRANCH_COLORS.length]} p-3 rounded-lg`}>
+                    <MapPin className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                    <p className="text-sm text-muted-foreground">{b.branchName}</p>
+                    <p className="text-2xl font-bold text-foreground">{b.customerCount}</p>
+                    {isActive && <p className="text-xs text-primary font-medium mt-0.5">Filtering</p>}
                   </div>
                 </div>
               </div>
             )
           })}
+
         </div>
-      )}
+      ) : null}
 
       {/* Filters and Search */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 flex-wrap">
@@ -262,7 +297,6 @@ const AdminCustomers = () => {
             <SelectItem value="walkin">Walk-in Users</SelectItem>
           </SelectContent>
         </Select>
-        {/* Branch Filter */}
         <Select value={branchFilter} onValueChange={setBranchFilter}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <MapPin className="w-4 h-4 mr-2" />
@@ -284,7 +318,9 @@ const AdminCustomers = () => {
         <div className="mb-4 flex items-center gap-2">
           <Badge variant="secondary" className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />
-            {branches.find((b: any) => b._id === branchFilter)?.name ?? "Branch"}
+            {branches.find((b: any) => b._id === branchFilter)?.name
+              ?? branchCounts.find((b: any) => b.branchId === branchFilter)?.branchName
+              ?? "Branch"}
           </Badge>
           <button
             onClick={() => setBranchFilter("all")}

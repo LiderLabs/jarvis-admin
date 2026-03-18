@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
-import { useUser, useClerk } from "@clerk/nextjs"
+import { useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ import {
 
 const AdminSettings = () => {
   const { user: clerkUser } = useUser()
-  const { openUserProfile } = useClerk()
+  
   const adminProfile = useQuery(api.admin.getCurrentUser)
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
@@ -170,7 +170,7 @@ const AdminSettings = () => {
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => openUserProfile()}>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => window.open("https://accounts.washlab.app/user", "_blank", "noopener,noreferrer")}>
               <ExternalLink className="w-3 h-3" />
               Manage Clerk Account
             </Button>
@@ -197,7 +197,7 @@ const AdminSettings = () => {
               <p className="text-sm font-medium">Change Password</p>
               <p className="text-xs text-muted-foreground mt-0.5">Password is managed securely via Clerk</p>
             </div>
-            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0" onClick={() => openUserProfile()}>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0" onClick={() => window.open("https://accounts.washlab.app/user", "_blank", "noopener,noreferrer")}>
               <ExternalLink className="w-3 h-3" />
               Change Password
             </Button>
