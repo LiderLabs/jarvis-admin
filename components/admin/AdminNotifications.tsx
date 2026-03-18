@@ -32,7 +32,6 @@ import {
 import { format } from "date-fns"
 import {
   Bell,
-  BellOff,
   Check,
   CheckCheck,
   Trash2,
@@ -121,7 +120,7 @@ const AdminNotifications = () => {
               | "payment"
               | "system")
           : undefined,
-      isRead: readFilter === "all" ? undefined : readFilter === "read",
+      // isRead filtered client-side to handle broadcast notifications
     },
     { initialNumItems: NOTIFICATIONS_LIMIT }
   )
@@ -319,64 +318,6 @@ const AdminNotifications = () => {
             <span className='sm:hidden'>Create</span>
           </Button>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className='grid gap-4 md:grid-cols-4'>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Total Notifications
-            </CardTitle>
-            <Bell className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {filteredNotifications.length}
-            </div>
-            <p className='text-xs text-muted-foreground'>All notifications</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Unread</CardTitle>
-            <BellOff className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {filteredNotifications.filter((n) => !n.isRead).length}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              Unread notifications
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Read</CardTitle>
-            <CheckCheck className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {filteredNotifications.filter((n) => n.isRead).length}
-            </div>
-            <p className='text-xs text-muted-foreground'>Read notifications</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>System</CardTitle>
-            <Settings className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {filteredNotifications.filter((n) => n.type === "system").length}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              System notifications
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}

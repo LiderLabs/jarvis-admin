@@ -80,17 +80,17 @@ function WeeklyTargetCard({ branchName, weeklyOrders, weeklyTarget }: {
     : "bg-card border-border"
 
   return (
-    <div className={`border rounded-xl p-4 ${bgColor} transition-all flex-shrink-0 w-64`}>
+    <div className={`border rounded-xl p-4 ${bgColor} transition-all flex-shrink-0 w-56`}>
       <div className="flex items-center justify-between mb-3">
         <div className="min-w-0 flex-1 mr-2">
           <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
           <p className="text-xs text-muted-foreground">
-            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget} orders` : "No target set"}
+            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget}` : "No target set"}
           </p>
         </div>
         <div className={`text-right flex-shrink-0 ${textColor}`}>
-          <p className="text-xl font-bold">{pct.toFixed(0)}%</p>
-          {isComplete && <p className="text-xs font-medium">🎯 Hit!</p>}
+          <p className="text-lg font-bold">{pct.toFixed(0)}%</p>
+          {isComplete && <p className="text-xs font-medium">🎯</p>}
         </div>
       </div>
 
@@ -118,7 +118,7 @@ function WeeklyTargetCard({ branchName, weeklyOrders, weeklyTarget }: {
         </div>
       ) : (
         <div className="h-4 bg-muted rounded-lg flex items-center justify-center">
-          <p className="text-[10px] text-muted-foreground">Set target in branch settings</p>
+          <p className="text-[10px] text-muted-foreground">Set in branch settings</p>
         </div>
       )}
     </div>
@@ -157,39 +157,32 @@ const AdminOverview = () => {
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
   }) ?? { totalRevenue: 0 }
 
-  const todayStats = useQuery(api.admin.getPaymentStats, {
-    startDate: format(new Date(), "yyyy-MM-dd"),
-    endDate: format(new Date(), "yyyy-MM-dd"),
-    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
-  }) ?? { totalRevenue: 0 }
-
   const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
   const stats = useMemo(() => {
-    const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
     const endTs = new Date(dateTo).setHours(23, 59, 59, 999)
 
-    const todayOrders = orders.filter((o: any) => o._creationTime >= todayStart)
     const selectedOrders = orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs)
-    const todayRevenue = todayStats?.totalRevenue ?? 0
+    const selectedRevenue = selectedStats?.totalRevenue ?? 0
     const totalRevenue30 = last30Stats?.totalRevenue ?? 0
 
     const pendingOrders = orders.filter((o: any) =>
       ["pending", "pending_dropoff", "in_progress", "washing", "drying", "folding", "sorting", "checked_in"].includes(o.status)
     ).length
 
-    const todayCompletedOrders = todayOrders.filter((o: any) => o.status === "completed").length
+    const completedInRange = selectedOrders.filter((o: any) => o.status === "completed").length
 
+    // Compare selected period revenue vs 30-day daily avg
+    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const avgDailyRevenue = totalRevenue30 / 30
-    const revenueChange = avgDailyRevenue > 0 ? ((todayRevenue - avgDailyRevenue) / avgDailyRevenue) * 100 : 0
+    const expectedRevenue = avgDailyRevenue * dDiff
+    const revenueChange = expectedRevenue > 0 ? ((selectedRevenue - expectedRevenue) / expectedRevenue) * 100 : 0
 
     const avgDailyOrders = orders.length / 30
-    const ordersChange = avgDailyOrders > 0 ? ((todayOrders.length - avgDailyOrders) / avgDailyOrders) * 100 : 0
+    const expectedOrders = avgDailyOrders * dDiff
+    const ordersChange = expectedOrders > 0 ? ((selectedOrders.length - expectedOrders) / expectedOrders) * 100 : 0
 
-    // Build chart data for selected date range
-    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const chartData = []
     for (let i = dDiff - 1; i >= 0; i--) {
       const date = subDays(dateTo, i)
@@ -199,24 +192,23 @@ const AdminOverview = () => {
       const dayRevenue = (selectedStats as any)?.byDay?.[dateStr] ?? 0
       const dayOrders = orders.filter((o: any) => o._creationTime >= dayStart && o._creationTime < dayEnd).length
       chartData.push({
-        date: format(date, dDiff <= 14 ? "MMM d" : "MMM d"),
+        date: format(date, "MMM d"),
         revenue: dayRevenue,
         orders: dayOrders,
       })
     }
 
     return {
-      todayOrders: todayOrders.length,
-      todayRevenue,
+      selectedOrders: selectedOrders.length,
+      selectedRevenue,
       pendingOrders,
-      todayCompletedOrders,
+      completedInRange,
       revenueChange,
       ordersChange,
       chartData,
-      selectedRevenue: selectedStats?.totalRevenue ?? 0,
-      selectedOrders: selectedOrders.length,
+      dDiff,
     }
-  }, [orders, todayStats, last30Stats, selectedStats, dateFrom, dateTo])
+  }, [orders, last30Stats, selectedStats, dateFrom, dateTo])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
@@ -246,21 +238,22 @@ const AdminOverview = () => {
   if (isLoading) return <DashboardSkeleton />
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 pb-8">
+      {/* Header — stacks on mobile */}
+      <div className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard Overview</h1>
+          <h1 className="text-xl font-bold text-foreground">Dashboard Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Welcome to WashLab Admin</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Filters row — wraps naturally on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
             onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
           />
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-36 text-sm">
+            <SelectTrigger className="w-36 text-sm h-9">
               <SelectValue placeholder="All Branches" />
             </SelectTrigger>
             <SelectContent>
@@ -273,44 +266,48 @@ const AdminOverview = () => {
         </div>
       </div>
 
-      {/* Stat Cards — always show today's live stats */}
+      {/* Stat Cards — reflect selected date range */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard title="Today's Revenue" value={`₵${stats.todayRevenue.toFixed(2)}`} change={stats.revenueChange} color="border-l-green-500" />
-        <StatCard title="Today's Orders" value={stats.todayOrders} change={stats.ordersChange} color="border-l-blue-500" />
+        <StatCard title="Revenue" value={`₵${stats.selectedRevenue.toFixed(2)}`} change={stats.revenueChange} color="border-l-green-500" />
+        <StatCard title="Orders" value={stats.selectedOrders} change={stats.ordersChange} color="border-l-blue-500" />
         <StatCard title="In Progress" value={stats.pendingOrders} sub="Require attention" color="border-l-yellow-500" />
-        <StatCard title="Completed Today" value={stats.todayCompletedOrders} sub="Successfully done" color="border-l-emerald-500" />
+        <StatCard title="Completed" value={stats.completedInRange} sub={`In selected period`} color="border-l-emerald-500" />
       </div>
 
-      {/* Charts: Weekly Target + Revenue */}
-      <div className="grid lg:grid-cols-2 gap-5 items-stretch">
+      {/* Charts: stacks on mobile, side by side on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Weekly Target - horizontal scroll */}
-        <Card className="flex flex-col">
-          <CardHeader className="pb-2 flex-shrink-0">
+        {/* Weekly Target */}
+        <Card>
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Target className="w-4 h-4" /> Weekly Order Target
                 </CardTitle>
-                <CardDescription className="text-xs">Orders this week vs branch target</CardDescription>
+                <CardDescription className="text-xs">Orders this week vs target</CardDescription>
               </div>
               <div className="flex items-center gap-1">
-                <Zap className="w-4 h-4 text-yellow-500" />
+                <Zap className="w-3 h-3 text-yellow-500" />
                 <span className="text-xs text-muted-foreground">
-                  {(filteredWeeklyStats as any[]).reduce((s: number, b: any) => s + b.weeklyOrders, 0)} total
+                  {(filteredWeeklyStats as any[]).reduce((s: number, b: any) => s + b.weeklyOrders, 0)} orders
                 </span>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col min-h-0">
+          <CardContent className="pb-4">
             {filteredWeeklyStats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center flex-1 py-8 text-muted-foreground">
+              <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
                 <Target className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-sm">No branch data available</p>
               </div>
             ) : (
               <>
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                {/* Horizontal scroll — fixed height so only cards scroll, not page */}
+                <div
+                  className="flex gap-3 overflow-x-auto pb-2"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
                   {filteredWeeklyStats.map((b: any) => (
                     <WeeklyTargetCard
                       key={b.branchId}
@@ -320,9 +317,9 @@ const AdminOverview = () => {
                     />
                   ))}
                 </div>
-                {filteredWeeklyStats.length > 2 && (
-                  <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                    ← scroll to see all {filteredWeeklyStats.length} branches →
+                {filteredWeeklyStats.length > 1 && (
+                  <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                    ← swipe to see all branches →
                   </p>
                 )}
               </>
@@ -330,24 +327,24 @@ const AdminOverview = () => {
           </CardContent>
         </Card>
 
-        {/* Revenue Chart — responds to date range */}
-        <Card className="flex flex-col">
-          <CardHeader className="pb-2 flex-shrink-0">
+        {/* Revenue Chart */}
+        <Card>
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">
-                  Revenue: {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d, yyyy")}
+                <CardTitle className="text-sm font-semibold">
+                  Revenue: {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d")}
                 </CardTitle>
                 <CardDescription className="text-xs">Daily received payments</CardDescription>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-green-600">₵{stats.selectedRevenue.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">{isToday ? "Today" : "This period"}</p>
+                <p className="text-lg font-bold text-green-600">₵{stats.selectedRevenue.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">{isToday ? "Today" : "Period"}</p>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 pt-0">
-            <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+          <CardContent className="pt-0">
+            <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -356,8 +353,8 @@ const AdminOverview = () => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={50} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={45} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#revGrad)" dot={false} activeDot={{ r: 4 }} />
               </AreaChart>
@@ -371,12 +368,12 @@ const AdminOverview = () => {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" /> Recent Orders
             </CardTitle>
             <Badge variant="secondary">{recentOrders.length}</Badge>
           </div>
-          <CardDescription>Latest customer orders</CardDescription>
+          <CardDescription className="text-xs">Latest customer orders</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">

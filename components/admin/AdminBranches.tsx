@@ -121,15 +121,30 @@ const ServiceImagePicker = ({
     setUploading(true)
     try {
       const uploadUrl = await generateUploadUrl()
-      const res = await fetch(uploadUrl, {
+      // Proxy through Next.js to avoid CORS issues with self-hosted Convex
+      const fileBuffer = await file.arrayBuffer()
+      const res = await fetch("/api/upload-proxy", {
         method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "x-upload-url": uploadUrl,
+          "x-content-type": file.type,
+        },
+        body: fileBuffer,
       })
-      const { storageId } = await res.json()
-      // Build a public URL from storageId — use getServiceImageUrl pattern
-      // We store the storageId as a special marker and resolve it on save
-      onChange(`convex-storage:${storageId}`)
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error("Upload response:", res.status, errText)
+        throw new Error("Upload failed: " + res.status + " " + errText)
+      }
+      const responseText = await res.text()
+      console.log("Upload response text:", responseText)
+      let data: any = {}
+      try { data = JSON.parse(responseText) } catch { data = { storageId: responseText } }
+      const storageId = data.storageId || data.storage_id || responseText.trim()
+      console.log("Storage ID:", storageId)
+      if (!storageId) throw new Error("No storage ID returned")
+        onChange(`convex-storage:${storageId}`)
     } catch {
       toast.error("Failed to upload image")
     } finally {
@@ -503,7 +518,7 @@ const BranchFormFields = ({
     <Separator />
     <div className='space-y-2'>
       <Label htmlFor={`${prefix}weeklyOrderTarget`}>Weekly Order Target</Label>
-      <Input id={`${prefix}weeklyOrderTarget`} type='number' min='0' value={formData.weeklyOrderTarget ?? 0} onChange={(e) => setFormData({ ...formData, weeklyOrderTarget: parseInt(e.target.value) || 0 })} placeholder='e.g., 150' />
+      <Input id={`${prefix}weeklyOrderTarget`} type='number' min='0' value={formData.weeklyOrderTarget || ""} onChange={(e) => setFormData({ ...formData, weeklyOrderTarget: parseInt(e.target.value) || 0 })} placeholder='e.g., 150' />
       <p className='text-xs text-muted-foreground'>Target number of orders per week for this branch.</p>
     </div>
     <Separator />
