@@ -296,7 +296,7 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
               <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
                 <div className="grid grid-cols-2 gap-2">
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                  <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
                 </div>
                 <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 <div className="flex gap-2 pt-1">
@@ -333,7 +333,7 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+              <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
           <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
@@ -407,7 +407,7 @@ const ServiceDraftsPanel = ({
                 <div className="flex-1 space-y-2 mr-2">
                   <div className="grid grid-cols-2 gap-2">
                     <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
+                    <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
                   </div>
                   <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 </div>
@@ -445,7 +445,7 @@ const ServiceDraftsPanel = ({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+              <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
           <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
@@ -503,7 +503,7 @@ const BranchFormFields = ({
     <div className='grid grid-cols-2 gap-4'>
       <div className='space-y-2'>
         <Label htmlFor={`${prefix}phoneNumber`}>Phone Number *</Label>
-        <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder='0XX XXX XXXX' />
+        <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 10); setFormData({ ...formData, phoneNumber: digits }); }} placeholder='0XX XXX XXXX' maxLength={10} inputMode='numeric' />
       </div>
       <div className='space-y-2'>
         <Label htmlFor={`${prefix}email`}>Email</Label>
@@ -513,7 +513,7 @@ const BranchFormFields = ({
     <Separator />
     <div className='space-y-2'>
       <Label htmlFor={`${prefix}deliveryFee`}>Delivery Fee (&#8373;)</Label>
-      <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
+      <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee || ""} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
     </div>
     <Separator />
     <div className='space-y-2'>

@@ -17,13 +17,14 @@ import {
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
 import { format, subDays } from "date-fns"
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
 } from "recharts"
 
 function StatCard({ title, value, change, sub, color }: {
@@ -56,7 +57,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <p className="text-xs text-muted-foreground mb-2">{label}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} className="text-sm font-semibold" style={{ color: p.color }}>
-          {p.name}: {p.dataKey === "revenue" ? `GHS ${p.value.toFixed(2)}` : p.value}
+          {p.name}: ₵{p.value.toFixed(2)}
         </p>
       ))}
     </div>
@@ -80,26 +81,21 @@ function WeeklyTargetCard({ branchName, weeklyOrders, weeklyTarget }: {
     : "bg-card border-border"
 
   return (
-    <div className={`border rounded-xl p-4 ${bgColor} transition-all flex-shrink-0 w-56`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="min-w-0 flex-1 mr-2">
+    <div className={`border rounded-xl px-4 py-3 ${bgColor} transition-all w-full`}>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
           <p className="text-xs text-muted-foreground">
-            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget}` : "No target set"}
+            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget} orders` : "No target set"}
           </p>
         </div>
-        <div className={`text-right flex-shrink-0 ${textColor}`}>
-          <p className="text-lg font-bold">{pct.toFixed(0)}%</p>
-          {isComplete && <p className="text-xs font-medium">🎯</p>}
-        </div>
-      </div>
 
-      {weeklyTarget > 0 ? (
-        <div className="relative">
-          <div className="flex items-center gap-1">
-            <div className="flex-1 h-4 bg-muted rounded-lg overflow-hidden border border-border relative">
+        {/* Progress bar — desktop */}
+        {weeklyTarget > 0 ? (
+          <div className="flex-1 hidden sm:block">
+            <div className="h-3 bg-muted rounded-full overflow-hidden border border-border relative">
               <div
-                className={`h-full ${color} rounded-lg transition-all duration-1000 ease-out relative overflow-hidden`}
+                className={`h-full ${color} rounded-full transition-all duration-1000 ease-out relative overflow-hidden`}
                 style={{ width: `${pct}%` }}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
@@ -108,17 +104,23 @@ function WeeklyTargetCard({ branchName, weeklyOrders, weeklyTarget }: {
                 <div key={s} className="absolute top-0 bottom-0 w-px bg-background/40" style={{ left: `${s}%` }} />
               ))}
             </div>
-            <div className={`w-1.5 h-3 ${color} rounded-r-sm opacity-70`} />
           </div>
-          <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-            <span>0</span>
-            <span>{Math.round(weeklyTarget * 0.5)}</span>
-            <span>{weeklyTarget}</span>
-          </div>
+        ) : (
+          <div className="flex-1 hidden sm:block h-3 bg-muted rounded-full" />
+        )}
+
+        <div className={`text-right flex-shrink-0 flex items-center gap-1 ${textColor}`}>
+          <p className="text-sm font-bold">{pct.toFixed(0)}%</p>
+          {isComplete && <span className="text-xs">🎯</span>}
         </div>
-      ) : (
-        <div className="h-4 bg-muted rounded-lg flex items-center justify-center">
-          <p className="text-[10px] text-muted-foreground">Set in branch settings</p>
+      </div>
+
+      {/* Progress bar — mobile */}
+      {weeklyTarget > 0 && (
+        <div className="mt-2 sm:hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden border border-border">
+            <div className={`h-full ${color} rounded-full transition-all duration-1000 ease-out`} style={{ width: `${pct}%` }} />
+          </div>
         </div>
       )}
     </div>
@@ -145,12 +147,6 @@ const AdminOverview = () => {
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
   const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
 
-  const selectedStats = useQuery(api.admin.getPaymentStats, {
-    startDate: startDateStr,
-    endDate: endDateStr,
-    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
-  }) ?? { totalRevenue: 0, byDay: {} }
-
   const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd"),
@@ -159,13 +155,23 @@ const AdminOverview = () => {
 
   const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
+  // Daily reports — source of truth for payment method amounts
+  const dailyReports = useQuery(
+    (api as any).dailyReports.getAll,
+    {
+      startDate: startDateStr,
+      endDate: endDateStr,
+      ...(selectedBranch !== "all" ? { branchId: selectedBranch } : {}),
+      limit: 100,
+    }
+  ) ?? []
+
   const stats = useMemo(() => {
     const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
     const endTs = new Date(dateTo).setHours(23, 59, 59, 999)
 
     const selectedOrders = orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs)
-    const selectedRevenue = selectedStats?.totalRevenue ?? 0
-    const totalRevenue30 = last30Stats?.totalRevenue ?? 0
+    const totalRevenue30 = (last30Stats as any)?.totalRevenue ?? 0
 
     const pendingOrders = orders.filter((o: any) =>
       ["pending", "pending_dropoff", "in_progress", "washing", "drying", "folding", "sorting", "checked_in"].includes(o.status)
@@ -173,8 +179,14 @@ const AdminOverview = () => {
 
     const completedInRange = selectedOrders.filter((o: any) => o.status === "completed").length
 
-    // Compare selected period revenue vs 30-day daily avg
     const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+
+    // Accurate payment totals from submitted daily reports only
+    const totalMobileMoney = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0)
+    const totalCard = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
+    const totalCash = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cashAmount || 0), 0)
+    const selectedRevenue = totalMobileMoney + totalCard + totalCash
+
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
     const revenueChange = expectedRevenue > 0 ? ((selectedRevenue - expectedRevenue) / expectedRevenue) * 100 : 0
@@ -183,32 +195,44 @@ const AdminOverview = () => {
     const expectedOrders = avgDailyOrders * dDiff
     const ordersChange = expectedOrders > 0 ? ((selectedOrders.length - expectedOrders) / expectedOrders) * 100 : 0
 
-    const chartData = []
+    // Build per-day chart data from daily reports
+    const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
+    const dayMap: Record<string, { mobileMoney: number; cash: number; card: number; displayDate: string }> = {}
     for (let i = dDiff - 1; i >= 0; i--) {
       const date = subDays(dateTo, i)
-      const dateStr = format(date, "yyyy-MM-dd")
-      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-      const dayEnd = dayStart + 86400000
-      const dayRevenue = (selectedStats as any)?.byDay?.[dateStr] ?? 0
-      const dayOrders = orders.filter((o: any) => o._creationTime >= dayStart && o._creationTime < dayEnd).length
-      chartData.push({
-        date: format(date, "MMM d"),
-        revenue: dayRevenue,
-        orders: dayOrders,
-      })
+      const key = format(date, "MMM d")
+      dayMap[key] = {
+        mobileMoney: 0,
+        cash: 0,
+        card: 0,
+        displayDate: (dDiff - 1 - i) % step === 0 ? key : "",
+      }
     }
+
+    ;(dailyReports as any[]).forEach((r: any) => {
+      const key = format(new Date(r.date), "MMM d")
+      if (dayMap[key]) {
+        dayMap[key].mobileMoney += r.mobileMoneylAmount || 0
+        dayMap[key].cash += r.cashAmount || 0
+        dayMap[key].card += (r.cardAmount || 0) + (r.paystackAmount || 0)
+      }
+    })
+
+    const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }))
 
     return {
       selectedOrders: selectedOrders.length,
       selectedRevenue,
+      totalMobileMoney,
+      totalCard,
+      totalCash,
       pendingOrders,
       completedInRange,
       revenueChange,
       ordersChange,
       chartData,
-      dDiff,
     }
-  }, [orders, last30Stats, selectedStats, dateFrom, dateTo])
+  }, [orders, last30Stats, dailyReports, dateFrom, dateTo])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
@@ -216,8 +240,6 @@ const AdminOverview = () => {
     if (selectedBranch === "all") return weeklyStats as any[]
     return (weeklyStats as any[]).filter((s: any) => s.branchId === selectedBranch)
   }, [weeklyStats, selectedBranch])
-
-  const isToday = startDateStr === endDateStr && startDateStr === format(new Date(), "yyyy-MM-dd")
 
   const statusColors: Record<string, string> = {
     completed: "bg-green-100 text-green-700",
@@ -239,14 +261,13 @@ const AdminOverview = () => {
 
   return (
     <div className="space-y-4 pb-8">
-      {/* Header — stacks on mobile */}
-      <div className="flex flex-col gap-3">
+      {/* Header — filters on the right */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Dashboard Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Welcome to WashLab Admin</p>
         </div>
-        {/* Filters row — wraps naturally on mobile */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
@@ -266,15 +287,15 @@ const AdminOverview = () => {
         </div>
       </div>
 
-      {/* Stat Cards — reflect selected date range */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard title="Revenue" value={`₵${stats.selectedRevenue.toFixed(2)}`} change={stats.revenueChange} color="border-l-green-500" />
         <StatCard title="Orders" value={stats.selectedOrders} change={stats.ordersChange} color="border-l-blue-500" />
         <StatCard title="In Progress" value={stats.pendingOrders} sub="Require attention" color="border-l-yellow-500" />
-        <StatCard title="Completed" value={stats.completedInRange} sub={`In selected period`} color="border-l-emerald-500" />
+        <StatCard title="Completed" value={stats.completedInRange} sub="In selected period" color="border-l-emerald-500" />
       </div>
 
-      {/* Charts: stacks on mobile, side by side on desktop */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Weekly Target */}
@@ -290,7 +311,7 @@ const AdminOverview = () => {
               <div className="flex items-center gap-1">
                 <Zap className="w-3 h-3 text-yellow-500" />
                 <span className="text-xs text-muted-foreground">
-                  {(filteredWeeklyStats as any[]).reduce((s: number, b: any) => s + b.weeklyOrders, 0)} orders
+                  {filteredWeeklyStats.length} {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
                 </span>
               </div>
             </div>
@@ -302,62 +323,65 @@ const AdminOverview = () => {
                 <p className="text-sm">No branch data available</p>
               </div>
             ) : (
-              <>
-                {/* Horizontal scroll — fixed height so only cards scroll, not page */}
-                <div
-                  className="flex gap-3 overflow-x-auto pb-2"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  {filteredWeeklyStats.map((b: any) => (
-                    <WeeklyTargetCard
-                      key={b.branchId}
-                      branchName={b.branchName}
-                      weeklyOrders={b.weeklyOrders}
-                      weeklyTarget={b.weeklyTarget}
-                    />
-                  ))}
-                </div>
-                {filteredWeeklyStats.length > 1 && (
-                  <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                    ← swipe to see all branches →
-                  </p>
-                )}
-              </>
+              <div
+                className="flex flex-col gap-2 overflow-y-auto pr-1"
+                style={{ maxHeight: "260px", scrollbarWidth: "thin" }}
+              >
+                {filteredWeeklyStats.map((b: any) => (
+                  <WeeklyTargetCard
+                    key={b.branchId}
+                    branchName={b.branchName}
+                    weeklyOrders={b.weeklyOrders}
+                    weeklyTarget={b.weeklyTarget}
+                  />
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Revenue Chart */}
+        {/* Payment Distribution Chart */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-semibold">
-                  Revenue: {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d")}
-                </CardTitle>
-                <CardDescription className="text-xs">Daily received payments</CardDescription>
+                <CardTitle className="text-sm font-semibold">Payment Distribution</CardTitle>
+                <CardDescription className="text-xs">
+                  Mobile Money · Card · Cash — {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d")}
+                </CardDescription>
               </div>
               <div className="text-right">
                 <p className="text-lg font-bold text-green-600">₵{stats.selectedRevenue.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">{isToday ? "Today" : "Period"}</p>
+                {stats.selectedRevenue > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {Math.round(((stats.totalMobileMoney + stats.totalCard) / stats.selectedRevenue) * 100)}% digital
+                  </p>
+                )}
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <BarChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={45} />
+                <XAxis
+                  dataKey="displayDate"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={45}
+                />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#revGrad)" dot={false} activeDot={{ r: 4 }} />
-              </AreaChart>
+                <Legend wrapperStyle={{ fontSize: "11px" }} />
+                <Bar dataKey="mobileMoney" name="Mobile Money" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="card" name="Card" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="cash" name="Cash" fill="#10b981" radius={[3, 3, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
