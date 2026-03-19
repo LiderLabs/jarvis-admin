@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
-import { useUser } from "@clerk/nextjs"
+import { useUser, UserProfile } from "@clerk/nextjs"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,13 +12,21 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
-  User, Lock, Bell, Palette, Shield, ExternalLink,
-  Save, Moon, Sun, Loader2, CheckCircle, Mail, Crown
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  User, Lock, Bell, Palette, Shield,
+  Save, Moon, Sun, Loader2, CheckCircle, Mail, Crown, Settings
 } from "lucide-react"
 
 const AdminSettings = () => {
   const { user: clerkUser } = useUser()
-  
+  const [showClerkProfile, setShowClerkProfile] = useState(false)
+  const [clerkProfileTab, setClerkProfileTab] = useState<"profile" | "security">("profile")
+
   const adminProfile = useQuery(api.admin.getCurrentUser)
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
@@ -166,13 +174,18 @@ const AdminSettings = () => {
                 Clerk
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Email is managed via Clerk. Change it in account settings.</p>
+            <p className="text-xs text-muted-foreground">Email is managed via Clerk.</p>
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => window.open("https://accounts.washlab.app/user", "_blank", "noopener,noreferrer")}>
-              <ExternalLink className="w-3 h-3" />
-              Manage Clerk Account
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={() => { setClerkProfileTab("profile"); setShowClerkProfile(true) }}
+            >
+              <Settings className="w-3 h-3" />
+              Manage Account
             </Button>
             <Button size="sm" className="text-xs gap-1.5" onClick={saveProfile} disabled={savingProfile}>
               {savingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
@@ -195,10 +208,15 @@ const AdminSettings = () => {
           <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
             <div>
               <p className="text-sm font-medium">Change Password</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Password is managed securely via Clerk</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Update your login password</p>
             </div>
-            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0" onClick={() => window.open("https://accounts.washlab.app/user", "_blank", "noopener,noreferrer")}>
-              <ExternalLink className="w-3 h-3" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5 shrink-0"
+              onClick={() => { setClerkProfileTab("security"); setShowClerkProfile(true) }}
+            >
+              <Lock className="w-3 h-3" />
               Change Password
             </Button>
           </div>
@@ -303,6 +321,29 @@ const AdminSettings = () => {
           Save All Settings
         </Button>
       </div>
+
+      {/* Clerk UserProfile Dialog */}
+      <Dialog open={showClerkProfile} onOpenChange={setShowClerkProfile}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="text-base font-semibold">
+              {clerkProfileTab === "security" ? "Password & Security" : "Manage Account"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-2 pb-4">
+            <UserProfile
+              routing="hash"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "shadow-none border-0 w-full",
+                  navbar: clerkProfileTab === "security" ? "hidden" : undefined,
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

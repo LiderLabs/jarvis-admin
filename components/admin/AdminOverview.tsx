@@ -147,6 +147,13 @@ const AdminOverview = () => {
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
   const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
 
+  // ── Live payment stats — primary source for revenue (always up to date) ──
+  const selectedStats = useQuery(api.admin.getPaymentStats, {
+    startDate: startDateStr,
+    endDate: endDateStr,
+    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {} }
+
   const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd"),
@@ -155,7 +162,7 @@ const AdminOverview = () => {
 
   const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
-  // Daily reports — source of truth for payment method amounts
+  // Daily reports — supplement for method breakdown when submitted
   const dailyReports = useQuery(
     (api as any).dailyReports.getAll,
     {
@@ -177,15 +184,24 @@ const AdminOverview = () => {
       ["pending", "pending_dropoff", "in_progress", "washing", "drying", "folding", "sorting", "checked_in"].includes(o.status)
     ).length
 
-    const completedInRange = selectedOrders.filter((o: any) => o.status === "completed").length
+    const completedInRange = selectedOrders.filter((o: any) => o.status === "completed" || o.status === "delivered").length
 
     const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1)
 
-    // Accurate payment totals from submitted daily reports only
-    const totalMobileMoney = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0)
-    const totalCard = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
-    const totalCash = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cashAmount || 0), 0)
-    const selectedRevenue = totalMobileMoney + totalCard + totalCash
+    // ── Revenue: use live getPaymentStats (reads from payments table directly) ──
+    const selectedRevenue = (selectedStats as any)?.totalRevenue ?? 0
+
+    // ── Payment method breakdown: prefer daily reports if submitted, else live stats ──
+    const hasReports = (dailyReports as any[]).length > 0
+    const totalMobileMoney = hasReports
+      ? (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0)
+      : (selectedStats as any)?.mobileMoneylAmount ?? 0
+    const totalCard = hasReports
+      ? (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cardAmount || 0) + (r.paystackAmount || 0), 0)
+      : (selectedStats as any)?.cardAmount ?? 0
+    const totalCash = hasReports
+      ? (dailyReports as any[]).reduce((s: number, r: any) => s + (r.cashAmount || 0), 0)
+      : (selectedStats as any)?.cashAmount ?? 0
 
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
@@ -195,26 +211,30 @@ const AdminOverview = () => {
     const expectedOrders = avgDailyOrders * dDiff
     const ordersChange = expectedOrders > 0 ? ((selectedOrders.length - expectedOrders) / expectedOrders) * 100 : 0
 
-    // Build per-day chart data from daily reports
+    // ── Chart data: use live byDay from getPaymentStats, supplement with dailyReports ──
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
     const dayMap: Record<string, { mobileMoney: number; cash: number; card: number; displayDate: string }> = {}
     for (let i = dDiff - 1; i >= 0; i--) {
       const date = subDays(dateTo, i)
       const key = format(date, "MMM d")
+      const dateStr = format(date, "yyyy-MM-dd")
+      // Use live byDay revenue as base
+      const dayRevenue = (selectedStats as any)?.byDay?.[dateStr] ?? 0
       dayMap[key] = {
         mobileMoney: 0,
-        cash: 0,
+        cash: dayRevenue, // default all to cash until report breakdown available
         card: 0,
         displayDate: (dDiff - 1 - i) % step === 0 ? key : "",
       }
     }
 
+    // Override with daily report breakdown where available (more accurate method split)
     ;(dailyReports as any[]).forEach((r: any) => {
       const key = format(new Date(r.date), "MMM d")
       if (dayMap[key]) {
-        dayMap[key].mobileMoney += r.mobileMoneylAmount || 0
-        dayMap[key].cash += r.cashAmount || 0
-        dayMap[key].card += (r.cardAmount || 0) + (r.paystackAmount || 0)
+        dayMap[key].mobileMoney = r.mobileMoneylAmount || 0
+        dayMap[key].cash = r.cashAmount || 0
+        dayMap[key].card = (r.cardAmount || 0) + (r.paystackAmount || 0)
       }
     })
 
@@ -232,7 +252,7 @@ const AdminOverview = () => {
       ordersChange,
       chartData,
     }
-  }, [orders, last30Stats, dailyReports, dateFrom, dateTo])
+  }, [orders, last30Stats, selectedStats, dailyReports, dateFrom, dateTo])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
@@ -243,6 +263,7 @@ const AdminOverview = () => {
 
   const statusColors: Record<string, string> = {
     completed: "bg-green-100 text-green-700",
+    delivered: "bg-green-100 text-green-700",
     ready: "bg-blue-100 text-blue-700",
     in_progress: "bg-yellow-100 text-yellow-700",
     pending: "bg-yellow-100 text-yellow-700",
@@ -348,6 +369,9 @@ const AdminOverview = () => {
                 <CardTitle className="text-sm font-semibold">Payment Distribution</CardTitle>
                 <CardDescription className="text-xs">
                   Mobile Money · Card · Cash — {format(dateFrom, "MMM d")} – {format(dateTo, "MMM d")}
+                  {(dailyReports as any[]).length === 0 && (
+                    <span className="ml-1 text-yellow-500">· Live</span>
+                  )}
                 </CardDescription>
               </div>
               <div className="text-right">
