@@ -142,7 +142,70 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
     return { totalRevenue, mobileMoney, card, cash, chartData: chartDataLabeled, totalTokens, totalOrders: filtered.length };
   }, [filtered, prevFiltered, dateFrom, dateTo, dailyReports]);
 
-  const exportCSV = () => {
+  const exportPDF = () => {
+    const w = window.open('', '_blank');
+    if (!w) return toast.error('Allow popups to export');
+    const reports = dailyReports as any[];
+    const totalRevenue = reports.reduce((s:number, r:any) => s + (r.cashAmount||0) + (r.mobileMoneylAmount||0) + (r.cardAmount||0) + (r.paystackAmount||0), 0);
+    const totalCash = reports.reduce((s:number, r:any) => s + (r.cashAmount||0), 0);
+    const totalMobile = reports.reduce((s:number, r:any) => s + (r.mobileMoneylAmount||0), 0);
+    const totalCard = reports.reduce((s:number, r:any) => s + (r.cardAmount||0) + (r.paystackAmount||0), 0);
+    const totalTokens = reports.reduce((s:number, r:any) => s + (r.totalTokensUsed||0), 0);
+    const totalFreeWash = reports.reduce((s:number, r:any) => s + (r.freeWashCount||0), 0);
+    const dateLabel = startDateStr === endDateStr ? format(dateFrom, 'd MMM yyyy') : format(dateFrom, 'd MMM') + ' - ' + format(dateTo, 'd MMM yyyy');
+    const branchLabel = selectedBranch === 'all' ? 'All Branches' : (branches.find((b:any) => b._id === selectedBranch)?.name || 'Branch');
+    const branchRows = reports.map((r:any) => {
+      const rev = (r.cashAmount||0)+(r.mobileMoneylAmount||0)+(r.cardAmount||0)+(r.paystackAmount||0);
+      const card = (r.cardAmount||0)+(r.paystackAmount||0);
+      const statusColor = r.status==='submitted'?'#16a34a':r.status==='submitted_with_outstanding'?'#ea580c':'#d97706';
+      const statusLabel = r.status==='submitted'?'Closed':r.status==='submitted_with_outstanding'?'Outstanding':'Open';
+      const vouchers = (r.voucherBreakdown||[]).map((v:any) => v.name+' x'+v.count+' GHS '+(v.totalDiscount||0).toFixed(2)).join(' | ');
+      return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:12px;page-break-inside:avoid">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:10px">'
+        +'<div><div style="font-size:15px;font-weight:700">'+(r.branchName||branchMap[r.branchId]||'-')+'</div>'
+        +'<div style="font-size:11px;color:#6b7280">'+format(new Date(r.date),'d MMM yyyy')+' | Attendants: '+(r.attendantsOnShift||[]).join(', ')+'</div></div>'
+        +'<span style="font-size:11px;font-weight:600;color:'+statusColor+';padding:3px 10px;border-radius:99px;background:'+statusColor+'18">'+statusLabel+'</span></div>'
+        +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:8px">'
+        +'<div style="background:#f9fafb;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Total</div><div style="font-size:13px;font-weight:700">GHS '+rev.toFixed(2)+'</div></div>'
+        +'<div style="background:#eff6ff;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#3b82f6;text-transform:uppercase">Mobile</div><div style="font-size:13px;font-weight:700;color:#1d4ed8">GHS '+(r.mobileMoneylAmount||0).toFixed(2)+'</div></div>'
+        +'<div style="background:#f0fdf4;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#16a34a;text-transform:uppercase">Cash</div><div style="font-size:13px;font-weight:700;color:#15803d">GHS '+(r.cashAmount||0).toFixed(2)+'</div></div>'
+        +'<div style="background:#f5f3ff;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#7c3aed;text-transform:uppercase">Card</div><div style="font-size:13px;font-weight:700;color:#6d28d9">GHS '+card.toFixed(2)+'</div></div>'
+        +'<div style="background:#f9fafb;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Tokens</div><div style="font-size:13px;font-weight:700">'+(r.totalTokensUsed||0)+'</div></div>'
+        +'<div style="background:#f9fafb;border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Free</div><div style="font-size:13px;font-weight:700">'+(r.freeWashCount||0)+'</div></div>'
+        +'</div>'
+        +(vouchers?'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Discounts: '+vouchers+'</div>':'')
+        +((r.outstandingOrderCount||0)>0?'<div style="padding:4px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:11px;color:#c2410c;margin-bottom:4px">Outstanding: '+r.outstandingOrderCount+' order(s) GHS '+(r.outstandingAmount||0).toFixed(2)+'</div>':'')
+        +(r.technicalFaultNotes?'<div style="padding:4px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c">'+r.technicalFaultNotes+'</div>':'')
+        +(r.notes?'<div style="font-size:11px;color:#374151;font-style:italic;margin-top:4px">"'+r.notes+'"</div>':'')
+        +'</div>';
+    }).join('');
+    w.document.write('<html><head><title>WashLab Report</title>'
+      +'<style>body{font-family:system-ui,sans-serif;padding:32px;max-width:900px;margin:0 auto}@media print{button{display:none}}</style></head><body>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<div><h1 style="font-size:22px;font-weight:800;margin:0">WashLab Report</h1>'
+      +'<p style="font-size:13px;color:#6b7280;margin:4px 0 0">'+dateLabel+' | '+branchLabel+'</p></div>'
+      +'<button onclick="window.print()" style="padding:8px 16px;background:#111;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">Print / Save PDF</button></div>'
+      +'<hr style="border:none;border-top:2px solid #e5e7eb;margin:16px 0"/>'
+      +'<div style="background:#f9fafb;border-radius:10px;padding:16px;margin-bottom:20px">'
+      +'<h2 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 12px">Summary — '+reports.length+' Report(s)</h2>'
+      +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">'
+      +'<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center"><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Total Revenue</div><div style="font-size:18px;font-weight:800;margin-top:4px">GHS '+totalRevenue.toFixed(2)+'</div></div>'
+      +'<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center"><div style="font-size:10px;color:#3b82f6;text-transform:uppercase">Mobile Money</div><div style="font-size:18px;font-weight:800;color:#1d4ed8;margin-top:4px">GHS '+totalMobile.toFixed(2)+'</div></div>'
+      +'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;text-align:center"><div style="font-size:10px;color:#16a34a;text-transform:uppercase">Cash</div><div style="font-size:18px;font-weight:800;color:#15803d;margin-top:4px">GHS '+totalCash.toFixed(2)+'</div></div>'
+      +'<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:12px;text-align:center"><div style="font-size:10px;color:#7c3aed;text-transform:uppercase">Card</div><div style="font-size:18px;font-weight:800;color:#6d28d9;margin-top:4px">GHS '+totalCard.toFixed(2)+'</div></div>'
+      +'<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center"><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Total Tokens</div><div style="font-size:18px;font-weight:800;margin-top:4px">'+totalTokens+'</div></div>'
+      +'</div>'
+      +(totalFreeWash>0?'<div style="margin-top:8px;font-size:12px;color:#6b7280">Free washes: <strong>'+totalFreeWash+'</strong></div>':'')
+      +'</div>'
+      +'<h2 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 10px">Branch Breakdown</h2>'
+      +(branchRows||'<p style="color:#6b7280;font-size:13px">No reports found.</p>')
+      +'</body></html>');
+    w.document.close();
+    setTimeout(()=>w.print(),400);
+    toast.success('PDF ready');
+  };
+
+    const exportCSV = () => {
     const rows = [
       ['Date', 'Branch', 'Attendant', 'Tokens', 'Revenue', 'Status'],
       ...(dailyReports as any[]).map((r: any) => [
