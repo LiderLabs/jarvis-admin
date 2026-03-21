@@ -29,11 +29,13 @@ const AdminSettings = () => {
 
   const adminProfile = useQuery(api.admin.getCurrentUser)
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
+  const updateReportEmailPref = useMutation((api as any).admin.updateReportEmailPreference)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
   const systemSettings = useQuery(api.admin.getSystemSettings)
 
   const [name, setName] = useState("")
   const [savingProfile, setSavingProfile] = useState(false)
+  const [receiveReportEmails, setReceiveReportEmails] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [isDark, setIsDark] = useState(false)
 
