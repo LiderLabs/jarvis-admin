@@ -37,6 +37,7 @@ import {
   Tag,
   ImagePlus,
   X,
+  Cpu,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -463,6 +464,122 @@ const ServiceDraftsPanel = ({
   )
 }
 
+
+// --- Branch Machines Panel ---
+const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
+  const machines = useQuery((api as any).branchMachines.listByBranch, { branchId }) ?? []
+  const createMachine = useMutation((api as any).branchMachines.create)
+  const updateMachine = useMutation((api as any).branchMachines.update)
+  const removeMachine = useMutation((api as any).branchMachines.remove)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState({ name: "", washPrice: 0 })
+  const adminId = (useQuery(api.admin.getCurrentUser) as any)?._id
+  const resetForm = () => setForm({ name: "", washPrice: 0 })
+
+  const handleAdd = async () => {
+    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
+    if (!adminId) { toast.error("Not authenticated"); return }
+    try {
+      await createMachine({ branchId, name: form.name.trim(), washPrice: form.washPrice, adminId })
+      toast.success("Machine added")
+      setShowAdd(false); resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleUpdate = async () => {
+    if (!editingId || !adminId) return
+    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
+    try {
+      await updateMachine({ machineId: editingId as any, name: form.name.trim(), washPrice: form.washPrice, adminId })
+      toast.success("Machine updated")
+      setEditingId(null); resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleToggle = async (machine: any) => {
+    if (!adminId) return
+    try {
+      await updateMachine({ machineId: machine._id, isActive: !machine.isActive, adminId })
+      toast.success(machine.isActive ? "Deactivated" : "Activated")
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleRemove = async (machineId: string) => {
+    if (!adminId) return
+    try {
+      await removeMachine({ machineId: machineId as any, adminId })
+      toast.success("Machine removed")
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  return (
+    <div className="space-y-3">
+      {machines.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-3">No machines configured. Add a machine to enable custom wash pricing.</p>
+      ) : (
+        <div className="space-y-2">
+          {(machines as any[]).map((m: any) => (
+            editingId === m._id ? (
+              <div key={m._id} className="border rounded-lg p-3 space-y-2 bg-background">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Machine name" className="h-8 text-sm" />
+                  <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} placeholder="Wash price" className="h-8 text-sm" min="0" step="0.01" />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div key={m._id} className={"flex items-center justify-between px-3 py-2 rounded-lg border " + (m.isActive ? "bg-muted/50" : "bg-muted/20 opacity-60")}>
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Cpu className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <span className="font-medium text-sm">{m.name}</span>
+                    {!m.isActive && <Badge variant="outline" className="text-xs ml-2">Inactive</Badge>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold text-primary text-sm">&#8373;{m.washPrice.toFixed(2)}</span>
+                  <span className="text-xs text-muted-foreground">wash</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingId(m._id); setForm({ name: m.name, washPrice: m.washPrice }); setShowAdd(false) }}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleToggle(m)}><span className="text-xs">{m.isActive ? "Off" : "On"}</span></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemove(m._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+      {showAdd ? (
+        <div className="border rounded-lg p-3 space-y-2 bg-background">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Machine Name *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Big Washer" className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Wash Price (&#8373;) *</Label>
+              <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Machine</Button>
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+          <Plus className="h-3.5 w-3.5 mr-1.5" />Add Machine
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // ─── Branch Form Fields ───────────────────────────────────────────────────────
 const BranchFormFields = ({
   prefix = "",
@@ -829,6 +946,15 @@ const AdminBranches = () => {
               </div>
               <p className='text-xs text-muted-foreground mb-3'>Manage the services this branch offers. Changes apply immediately.</p>
               {selectedBranch && <BranchServicesPanel branchId={selectedBranch._id} />}
+            </div>
+            <Separator />
+            <div>
+              <div className='flex items-center gap-2 mb-3'>
+                <Cpu className='h-4 w-4 text-primary' />
+                <Label className='text-base font-semibold'>Machines</Label>
+              </div>
+              <p className='text-xs text-muted-foreground mb-3'>Configure machines with custom wash pricing. Attendants can select a machine per order.</p>
+              {selectedBranch && <BranchMachinesPanel branchId={selectedBranch._id} />}
             </div>
           </div>
           <DialogFooter>

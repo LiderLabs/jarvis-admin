@@ -207,15 +207,25 @@ const AdminReportsOverview = ({ onViewReport }: { onViewReport?: (id: string) =>
 
     const exportCSV = () => {
     const rows = [
-      ['Date', 'Branch', 'Attendant', 'Tokens', 'Revenue', 'Status'],
-      ...(dailyReports as any[]).map((r: any) => [
-        r.date,
-        r.branchName || '',
-        (r.attendantsOnShift || []).join('|'),
-        r.totalTokensUsed,
-        r.totalRevenue?.toFixed(2),
-        r.status,
-      ]),
+      ['Date', 'Branch', 'Attendants', 'Tokens', 'Total Revenue', 'Cash', 'Mobile Money', 'Card/Paystack', 'Free Washes', 'Outstanding Orders', 'Outstanding Amount', 'Status'],
+      ...(dailyReports as any[]).map((r: any) => {
+        const card = (r.cardAmount || 0) + (r.paystackAmount || 0)
+        const total = (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + card
+        return [
+          r.date,
+          r.branchName || branchMap[r.branchId] || '',
+          (r.attendantsOnShift || []).join('|'),
+          r.totalTokensUsed || 0,
+          total.toFixed(2),
+          (r.cashAmount || 0).toFixed(2),
+          (r.mobileMoneylAmount || 0).toFixed(2),
+          card.toFixed(2),
+          r.freeWashCount || 0,
+          r.outstandingOrderCount || 0,
+          (r.outstandingAmount || 0).toFixed(2),
+          r.status === 'submitted' ? 'Closed' : r.status === 'submitted_with_outstanding' ? 'Outstanding' : 'Open',
+        ]
+      }),
     ];
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
