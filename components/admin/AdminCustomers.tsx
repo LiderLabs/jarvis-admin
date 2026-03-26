@@ -87,7 +87,7 @@ const AdminCustomers = () => {
     status: paginationStatus,
     loadMore,
   } = usePaginatedQuery(
-    api.admin.getCustomers,
+    (api.admin.getCustomers as any),
     {
       search: debouncedSearchQuery || undefined,
       status:

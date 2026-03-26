@@ -12,7 +12,7 @@ import { useQuery } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import {
   LayoutDashboard,
-  Building2,
+  Building2, Wrench,
   Users,
   Clock,
   Ticket,
@@ -54,7 +54,13 @@ const sidebarItems = [
     path: "/dashboard/orders",
     group: "management",
   },
-  // HIDDEN: inventory - not ready for production
+  {
+    id: "inventory",
+    label: "Inventory",
+    icon: Package,
+    path: "/dashboard/inventory",
+    group: "management",
+  },
   {
     id: "payments",
     label: "Payments",
@@ -103,6 +109,13 @@ const sidebarItems = [
     label: "Settings",
     icon: Settings,
     path: "/dashboard/settings",
+    group: "system",
+  },
+  {
+    id: "maintenance",
+    label: "Maintenance",
+    icon: Wrench,
+    path: "/dashboard/maintenance",
     group: "system",
   },
   // HIDDEN: audit-logs - not ready for production
