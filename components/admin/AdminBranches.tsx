@@ -220,7 +220,13 @@ const ServiceImage = ({ imageUrl, alt, className }: { imageUrl: string; alt: str
     api.admin.getServiceImageUrl,
     isStorageId ? { storageId: imageUrl as any } : "skip"
   )
-  const fixUrl = (url: string | null) => url?.replace("convex-dashboard.washlab.app", "convex-backend.washlab.app") ?? null
+  const fixUrl = (url: string | null) => {
+    if (!url) return null
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || ""
+    const backendUrl = convexUrl.replace("convex-dashboard", "convex-backend")
+    return url.replace("convex-dashboard.washlab.app", "convex-backend.washlab.app")
+      .replace("staging.convex-backend.washlab.app", backendUrl.replace("https://", ""))
+  }
   const resolvedUrl = isStorageId ? fixUrl(storageUrl ?? null) : imageUrl
   if (!resolvedUrl) return <div className={className + " bg-muted flex items-center justify-center"}><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>
   return <img src={resolvedUrl} alt={alt} className={className} />
