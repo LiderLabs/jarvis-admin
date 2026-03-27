@@ -65,7 +65,9 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   const cashAmount = report.cashAmount || 0;
   const mobileAmount = report.mobileMoneylAmount || 0;
   const cardAmount = (report.cardAmount || 0) + (report.paystackAmount || 0);
+  // EOD total = only paid amounts, no outstanding, no vouchers
   const totalRevenue = cashAmount + mobileAmount + cardAmount;
+
   const voucherBreakdown: any[] = report.voucherBreakdown || [];
   const totalVoucherDiscount = voucherBreakdown.reduce((s: number, v: any) => s + (v.totalDiscount || 0), 0);
   const outstandingOrders: any[] = outstandingData?.outstanding ?? [];
@@ -73,50 +75,172 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   const outstandingTotal = outstandingOrders.reduce((s, o) => s + (o.finalPrice || 0), 0);
   const receivedTotal = receivedOrders.reduce((s, o) => s + (o.amount || 0), 0);
 
+  const statusText = report.status === 'submitted_with_outstanding' ? 'Outstanding'
+    : report.status === 'submitted' ? 'Closed' : 'Open';
+
   const exportPDF = () => {
     const w = window.open('', '_blank');
     if (!w) return toast.error('Allow popups');
+
     const voucherRows = voucherBreakdown.map((v: any) =>
-      `<tr><td style="padding:6px 8px">${v.name}</td><td style="padding:6px 8px;text-align:center">${v.count}</td><td style="padding:6px 8px;text-align:right">${v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : fmt(v.totalDiscount)}</td></tr>`
+      `<tr>
+        <td style="padding:6px 8px">${v.name}</td>
+        <td style="padding:6px 8px;font-family:monospace">${v.code}</td>
+        <td style="padding:6px 8px;text-align:center">${v.count}</td>
+        <td style="padding:6px 8px;text-align:right">${v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : fmt(v.totalDiscount)}</td>
+      </tr>`
     ).join('');
+
+    const outstandingRows = outstandingOrders.map((o: any) =>
+      `<tr>
+        <td style="padding:6px 8px;font-family:monospace">${o.orderNumber}</td>
+        <td style="padding:6px 8px"><strong>${o.customerName}</strong><br/><span style="color:#6b7280;font-size:12px">${o.customerPhone}</span></td>
+        <td style="padding:6px 8px">${serviceLabel(o.serviceType)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:600">${fmt(o.finalPrice)}</td>
+      </tr>`
+    ).join('');
+
+    const receivedRows = receivedOrders.map((o: any) =>
+      `<tr>
+        <td style="padding:6px 8px">${methodLabel(o.paymentMethod)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:600">${fmt(o.amount)}</td>
+        <td style="padding:6px 8px;color:#6b7280">${format(new Date(o.orderDate), 'MMM d')}</td>
+      </tr>`
+    ).join('');
+
+    const faultLines = (report.technicalFaultNotes || '').split('\n').filter(Boolean).map((line: string) => {
+      const match = line.match(/^\[(.+?)\]\s*(.+)$/);
+      return `<tr>
+        <td style="padding:6px 8px;font-weight:600">${match ? match[1] : '—'}</td>
+        <td style="padding:6px 8px">${match ? match[2] : line}</td>
+      </tr>`;
+    }).join('');
+
     w.document.write(`
-      <html><head><title>WashLab Report - ${report.branchName} ${report.date}</title>
+      <html><head><title>WashLab Report — ${report.branchName} ${report.date}</title>
       <style>
-        body{font-family:system-ui,sans-serif;padding:40px;color:#111}
-        h1{font-size:24px;font-weight:700;margin-bottom:4px}
-        .meta{color:#666;font-size:13px;margin-bottom:24px}
-        .section{background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:16px}
-        .section h2{font-size:14px;font-weight:600;margin-bottom:12px;color:#374151}
-        .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+        *{box-sizing:border-box}
+        body{font-family:system-ui,sans-serif;padding:40px;color:#111;max-width:900px;margin:0 auto}
+        h1{font-size:22px;font-weight:700;margin:0 0 4px}
+        .meta{color:#6b7280;font-size:13px;margin-bottom:28px;display:flex;gap:16px;flex-wrap:wrap}
+        .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#f3f4f6;border:1px solid #e5e7eb}
+        .total-block{text-align:center;padding:24px 0;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;margin-bottom:24px}
+        .total-label{font-size:15px;color:#6b7280;font-weight:500}
+        .total-value{font-size:48px;font-weight:900;letter-spacing:-2px;margin:4px 0 0}
+        .section{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:16px}
+        .section h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151;margin:0 0 12px}
+        .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
         .stat{background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px}
         .stat-label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}
-        .stat-value{font-size:18px;font-weight:700;margin-top:2px}
+        .stat-value{font-size:20px;font-weight:700;margin-top:2px}
+        .stat-sub{font-size:12px;color:#6b7280;margin-top:2px}
         table{width:100%;border-collapse:collapse}
-        th{text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;padding:6px 8px;border-bottom:1px solid #e5e7eb}
-        td{font-size:13px;border-bottom:1px solid #f3f4f6;padding:6px 8px}
+        th{text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;padding:6px 8px;border-bottom:2px solid #e5e7eb}
+        td{font-size:13px;border-bottom:1px solid #f3f4f6}
+        tfoot td{border-top:2px solid #e5e7eb;font-weight:700;padding:8px}
+        .pay-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+        .pay-row:last-child{border:none;font-weight:700;padding-top:8px;margin-top:4px;border-top:1px solid #e5e7eb}
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         @media print{body{padding:20px}}
       </style></head><body>
-      <h1>${report.branchName} - ${format(new Date(report.date), 'd MMM yyyy')}</h1>
-      <div class="meta">Status: ${report.status === 'submitted_with_outstanding' ? 'Outstanding' : report.status === 'submitted' ? 'Closed' : 'Open'} &nbsp;|&nbsp; Attendants: ${(report.attendantsOnShift || []).join(', ')}</div>
-      <div class="section">
-        <h2>End of Day Total: ${fmt(totalRevenue)}</h2>
-        <div class="grid">
-          <div class="stat"><div class="stat-label">Mobile Money</div><div class="stat-value">${fmt(mobileAmount)}</div></div>
-          <div class="stat"><div class="stat-label">Card / Paystack</div><div class="stat-value">${fmt(cardAmount)}</div></div>
-          <div class="stat"><div class="stat-label">Cash</div><div class="stat-value">${fmt(cashAmount)}</div></div>
-        </div>
+
+      <h1>${report.branchName} — ${format(new Date(report.date), 'd MMMM yyyy')}</h1>
+      <div class="meta">
+        <span class="badge">Status: ${statusText}</span>
+        <span>Attendants: ${(report.attendantsOnShift || []).join(', ') || '—'}</span>
+        <span>Last updated: ${format(new Date(report._creationTime), 'h:mm a')}</span>
       </div>
+
+      <div class="total-block">
+        <div class="total-label">End of Day Total</div>
+        <div class="total-value">GHS ${totalRevenue.toFixed(2)}</div>
+      </div>
+
+      <!-- Payment Breakdown -->
+      <div class="section">
+        <h2>Payment Breakdown</h2>
+        <div class="pay-row"><span>Mobile Money</span><span>${fmt(mobileAmount)}</span></div>
+        <div class="pay-row"><span>Card / Paystack</span><span>${fmt(cardAmount)}</span></div>
+        <div class="pay-row"><span>Cash</span><span>${fmt(cashAmount)}</span></div>
+        <div class="pay-row"><span>Total</span><span>${fmt(totalRevenue)}</span></div>
+      </div>
+
+      <!-- Wash Summary -->
       <div class="section">
         <h2>Wash Summary</h2>
-        <div class="grid">
-          <div class="stat"><div class="stat-label">Wash Tokens</div><div class="stat-value">${report.washerTokensUsed || 0}</div><div style="font-size:12px;color:#6b7280">GHS ${((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</div></div>
-          <div class="stat"><div class="stat-label">Dry Tokens</div><div class="stat-value">${report.dryerTokensUsed || 0}</div><div style="font-size:12px;color:#6b7280">GHS ${((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</div></div>
-          <div class="stat"><div class="stat-label">Soap Used</div><div class="stat-value">${report.soapUnitsUsed || 0}</div></div>
+        <div class="grid3">
+          <div class="stat">
+            <div class="stat-label">Wash Tokens</div>
+            <div class="stat-value">${report.washerTokensUsed || 0}</div>
+            <div class="stat-sub">GHS ${((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Dry Tokens</div>
+            <div class="stat-value">${report.dryerTokensUsed || 0}</div>
+            <div class="stat-sub">GHS ${((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Soap Used</div>
+            <div class="stat-value">${report.soapUnitsUsed || 0}</div>
+          </div>
         </div>
       </div>
-      ${voucherBreakdown.length > 0 ? `<div class="section"><h2>Discounts & Vouchers</h2><table><thead><tr><th>Voucher</th><th>Uses</th><th>Total Discount</th></tr></thead><tbody>${voucherRows}</tbody></table><div style="margin-top:10px;font-weight:600;text-align:right">Total: ${fmt(totalVoucherDiscount)}</div></div>` : ''}
-      ${report.technicalFaultNotes ? `<div class="section"><h2>Technical Faults</h2><p>${report.technicalFaultNotes}</p></div>` : ''}
-      ${report.notes ? `<div class="section"><h2>Manager Comments</h2><p style="font-style:italic">"${report.notes}"</p></div>` : ''}
+
+      ${outstandingOrders.length > 0 ? `
+      <!-- Unpaid Orders -->
+      <div class="section">
+        <h2>Unpaid Orders — Total: ${fmt(outstandingTotal)}</h2>
+        <table>
+          <thead><tr><th>Order ID</th><th>Customer</th><th>Service</th><th style="text-align:right">Amount</th></tr></thead>
+          <tbody>${outstandingRows}</tbody>
+          <tfoot><tr><td colspan="3">Total</td><td style="text-align:right">${fmt(outstandingTotal)}</td></tr></tfoot>
+        </table>
+      </div>` : ''}
+
+      ${receivedOrders.length > 0 ? `
+      <!-- Outstanding Payment Received -->
+      <div class="section">
+        <h2>Outstanding Payment Received — Total: ${fmt(receivedTotal)}</h2>
+        <table>
+          <thead><tr><th>Method</th><th style="text-align:right">Amount</th><th>Order Date</th></tr></thead>
+          <tbody>${receivedRows}</tbody>
+          <tfoot><tr><td>Total</td><td style="text-align:right">${fmt(receivedTotal)}</td><td></td></tr></tfoot>
+        </table>
+      </div>` : ''}
+
+      ${voucherBreakdown.length > 0 ? `
+      <!-- Discounts & Vouchers -->
+      <div class="section">
+        <h2>Discounts & Vouchers — Total: ${fmt(totalVoucherDiscount)}</h2>
+        <table>
+          <thead><tr><th>Voucher</th><th>Code</th><th>Uses</th><th style="text-align:right">Total Discount</th></tr></thead>
+          <tbody>${voucherRows}</tbody>
+          <tfoot><tr><td colspan="3">Total</td><td style="text-align:right">${fmt(totalVoucherDiscount)}</td></tr></tfoot>
+        </table>
+      </div>` : ''}
+
+      ${report.technicalFaultCount > 0 ? `
+      <!-- Technical Faults -->
+      <div class="section">
+        <h2>Technical Faults (${report.technicalFaultCount})</h2>
+        <table>
+          <thead><tr><th>Machine</th><th>Description</th></tr></thead>
+          <tbody>${faultLines}</tbody>
+        </table>
+      </div>` : ''}
+
+      <div class="two-col">
+        ${report.notes ? `
+        <div class="section">
+          <h2>Manager Comments</h2>
+          <p style="font-style:italic;font-size:13px;margin:0">"${report.notes}"</p>
+        </div>` : ''}
+        <div class="section">
+          <h2>Attendants on Duty</h2>
+          <p style="font-weight:600;font-size:13px;margin:0">${(report.attendantsOnShift || []).join(' | ') || '—'}</p>
+        </div>
+      </div>
+
       </body></html>
     `);
     w.document.close();
@@ -144,7 +268,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
               report.status === 'submitted' ? 'bg-gray-100 text-gray-600 border-gray-200' :
               'bg-amber-100 text-amber-700 border-amber-200'
             }`}>
-              Status: {report.status === 'submitted_with_outstanding' ? 'Outstanding' : report.status === 'submitted' ? 'Closed' : 'Open'}
+              Status: {statusText}
             </Badge>
             <span className="text-xs text-muted-foreground">
               Last updated: {format(new Date(report._creationTime), 'h:mm a')}
@@ -213,7 +337,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           )}
         </div>
 
-        {/* Payment Breakdown */}
+        {/* Payment Breakdown — no vouchers */}
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-3">Payment Breakdown</h2>
           <div className="space-y-2.5">
@@ -221,7 +345,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
               { label: 'Mobile Money', value: mobileAmount, icon: Smartphone, color: 'text-blue-500' },
               { label: 'Card', value: cardAmount, icon: CreditCard, color: 'text-indigo-500' },
               { label: 'Cash', value: cashAmount, icon: Banknote, color: 'text-green-500' },
-              { label: 'Vouchers', value: totalVoucherDiscount, icon: Tag, color: 'text-purple-500' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -233,7 +356,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             ))}
           </div>
           <div className="border-t border-border mt-3 pt-3 flex justify-between items-center">
-            <span className="text-sm font-semibold text-foreground">Total Sales</span>
+            <span className="text-sm font-semibold text-foreground">Total</span>
             <span className="text-sm font-bold text-foreground">{fmt(totalRevenue)}</span>
           </div>
         </div>
@@ -271,10 +394,10 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </div>
       </div>
 
-      {/* Outstanding Payment Table */}
+      {/* Unpaid Orders (formerly Outstanding Payment) */}
       {outstandingOrders.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="font-semibold text-sm text-foreground mb-4">Outstanding Payment</h2>
+          <h2 className="font-semibold text-sm text-foreground mb-4">Unpaid Orders</h2>
           {/* Mobile */}
           <div className="sm:hidden space-y-2">
             {outstandingOrders.map((o: any, i: number) => (
@@ -427,7 +550,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2 pr-4">Machine ID</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2 pr-4">Machine</th>
                   <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2">Fault Description</th>
                 </tr>
               </thead>

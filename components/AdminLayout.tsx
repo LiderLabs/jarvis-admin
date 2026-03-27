@@ -103,7 +103,6 @@ const sidebarItems = [
     path: "/dashboard/reports",
     group: "features",
   },
-  // HIDDEN: whatsapp - not ready for production
   {
     id: "settings",
     label: "Settings",
@@ -118,7 +117,6 @@ const sidebarItems = [
     path: "/dashboard/maintenance",
     group: "system",
   },
-  // HIDDEN: audit-logs - not ready for production
   {
     id: "customers",
     label: "Customers",
@@ -135,7 +133,6 @@ const groupLabels: Record<string, string> = {
   system: "System",
 }
 
-// Context for mobile menu state
 const MobileMenuContext = createContext<{
   open: boolean
   setOpen: (open: boolean) => void
@@ -157,7 +154,6 @@ const SidebarContent = ({
   isActive,
   onLinkClick,
 }: SidebarContentProps) => {
-  // Get unread notification count
   const unreadCount = useQuery(api.notifications?.getUnreadCount)
 
   return (
@@ -249,12 +245,6 @@ const SidebarContent = ({
   )
 }
 
-/**
- * Admin Layout
- *
- * Provides sidebar navigation for all admin pages
- * Does NOT wrap enrollment page (that's standalone)
- */
 export default function AdminLayout({
   children,
 }: {
@@ -265,20 +255,21 @@ export default function AdminLayout({
   const { isAdmin, isLoading, isAuthenticated, clerkUser } = useCurrentAdmin()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // Redirect non-admins to unauthorized page
   useEffect(() => {
     if (!isLoading && isAuthenticated && !isAdmin) {
       router.push("/unauthorized")
     }
   }, [isAdmin, isLoading, isAuthenticated, router])
 
-  // If user is not authenticated (signed out), don't render anything
-  // The middleware will redirect them to sign-in
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname])
+
   if (!clerkUser && !isLoading) {
     return null
   }
 
-  // Show loading state while checking admin status
   if (isLoading || (isAuthenticated && !isAdmin)) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-background'>
@@ -297,7 +288,6 @@ export default function AdminLayout({
     return pathname?.startsWith(path) || false
   }
 
-  // Group sidebar items
   const groupedItems = sidebarItems.reduce(
     (acc, item) => {
       const group = item.group || "main"
@@ -315,12 +305,9 @@ export default function AdminLayout({
       value={{ open: mobileMenuOpen, setOpen: setMobileMenuOpen }}
     >
       <div className='min-h-screen bg-background flex'>
+
         {/* Desktop Sidebar */}
-        <aside
-          className={cn(
-            "hidden md:flex fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border flex-col"
-          )}
-        >
+        <aside className='hidden md:flex fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border flex-col'>
           <SidebarContent
             groupedItems={groupedItems}
             isActive={isActive}
@@ -328,14 +315,20 @@ export default function AdminLayout({
           />
         </aside>
 
-        {/* Mobile Sidebar Sheet */}
+        {/* Mobile Sidebar — solid overlay, not transparent */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetContent
             side='left'
-            className='w-64 p-0 bg-sidebar border-sidebar-border flex flex-col h-full overflow-hidden'
+            className='w-72 max-w-[85vw] p-0 flex flex-col h-full overflow-hidden border-r border-sidebar-border [&>button]:z-10'
+            // Force solid bg regardless of theme — sidebar var falls back to card/background
+            style={{
+              backgroundColor: 'hsl(var(--sidebar, var(--card, var(--background))))',
+              zIndex: 9999,
+            }}
           >
             <SheetTitle className='sr-only'>Navigation Menu</SheetTitle>
-            <div className='flex-1 overflow-y-auto'>
+            {/* Inner wrapper inherits sidebar bg token properly */}
+            <div className='flex flex-col flex-1 overflow-hidden bg-sidebar min-h-0'>
               <SidebarContent
                 groupedItems={groupedItems}
                 isActive={isActive}
@@ -350,8 +343,8 @@ export default function AdminLayout({
           <DashboardHeader />
           <main className='flex-1 p-4 md:p-8'>{children}</main>
         </div>
+
       </div>
     </MobileMenuContext.Provider>
   )
 }
-

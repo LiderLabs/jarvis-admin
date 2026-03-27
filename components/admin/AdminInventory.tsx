@@ -10,7 +10,7 @@ import { Id } from "@jordan6699/washlab-backend/dataModel";
 import { toast } from "sonner";
 import {
   Package, Plus, Edit, Trash2, AlertTriangle, CheckCircle,
-  Search, Bell, Droplets, Info,
+  Search, Droplets, Info,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 
 type InventoryCategory = "cleaning_supplies" | "add_ons" | "facility" | "retail" | "operational";
 type InventoryStatus = "critical" | "low" | "ok" | "ordered";
@@ -59,7 +58,6 @@ const categoryLabels: Record<InventoryCategory, string> = {
   operational: "Operational",
 };
 
-// Number input that allows clearing — stores as string internally
 function NumInput({ value, onChange, placeholder, min = "0" }: {
   value: string; onChange: (v: string) => void; placeholder?: string; min?: string;
 }) {
@@ -78,7 +76,8 @@ function NumInput({ value, onChange, placeholder, min = "0" }: {
 const emptyForm = () => ({
   name: "", category: "cleaning_supplies" as InventoryCategory,
   unit: "", description: "",
-  currentStock: "", maxStock: "", minStock: "", reorderPoint: "",
+  newStock: "",
+  minStock: "", reorderPoint: "",
   scoopsPerUnit: "", usageNotes: "",
   branchId: null as Id<"branches"> | null,
 });
@@ -137,8 +136,7 @@ const AdminInventory = () => {
       setItemForm({
         name: item.name, category: item.category, unit: item.unit,
         description: item.description || "",
-        currentStock: String(item.currentStock),
-        maxStock: String(item.maxStock),
+        newStock: "",
         minStock: String(item.minStock),
         reorderPoint: String(item.reorderPoint),
         scoopsPerUnit: item.scoopsPerUnit ? String(item.scoopsPerUnit) : "",
@@ -159,35 +157,33 @@ const AdminInventory = () => {
     const branchId: Id<"branches"> | null = selectedBranch !== "all" ? selectedBranch as Id<"branches"> : itemForm.branchId;
     if (!itemForm.name.trim()) return toast.error("Please enter item name");
     if (!itemForm.unit.trim()) return toast.error("Please enter unit");
-    const maxStock = n(itemForm.maxStock);
     const minStock = n(itemForm.minStock);
     const reorderPoint = n(itemForm.reorderPoint);
-    if (maxStock <= 0) return toast.error("Max stock must be greater than 0");
     if (minStock < 0) return toast.error("Min stock cannot be negative");
     if (reorderPoint < 0) return toast.error("Reorder point cannot be negative");
     if (minStock >= reorderPoint) return toast.error("Min stock must be less than reorder point");
-    if (reorderPoint >= maxStock) return toast.error("Reorder point must be less than max stock");
 
     try {
       if (editingItem) {
+        const newStockVal = itemForm.newStock !== "" ? n(itemForm.newStock) : undefined;
         await (updateItem as any)({
           itemId: editingItem._id,
           name: itemForm.name, category: itemForm.category, unit: itemForm.unit,
-          description: itemForm.description, maxStock, minStock, reorderPoint,
+          description: itemForm.description, minStock, reorderPoint,
+          ...(newStockVal !== undefined ? { currentStock: newStockVal, maxStock: newStockVal } : {}),
           scoopsPerUnit: itemForm.scoopsPerUnit ? n(itemForm.scoopsPerUnit) : undefined,
           usageNotes: itemForm.usageNotes || undefined,
         });
-        toast.success("Item updated");
       } else {
         if (!branchId) return toast.error("Please select a branch");
+        const stockVal = n(itemForm.newStock);
         await (createItem as any)({
           branchId, name: itemForm.name, category: itemForm.category,
           unit: itemForm.unit, description: itemForm.description,
-          currentStock: n(itemForm.currentStock), maxStock, minStock, reorderPoint,
+          currentStock: stockVal, maxStock: stockVal, minStock, reorderPoint,
           scoopsPerUnit: itemForm.scoopsPerUnit ? n(itemForm.scoopsPerUnit) : undefined,
           usageNotes: itemForm.usageNotes || undefined,
         });
-        toast.success("Item created");
       }
       setShowItemDialog(false);
       setEditingItem(null);
@@ -200,7 +196,6 @@ const AdminInventory = () => {
     if (!itemToDelete) return;
     try {
       await deleteItem({ itemId: itemToDelete });
-      toast.success("Item deleted");
       setShowDeleteDialog(false);
       setItemToDelete(null);
     } catch (error: any) {
@@ -245,21 +240,6 @@ const AdminInventory = () => {
           </div>
         ))}
       </div>
-
-      {/* Order requests banner */}
-      {stats.ordered > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl">
-          <Bell className="w-5 h-5 text-blue-600 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-              {stats.ordered} item{stats.ordered > 1 ? "s" : ""} pending order
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              Attendants have requested orders — review and fulfil below
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="bg-card border border-border rounded-xl p-4">
@@ -339,15 +319,16 @@ const AdminInventory = () => {
                 <div className="space-y-1.5 mb-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Stock</span>
-                    <span className="font-medium">{item.currentStock} / {item.maxStock} {item.unit}</span>
+                    <span className="font-medium">{item.currentStock} {item.unit}</span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
-                    <div className={`h-full rounded-full transition-all ${stockPct < 20 ? 'bg-red-500' : stockPct < 40 ? 'bg-amber-500' : 'bg-green-500'}`}
-                      style={{ width: `${stockPct}%` }} />
+                    <div
+                      className={`h-full rounded-full transition-all ${stockPct < 20 ? 'bg-red-500' : stockPct < 40 ? 'bg-amber-500' : 'bg-green-500'}`}
+                      style={{ width: `${stockPct}%` }}
+                    />
                   </div>
-                  <div className="flex justify-between text-xs mt-1">
+                  <div className="flex justify-end text-xs mt-1">
                     <span className="text-red-500">🔴 Alert below {item.minStock} {item.unit}</span>
-                    <span className="text-amber-500">🟡 Order below {item.reorderPoint} {item.unit}</span>
                   </div>
                 </div>
 
@@ -367,15 +348,6 @@ const AdminInventory = () => {
                   <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg mb-3">
                     <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-muted-foreground">{item.usageNotes}</p>
-                  </div>
-                )}
-
-                {item.status === "ordered" && (
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 rounded-lg mb-3 text-xs text-blue-700 dark:text-blue-300">
-                    {item.expectedArrivalDate
-                      ? `Arriving: ${format(new Date(item.expectedArrivalDate), 'MMM d, yyyy')}`
-                      : "Order pending fulfillment"}
-                    {item.orderQuantity ? ` — Qty: ${item.orderQuantity}` : ""}
                   </div>
                 )}
 
@@ -399,7 +371,11 @@ const AdminInventory = () => {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Item" : "Add Inventory Item"}</DialogTitle>
-            <DialogDescription>{editingItem ? "Update item details and thresholds" : "Add a new item and configure thresholds for this branch"}</DialogDescription>
+            <DialogDescription>
+              {editingItem
+                ? "Update item details. Enter a new stock number to restock."
+                : "Add a new item and configure thresholds for this branch."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -437,15 +413,24 @@ const AdminInventory = () => {
               </div>
 
               <div className="col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Stock Thresholds</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Stock</p>
               </div>
-              <div>
-                <Label>Current Stock</Label>
-                <NumInput value={itemForm.currentStock} onChange={f("currentStock")} />
+              <div className="col-span-2">
+                <Label>{editingItem ? "New Stock Amount" : "Starting Stock"}</Label>
+                <NumInput
+                  value={itemForm.newStock}
+                  onChange={f("newStock")}
+                  placeholder={editingItem ? "Enter updated stock number" : "Enter starting stock"}
+                />
+                {editingItem && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Current stock: <span className="font-medium">{editingItem.currentStock} {editingItem.unit}</span>. Leave blank to keep unchanged.
+                  </p>
+                )}
               </div>
-              <div>
-                <Label>Max Stock *</Label>
-                <NumInput value={itemForm.maxStock} onChange={f("maxStock")} min="1" />
+
+              <div className="col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Thresholds</p>
               </div>
               <div>
                 <Label>Min Stock (Critical threshold) *</Label>

@@ -29,15 +29,14 @@ const AdminSettings = () => {
 
   const adminProfile = useQuery(api.admin.getCurrentUser)
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
-  const updateReportEmailPref = useMutation((api as any).admin.updateReportEmailPreference)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
   const systemSettings = useQuery(api.admin.getSystemSettings)
 
   const [name, setName] = useState("")
   const [savingProfile, setSavingProfile] = useState(false)
-  const [receiveReportEmails, setReceiveReportEmails] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [isDark, setIsDark] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   const [notifications, setNotifications] = useState({
     notifyNewOrders: true,
@@ -48,6 +47,12 @@ const AdminSettings = () => {
     requireBiometricPayment: true,
     autoLogoutMinutes: 30,
   })
+
+  // Read actual DOM class on mount — single source of truth
+  useEffect(() => {
+    setMounted(true)
+    setIsDark(document.documentElement.classList.contains("dark"))
+  }, [])
 
   useEffect(() => {
     if (adminProfile) setName(adminProfile.name || "")
@@ -65,13 +70,6 @@ const AdminSettings = () => {
       })
     }
   }, [systemSettings])
-
-  useEffect(() => {
-    const saved = localStorage.getItem("washlab-theme")
-    const dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    setIsDark(dark)
-    document.documentElement.classList.toggle("dark", dark)
-  }, [])
 
   const toggleTheme = () => {
     const next = !isDark
@@ -238,14 +236,18 @@ const AdminSettings = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                {isDark ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-yellow-500" />}
+                {/* Only render icon after mount to avoid hydration mismatch */}
+                {mounted && (isDark
+                  ? <Moon className="w-4 h-4 text-foreground" />
+                  : <Sun className="w-4 h-4 text-yellow-500" />
+                )}
               </div>
               <div>
-                <p className="text-sm font-medium">{isDark ? "Dark Mode" : "Light Mode"}</p>
+                <p className="text-sm font-medium">{mounted && isDark ? "Dark Mode" : "Light Mode"}</p>
                 <p className="text-xs text-muted-foreground">Toggle the app theme</p>
               </div>
             </div>
-            <Switch checked={isDark} onCheckedChange={toggleTheme} />
+            <Switch checked={mounted ? isDark : false} onCheckedChange={toggleTheme} />
           </div>
         </CardContent>
       </Card>

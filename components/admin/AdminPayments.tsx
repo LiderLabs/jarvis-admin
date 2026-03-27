@@ -131,8 +131,6 @@ const AdminPayments = () => {
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
             </SelectContent>
           </Select>
           <Select value={selectedMethod} onValueChange={setSelectedMethod}>
