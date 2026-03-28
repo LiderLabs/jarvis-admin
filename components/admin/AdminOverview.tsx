@@ -11,13 +11,77 @@ import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import {
   ShoppingBag, ArrowUpRight, ArrowDownRight, Zap, Target,
   BarChart2, X, CheckCircle2, Minus, TrendingUp, Calendar,
+  ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
-import { format, subDays, getISOWeek, getYear, startOfISOWeek, endOfISOWeek } from "date-fns"
+import {
+  format, subDays, getISOWeek, getYear,
+  startOfISOWeek, endOfISOWeek, addWeeks, subWeeks, isSameWeek,
+} from "date-fns"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Legend,
 } from "recharts"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week Picker — replaces DateRangePicker inside the weekly modal
+// Lets user navigate backward/forward one ISO week at a time
+// ─────────────────────────────────────────────────────────────────────────────
+
+function WeekPicker({
+  value,
+  onChange,
+}: {
+  value: Date          // any date inside the selected ISO week
+  onChange: (weekStart: Date) => void
+}) {
+  const now       = new Date()
+  const isThisWeek = isSameWeek(value, now, { weekStartsOn: 1 })
+  const weekNum   = getISOWeek(value)
+  const weekYear  = getYear(value)
+  const weekStart = startOfISOWeek(value)
+  const weekEnd   = endOfISOWeek(value)
+
+  const prev = () => onChange(startOfISOWeek(subWeeks(value, 1)))
+  const next = () => {
+    if (isThisWeek) return // can't go into the future
+    onChange(startOfISOWeek(addWeeks(value, 1)))
+  }
+
+  return (
+    <div className="flex items-center gap-1 bg-muted/50 border border-border rounded-lg px-1 py-1">
+      <button
+        onClick={prev}
+        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+
+      <div className="flex items-center gap-1.5 px-2 min-w-[180px] justify-center">
+        <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+          W{weekNum} {weekYear}
+        </span>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          · {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d")}
+        </span>
+        {isThisWeek && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+            Now
+          </span>
+        )}
+      </div>
+
+      <button
+        onClick={next}
+        disabled={isThisWeek}
+        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat Card
@@ -81,17 +145,16 @@ function WeeklyReportsModal({
 }) {
   const [activeTab, setActiveTab] = useState<"current" | "history">("current")
 
+  // Week picker state — defaults to current ISO week
+  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
+
   const trends = useQuery((api as any).analytics.getRevenueTrends, {
     period: "weekly",
     days: 84,
   }) ?? []
 
-  const now       = new Date()
-  const weekNum   = getISOWeek(now)
-  const weekYear  = getYear(now)
-  const weekStart = startOfISOWeek(now)
-  const weekEnd   = endOfISOWeek(now)
-  const weekLabel = `W${weekNum} ${weekYear} · ${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d")}`
+  const weekNum  = getISOWeek(selectedWeek)
+  const weekYear = getYear(selectedWeek)
 
   const branchRows = weeklyStats.map((s: any) => {
     const pct   = s.weeklyTarget > 0 ? (s.weeklyOrders / s.weeklyTarget) * 100 : null
@@ -104,6 +167,7 @@ function WeeklyReportsModal({
   const progressCount = branchRows.filter(r => !r.hit && (r.weeklyTarget ?? 0) > 0).length
   const noTargetCount = branchRows.filter(r => !r.weeklyTarget || r.weeklyTarget === 0).length
 
+  // History: most-recent 12 weeks, newest first
   const historyRows = useMemo(() =>
     [...(trends as any[])].reverse().slice(0, 12),
     [trends]
@@ -118,8 +182,7 @@ function WeeklyReportsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl z-10
-                      flex flex-col max-h-[88vh]">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl z-10 flex flex-col max-h-[88vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -148,7 +211,7 @@ function WeeklyReportsModal({
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
-              {tab === "current" ? "This Week" : "Past 12 Weeks"}
+              {tab === "current" ? "This Week" : "Week History"}
             </button>
           ))}
         </div>
@@ -156,31 +219,26 @@ function WeeklyReportsModal({
         {/* Body */}
         <div className="overflow-y-auto flex-1 min-h-0">
 
-          {/* This Week */}
+          {/* ── This Week ── */}
           {activeTab === "current" && (
             <div className="p-6 space-y-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground
-                                bg-muted/50 px-3 py-1.5 rounded-lg border border-border">
-                  <Calendar className="w-3.5 h-3.5" />
-                  {weekLabel}
-                </div>
+
+              {/* Week picker */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <WeekPicker value={selectedWeek} onChange={setSelectedWeek} />
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full
-                                   bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
                     <CheckCircle2 className="w-3 h-3" />
                     {hitCount} {hitCount === 1 ? "branch" : "branches"} hit target
                   </span>
                   {progressCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full
-                                     bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
                       <TrendingUp className="w-3 h-3" />
                       {progressCount} in progress
                     </span>
                   )}
                   {noTargetCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full
-                                     bg-muted text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-muted text-muted-foreground">
                       <Minus className="w-3 h-3" />
                       {noTargetCount} no target set
                     </span>
@@ -265,17 +323,27 @@ function WeeklyReportsModal({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Targets reflect current branch settings.
+                Targets reflect current branch settings. Navigate weeks using the arrows above.
               </p>
             </div>
           )}
 
-          {/* Past 12 Weeks */}
+          {/* ── Week History ── */}
           {activeTab === "history" && (
             <div className="p-6 space-y-5">
+
+              {/* Context banner */}
+              <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
+                <p className="text-sm font-semibold text-foreground mb-0.5">How to read this</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Each row is one complete ISO week (Mon – Sun), sorted newest first.
+                  <strong className="text-foreground"> vs Avg</strong> compares that week against the average of all
+                  completed weeks shown. The current week is marked "In Progress" since it isn't finished yet.
+                </p>
+              </div>
+
               {avgOrders > 0 && (
-                <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-950/20
-                                border border-purple-200 dark:border-purple-800 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl px-4 py-3">
                   <TrendingUp className="w-4 h-4 text-purple-600 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -300,7 +368,8 @@ function WeeklyReportsModal({
                     <thead>
                       <tr className="bg-muted/40 border-b border-border">
                         <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Week</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Total Orders</th>
+                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Dates</th>
+                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Orders</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Revenue</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">vs Avg</th>
                       </tr>
@@ -312,6 +381,21 @@ function WeeklyReportsModal({
                           ? ((r.orders - avgOrders) / avgOrders) * 100
                           : null
                         const above  = vsAvg !== null && vsAvg >= 0
+
+                        // Parse the period label to get a date for the week range display
+                        // r.period is something like "W12 2025" — derive Mon–Sun dates
+                        let weekRangeLabel = ""
+                        try {
+                          const [wPart, yPart] = (r.period as string).split(" ")
+                          const wn = parseInt(wPart.replace("W", ""))
+                          const yr = parseInt(yPart)
+                          // Get ISO week start: Jan 4 is always in week 1
+                          const jan4 = new Date(yr, 0, 4)
+                          const wStart = startOfISOWeek(new Date(jan4.getTime() + (wn - 1) * 7 * 86400000))
+                          const wEnd   = endOfISOWeek(wStart)
+                          weekRangeLabel = `${format(wStart, "MMM d")} – ${format(wEnd, "MMM d")}`
+                        } catch {}
+
                         return (
                           <tr
                             key={r.period}
@@ -320,14 +404,16 @@ function WeeklyReportsModal({
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-foreground">{r.period}</span>
+                                <span className="text-sm font-bold text-foreground">{r.period}</span>
                                 {isCurrentWeek && (
-                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full
-                                                   bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
                                     This week
                                   </span>
                                 )}
                               </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs text-muted-foreground">{weekRangeLabel}</span>
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className="text-sm font-bold text-foreground">{r.orders.toLocaleString()}</span>
@@ -345,7 +431,7 @@ function WeeklyReportsModal({
                                   {above ? "+" : ""}{vsAvg.toFixed(1)}%
                                 </span>
                               ) : isCurrentWeek ? (
-                                <span className="text-xs italic text-muted-foreground">in progress</span>
+                                <span className="text-xs italic text-muted-foreground">In progress</span>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
@@ -359,7 +445,7 @@ function WeeklyReportsModal({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Totals are across all branches combined. Per-branch weekly breakdown requires a future backend update.
+                Showing up to 12 weeks of history across all branches combined.
               </p>
             </div>
           )}
@@ -367,7 +453,7 @@ function WeeklyReportsModal({
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-border shrink-0 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">ISO W{weekNum} · {weekYear}</p>
+          <p className="text-xs text-muted-foreground">W{weekNum} · {weekYear}</p>
           <Button variant="outline" size="sm" className="h-7 text-xs px-3" onClick={onClose}>
             Close
           </Button>
@@ -378,7 +464,7 @@ function WeeklyReportsModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Weekly Target Card — display only, not clickable
+// Weekly Target Card — display only
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeeklyTargetCard({
@@ -405,7 +491,6 @@ function WeeklyTargetCard({
   return (
     <div className={`border rounded-xl px-4 py-3 ${wrapColor} w-full`}>
       <div className="flex items-center gap-3">
-        {/* Name + order count */}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
           <p className="text-xs text-muted-foreground">
@@ -415,7 +500,6 @@ function WeeklyTargetCard({
           </p>
         </div>
 
-        {/* Progress bar — desktop */}
         {weeklyTarget > 0 ? (
           <div className="flex-1 hidden sm:block">
             <div className="h-3 bg-muted rounded-full overflow-hidden border border-border relative">
@@ -434,14 +518,12 @@ function WeeklyTargetCard({
           <div className="flex-1 hidden sm:block h-3 bg-muted rounded-full opacity-40" />
         )}
 
-        {/* Percentage */}
         <div className={`text-right shrink-0 flex items-center gap-1 ${textColor}`}>
           <p className="text-sm font-bold">{pct.toFixed(0)}%</p>
           {isComplete && <span className="text-xs">🎯</span>}
         </div>
       </div>
 
-      {/* Progress bar — mobile */}
       {weeklyTarget > 0 && (
         <div className="mt-2 sm:hidden">
           <div className="h-2 bg-muted rounded-full overflow-hidden border border-border">
@@ -534,21 +616,27 @@ const AdminOverview = () => {
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
     const dayMap: Record<string, { mobileMoney: number; cash: number; card: number; displayDate: string }> = {}
 
-    // Initialise every day in range — use byDay total as cash fallback (live data)
+    const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
+    const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
+    const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
+    const cashRatio = liveTotalForProportion > 0 ? totalCash        / liveTotalForProportion : 1
+
     for (let i = dDiff - 1; i >= 0; i--) {
-      const date    = subDays(dateTo, i)
-      const key     = format(date, "MMM d")
-      const dateStr = format(date, "yyyy-MM-dd")
-      const dayTotal = (selectedStats as any)?.byDay?.[dateStr] ?? 0
+      const date     = subDays(dateTo, i)
+      const key      = format(date, "MMM d")
+      const dateStr  = format(date, "yyyy-MM-dd")
+      const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
+        ? (selectedStats as any).byDay[dateStr]
+        : 0
+
       dayMap[key] = {
-        mobileMoney: 0,
-        cash:        typeof dayTotal === "number" ? dayTotal : 0,
-        card:        0,
+        mobileMoney: Math.round(dayTotal * mmRatio   * 100) / 100,
+        cash:        Math.round(dayTotal * cashRatio * 100) / 100,
+        card:        Math.round(dayTotal * cardRatio * 100) / 100,
         displayDate: (dDiff - 1 - i) % step === 0 ? key : "",
       }
     }
 
-    // Override with dailyReports breakdown where available — this gives the real per-method split
     ;(dailyReports as any[]).forEach((r: any) => {
       const key = format(new Date(r.date), "MMM d")
       if (dayMap[key]) {

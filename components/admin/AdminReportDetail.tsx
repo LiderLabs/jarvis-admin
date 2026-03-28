@@ -43,6 +43,24 @@ function discountTypeBadge(type: string) {
   return { label: type, cls: 'bg-muted text-muted-foreground' };
 }
 
+// ── Fault deserializer — handles both JSON (new) and legacy [id] desc format ──
+function parseFaults(raw: string): Array<{ machineName: string; serialNumber?: string; faultTypes: string[]; description: string }> {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+  } catch {}
+  // Legacy format
+  return raw.split('\n').filter(Boolean).map((line: string) => {
+    const match = line.match(/^\[(.+?)\]\s*(.*)$/)
+    return {
+      machineName: match ? match[1] : '—',
+      faultTypes: [],
+      description: match ? match[2] : line,
+    }
+  })
+}
+
 const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   const report = useQuery(
     (api as any).dailyReports.getById,
@@ -62,21 +80,27 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
     );
   }
 
-  const cashAmount = report.cashAmount || 0;
+  const cashAmount   = report.cashAmount || 0;
   const mobileAmount = report.mobileMoneylAmount || 0;
-  const cardAmount = (report.cardAmount || 0) + (report.paystackAmount || 0);
-  // EOD total = only paid amounts, no outstanding, no vouchers
-  const totalRevenue = cashAmount + mobileAmount + cardAmount;
+  const cardAmount   = (report.cardAmount || 0) + (report.paystackAmount || 0);
 
-  const voucherBreakdown: any[] = report.voucherBreakdown || [];
-  const totalVoucherDiscount = voucherBreakdown.reduce((s: number, v: any) => s + (v.totalDiscount || 0), 0);
+  // Day's own payments — shown in Payment Breakdown
+  const dayRevenue = cashAmount + mobileAmount + cardAmount;
+
+  const voucherBreakdown: any[]  = report.voucherBreakdown || [];
+  const totalVoucherDiscount     = voucherBreakdown.reduce((s: number, v: any) => s + (v.totalDiscount || 0), 0);
   const outstandingOrders: any[] = outstandingData?.outstanding ?? [];
-  const receivedOrders: any[] = outstandingData?.received ?? [];
-  const outstandingTotal = outstandingOrders.reduce((s, o) => s + (o.finalPrice || 0), 0);
-  const receivedTotal = receivedOrders.reduce((s, o) => s + (o.amount || 0), 0);
+  const receivedOrders: any[]    = outstandingData?.received ?? [];
+  const outstandingTotal         = outstandingOrders.reduce((s, o) => s + (o.finalPrice || 0), 0);
+  const receivedTotal            = receivedOrders.reduce((s, o) => s + (o.amount || 0), 0);
+
+  // End of Day Total = day's payments + any outstanding recovered today
+  const endOfDayTotal = dayRevenue + receivedTotal;
 
   const statusText = report.status === 'submitted_with_outstanding' ? 'Outstanding'
     : report.status === 'submitted' ? 'Closed' : 'Open';
+
+  const faults = parseFaults(report.technicalFaultNotes || '')
 
   const exportPDF = () => {
     const w = window.open('', '_blank');
@@ -108,13 +132,14 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       </tr>`
     ).join('');
 
-    const faultLines = (report.technicalFaultNotes || '').split('\n').filter(Boolean).map((line: string) => {
-      const match = line.match(/^\[(.+?)\]\s*(.+)$/);
-      return `<tr>
-        <td style="padding:6px 8px;font-weight:600">${match ? match[1] : '—'}</td>
-        <td style="padding:6px 8px">${match ? match[2] : line}</td>
-      </tr>`;
-    }).join('');
+    const faultRows = faults.map(f =>
+      `<tr>
+        <td style="padding:6px 8px;font-weight:600">${f.machineName}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:12px;color:#6b7280">${(f as any).serialNumber || '—'}</td>
+        <td style="padding:6px 8px">${f.faultTypes?.join(', ') || ''}</td>
+        <td style="padding:6px 8px">${f.description}</td>
+      </tr>`
+    ).join('');
 
     w.document.write(`
       <html><head><title>WashLab Report — ${report.branchName} ${report.date}</title>
@@ -127,6 +152,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         .total-block{text-align:center;padding:24px 0;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;margin-bottom:24px}
         .total-label{font-size:15px;color:#6b7280;font-weight:500}
         .total-value{font-size:48px;font-weight:900;letter-spacing:-2px;margin:4px 0 0}
+        .total-sub{font-size:12px;color:#6b7280;margin-top:4px}
         .section{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:16px}
         .section h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151;margin:0 0 12px}
         .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -153,16 +179,19 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
       <div class="total-block">
         <div class="total-label">End of Day Total</div>
-        <div class="total-value">GHS ${totalRevenue.toFixed(2)}</div>
+        <div class="total-value">GHS ${endOfDayTotal.toFixed(2)}</div>
+        ${receivedTotal > 0 ? `<div class="total-sub">Includes GHS ${receivedTotal.toFixed(2)} outstanding recovered · Day payments: GHS ${dayRevenue.toFixed(2)}</div>` : ''}
       </div>
 
-      <!-- Payment Breakdown -->
+      <!-- Payment Breakdown (day only) -->
       <div class="section">
-        <h2>Payment Breakdown</h2>
+        <h2>Payment Breakdown (Today's Orders)</h2>
         <div class="pay-row"><span>Mobile Money</span><span>${fmt(mobileAmount)}</span></div>
         <div class="pay-row"><span>Card / Paystack</span><span>${fmt(cardAmount)}</span></div>
         <div class="pay-row"><span>Cash</span><span>${fmt(cashAmount)}</span></div>
-        <div class="pay-row"><span>Total</span><span>${fmt(totalRevenue)}</span></div>
+        <div class="pay-row"><span>Day Subtotal</span><span>${fmt(dayRevenue)}</span></div>
+        ${receivedTotal > 0 ? `<div class="pay-row"><span>+ Outstanding Recovered</span><span>${fmt(receivedTotal)}</span></div>` : ''}
+        <div class="pay-row"><span>End of Day Total</span><span>${fmt(endOfDayTotal)}</span></div>
       </div>
 
       <!-- Wash Summary -->
@@ -187,7 +216,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       </div>
 
       ${outstandingOrders.length > 0 ? `
-      <!-- Unpaid Orders -->
       <div class="section">
         <h2>Unpaid Orders — Total: ${fmt(outstandingTotal)}</h2>
         <table>
@@ -198,7 +226,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       </div>` : ''}
 
       ${receivedOrders.length > 0 ? `
-      <!-- Outstanding Payment Received -->
       <div class="section">
         <h2>Outstanding Payment Received — Total: ${fmt(receivedTotal)}</h2>
         <table>
@@ -209,7 +236,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       </div>` : ''}
 
       ${voucherBreakdown.length > 0 ? `
-      <!-- Discounts & Vouchers -->
       <div class="section">
         <h2>Discounts & Vouchers — Total: ${fmt(totalVoucherDiscount)}</h2>
         <table>
@@ -219,13 +245,12 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </table>
       </div>` : ''}
 
-      ${report.technicalFaultCount > 0 ? `
-      <!-- Technical Faults -->
+      ${faults.length > 0 ? `
       <div class="section">
-        <h2>Technical Faults (${report.technicalFaultCount})</h2>
+        <h2>Technical Faults (${faults.length})</h2>
         <table>
-          <thead><tr><th>Machine</th><th>Description</th></tr></thead>
-          <tbody>${faultLines}</tbody>
+          <thead><tr><th>Machine</th><th>Serial No.</th><th>Fault Types</th><th>Description</th></tr></thead>
+          <tbody>${faultRows}</tbody>
         </table>
       </div>` : ''}
 
@@ -280,10 +305,19 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </Button>
       </div>
 
-      {/* Big total */}
+      {/* Big total — includes recovered outstanding */}
       <div className="text-center py-4">
-        <p className="text-lg text-muted-foreground font-medium">End Of Day Total:</p>
-        <p className="text-5xl sm:text-6xl font-black text-foreground tracking-tight mt-1">GHS {totalRevenue.toFixed(2)}</p>
+        <p className="text-lg text-muted-foreground font-medium">End Of Day Total</p>
+        <p className="text-5xl sm:text-6xl font-black text-foreground tracking-tight mt-1">
+          GHS {endOfDayTotal.toFixed(2)}
+        </p>
+        {receivedTotal > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Day payments <span className="font-semibold text-foreground">{fmt(dayRevenue)}</span>
+            {' '}+{' '}outstanding recovered{' '}
+            <span className="font-semibold text-green-600">{fmt(receivedTotal)}</span>
+          </p>
+        )}
       </div>
 
       {/* 4-col card row */}
@@ -337,9 +371,10 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           )}
         </div>
 
-        {/* Payment Breakdown — no vouchers */}
+        {/* Payment Breakdown — day's orders only, no outstanding */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="font-semibold text-sm text-foreground mb-3">Payment Breakdown</h2>
+          <h2 className="font-semibold text-sm text-foreground mb-1">Payment Breakdown</h2>
+          <p className="text-[10px] text-muted-foreground mb-3 uppercase tracking-wide">Today's orders only</p>
           <div className="space-y-2.5">
             {[
               { label: 'Mobile Money', value: mobileAmount, icon: Smartphone, color: 'text-blue-500' },
@@ -356,14 +391,20 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             ))}
           </div>
           <div className="border-t border-border mt-3 pt-3 flex justify-between items-center">
-            <span className="text-sm font-semibold text-foreground">Total</span>
-            <span className="text-sm font-bold text-foreground">{fmt(totalRevenue)}</span>
+            <span className="text-sm font-semibold text-foreground">Day Subtotal</span>
+            <span className="text-sm font-bold text-foreground">{fmt(dayRevenue)}</span>
           </div>
+          {receivedTotal > 0 && (
+            <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-dashed border-border">
+              <span className="text-xs text-green-600 font-medium">+ Outstanding Recovered</span>
+              <span className="text-xs font-bold text-green-600">{fmt(receivedTotal)}</span>
+            </div>
+          )}
         </div>
 
         {/* Outstanding Payment Received */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="font-semibold text-sm text-foreground mb-3">Outstanding Payment Received</h2>
+          <h2 className="font-semibold text-sm text-foreground mb-3">Outstanding Recovered</h2>
           {receivedOrders.length === 0 ? (
             <p className="text-sm text-muted-foreground">No outstanding payments received</p>
           ) : (
@@ -385,20 +426,19 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between items-center pt-1">
+              <div className="flex justify-between items-center pt-1 border-t border-border">
                 <span className="text-sm font-semibold text-foreground">Total</span>
-                <span className="text-sm font-bold text-foreground">{fmt(receivedTotal)}</span>
+                <span className="text-sm font-bold text-green-600">{fmt(receivedTotal)}</span>
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Unpaid Orders (formerly Outstanding Payment) */}
+      {/* Unpaid Orders */}
       {outstandingOrders.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-4">Unpaid Orders</h2>
-          {/* Mobile */}
           <div className="sm:hidden space-y-2">
             {outstandingOrders.map((o: any, i: number) => (
               <div key={i} className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg">
@@ -420,7 +460,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
               <span>{fmt(outstandingTotal)}</span>
             </div>
           </div>
-          {/* Desktop */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -501,7 +540,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground">{v.count}×</p>
-                    <p className="text-xs text-muted-foreground">{v.discountType === 'loyalty' ? fmt(v.totalDiscount) : fmt(v.totalDiscount)}</p>
+                    <p className="text-xs text-muted-foreground">{fmt(v.totalDiscount)}</p>
                   </div>
                 </div>
               );
@@ -539,8 +578,8 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </div>
       )}
 
-      {/* Technical Faults */}
-      {report.technicalFaultCount > 0 && (
+      {/* Technical Faults — uses parseFaults for both JSON and legacy format */}
+      {faults.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
             <Wrench className="w-4 h-4 text-destructive" />
@@ -551,34 +590,53 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2 pr-4">Machine</th>
-                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2">Fault Description</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2 pr-4">Serial No.</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2 pr-4">Fault Types</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold py-2">Description</th>
                 </tr>
               </thead>
               <tbody>
-                {(report.technicalFaultNotes || '').split('\n').filter(Boolean).map((line: string, i: number) => {
-                  const match = line.match(/^\[(.+?)\]\s*(.+)$/);
-                  const machineId = match ? match[1] : '—';
-                  const desc = match ? match[2] : line;
-                  return (
-                    <tr key={i} className="border-b border-border last:border-0">
-                      <td className="py-2.5 pr-4 text-sm font-semibold text-foreground">{machineId}</td>
-                      <td className="py-2.5 text-sm text-muted-foreground">{desc}</td>
-                    </tr>
-                  );
-                })}
+                {faults.map((f, i) => (
+                  <tr key={i} className="border-b border-border last:border-0">
+                    <td className="py-2.5 pr-4 text-sm font-semibold text-foreground">{f.machineName || '—'}</td>
+                    <td className="py-2.5 pr-4 text-xs font-mono text-muted-foreground">{(f as any).serialNumber || '—'}</td>
+                    <td className="py-2.5 pr-4">
+                      <div className="flex flex-wrap gap-1">
+                        {f.faultTypes?.length > 0
+                          ? f.faultTypes.map((ft: string) => (
+                              <span key={ft} className="text-xs px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full">{ft}</span>
+                            ))
+                          : <span className="text-xs text-muted-foreground">—</span>
+                        }
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-sm text-muted-foreground">{f.description || '—'}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
           <div className="sm:hidden space-y-2">
-            {(report.technicalFaultNotes || '').split('\n').filter(Boolean).map((line: string, i: number) => {
-              const match = line.match(/^\[(.+?)\]\s*(.+)$/);
-              return (
-                <div key={i} className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
-                  <p className="text-xs font-semibold text-destructive">{match ? match[1] : '—'}</p>
-                  <p className="text-sm text-foreground mt-0.5">{match ? match[2] : line}</p>
+            {faults.map((f, i) => (
+              <div key={i} className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-semibold text-destructive">{f.machineName || '—'}</p>
+                  {(f as any).serialNumber && (
+                    <span className="text-[10px] font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
+                      SN: {(f as any).serialNumber}
+                    </span>
+                  )}
                 </div>
-              );
-            })}
+                {f.faultTypes?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {f.faultTypes.map((ft: string) => (
+                      <span key={ft} className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded">{ft}</span>
+                    ))}
+                  </div>
+                )}
+                {f.description && <p className="text-sm text-foreground mt-1">{f.description}</p>}
+              </div>
+            ))}
           </div>
         </div>
       )}

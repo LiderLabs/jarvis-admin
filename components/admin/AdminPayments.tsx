@@ -97,62 +97,67 @@ const AdminPayments = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header row: title left, filters right */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
-          <p className="text-sm text-muted-foreground mt-1">View and manage all payment transactions</p>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
+        <p className="text-sm text-muted-foreground mt-1">View and manage all payment transactions</p>
+      </div>
 
-        {/* Filters on the right */}
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+      {/* Filters — full width row, wraps on mobile */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Date picker takes full width on mobile, auto on larger screens */}
+        <div className="w-full sm:w-auto">
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
             onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
           />
-          <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All Branches" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Branches</SelectItem>
-              {branchesList.map((branch) => (
-                <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedMethod} onValueChange={setSelectedMethod}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All Methods" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Methods</SelectItem>
-              <SelectItem value="mobile_money">Mobile Money</SelectItem>
-              <SelectItem value="card">Card</SelectItem>
-              <SelectItem value="cash">Cash</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={handleClearFilters} className="h-9">
-            Clear
-          </Button>
         </div>
+
+        <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Branches" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Branches</SelectItem>
+            {branchesList.map((branch) => (
+              <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedMethod} onValueChange={setSelectedMethod}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Methods" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Methods</SelectItem>
+            <SelectItem value="mobile_money">Mobile Money</SelectItem>
+            <SelectItem value="card">Card</SelectItem>
+            <SelectItem value="cash">Cash</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button variant="outline" size="sm" onClick={handleClearFilters} className="h-9 w-full sm:w-auto">
+          Clear Filters
+        </Button>
       </div>
 
       {/* Stats Grid */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
+        <Card className="col-span-2 lg:col-span-1 bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
           </CardHeader>

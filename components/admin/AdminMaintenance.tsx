@@ -272,21 +272,25 @@ const AdminMaintenance = () => {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </CardContent>
         </Card>
-      ) : allTickets.length === 0 ? (
+      ) : tickets.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Wrench className="h-12 w-12 mb-4 opacity-20" />
             <h3 className="font-semibold text-lg mb-1">No tickets found</h3>
             <p className="text-sm text-center">
-              {statusFilter === "open"  ? "No open faults reported." :
-               statusFilter === "fixed" ? "No resolved tickets yet." :
-               "No faults have been reported yet."}
+              {selectedBranchId !== "all" && statusFilter === "all"
+                ? "No tickets for this branch."
+                : statusFilter === "open"
+                ? "No open faults for the selected filters."
+                : statusFilter === "fixed"
+                ? "No resolved tickets for the selected filters."
+                : "No faults have been reported yet."}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {allTickets.map((ticket: any) => {
+          {tickets.map((ticket: any) => {
             const isOpen = ticket.status === "open"
             return (
               <Card
@@ -308,9 +312,16 @@ const AdminMaintenance = () => {
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div>
                           <p className="font-semibold text-foreground">{ticket.machineName}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <Building2 className="w-3 h-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">{getBranchName(ticket.branchId)}</span>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="w-3 h-3 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">{getBranchName(ticket.branchId)}</span>
+                            </div>
+                            {ticket.serialNumber && (
+                              <span className="text-[10px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                                SN: {ticket.serialNumber}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <Badge className={isOpen
@@ -419,7 +430,9 @@ const AdminMaintenance = () => {
               >
                 <option value="">Select machine…</option>
                 {(branchMachines as any[]).map((m: any) => (
-                  <option key={m._id} value={m._id}>{m.name}</option>
+                  <option key={m._id} value={m._id}>
+                    {m.name}{m.serialNumber ? ` (SN: ${m.serialNumber})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
