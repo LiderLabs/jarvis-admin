@@ -114,6 +114,9 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
     : activePreset === "All time" ? "All time"
     : `${activePreset}  ${PRESETS.find(p => p.label === activePreset)?.display() || ""}`;
 
+  // Shared dropdown positioning: on mobile use fixed centering, on desktop anchor right
+  const dropdownClass = "fixed left-1/2 -translate-x-1/2 sm:absolute sm:left-auto sm:translate-x-0 sm:right-0 top-auto z-50 bg-card border border-border rounded-xl shadow-xl";
+
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => { setOpen(!open); setShowCustom(false); }}
@@ -123,7 +126,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
       </button>
 
       {open && !showCustom && (
-        <div className="absolute right-0 top-11 z-50 bg-card border border-border rounded-xl shadow-xl w-52 py-1">
+        <div className={`${dropdownClass} w-52 py-1 mt-2 sm:mt-0 sm:top-11`}>
           {PRESETS.map(p => (
             <button key={p.label} onClick={() => handlePreset(p)}
               className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-muted transition-colors">
@@ -135,7 +138,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
       )}
 
       {open && showCustom && (
-        <div className="absolute right-0 top-11 z-50 bg-card border border-border rounded-xl shadow-xl w-72 p-4">
+        <div className={`${dropdownClass} w-[min(288px,90vw)] p-4 mt-2 sm:mt-0 sm:top-11`}>
           <div className="flex items-center justify-between mb-3">
             <button onClick={() => setCalMonth(m => addMonths(m, -1))} className="p-1 hover:bg-muted rounded"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold">{format(calMonth, "MMMM yyyy")}</span>

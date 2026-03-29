@@ -526,6 +526,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   const [dateFrom, setDateFrom]             = useState<Date>(new Date());
   const [dateTo, setDateTo]                 = useState<Date>(new Date());
   const [selectedBranch, setSelectedBranch] = useState('all');
+  const [showAllReports, setShowAllReports] = useState(false);
 
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
   const branches    = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? [];
@@ -745,7 +746,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">Recent Daily Reports</CardTitle>
-            <Button variant="link" size="sm" className="text-primary text-xs p-0 h-auto">View All Reports</Button>
+            <Button variant="link" size="sm" className="text-primary text-xs p-0 h-auto" onClick={() => setShowAllReports(v => !v)}>{showAllReports ? 'Show Less' : 'View All Reports'}</Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
