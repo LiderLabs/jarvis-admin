@@ -746,7 +746,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">Recent Daily Reports</CardTitle>
-            <Button variant="link" size="sm" className="text-primary text-xs p-0 h-auto" onClick={() => setShowAllReports(v => !v)}>{showAllReports ? 'Show Less' : 'View All Reports'}</Button>
+            <Button variant="link" size="sm" className="text-primary text-xs p-0 h-auto" onClick={() => setShowAllReports(v => !v)}>{showAllReports ? 'Show Less' : `View All (${(allRecentReports as any[]).length})`}</Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -760,7 +760,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
                 </tr>
               </thead>
               <tbody>
-                {((allRecentReports as any[]) || []).slice(0, 10).map((r: any) => (
+                {((allRecentReports as any[]) || []).slice(0, showAllReports ? undefined : 10).map((r: any) => (
                   <tr key={r._id} className="border-b border-border hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                     <td className="px-4 py-3 text-sm text-foreground">{r.branchName || branchMap[r.branchId] || '—'}</td>

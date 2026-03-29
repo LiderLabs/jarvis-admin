@@ -394,12 +394,6 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             <span className="text-sm font-semibold text-foreground">Day Subtotal</span>
             <span className="text-sm font-bold text-foreground">{fmt(dayRevenue)}</span>
           </div>
-          {receivedTotal > 0 && (
-            <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-dashed border-border">
-              <span className="text-xs text-green-600 font-medium">+ Outstanding Recovered</span>
-              <span className="text-xs font-bold text-green-600">{fmt(receivedTotal)}</span>
-            </div>
-          )}
         </div>
 
         {/* Outstanding Payment Received */}
