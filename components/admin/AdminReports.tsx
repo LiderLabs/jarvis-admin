@@ -82,7 +82,10 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
   const weekStart = startOfISOWeek(selectedWeek);
   const weekEnd   = endOfISOWeek(selectedWeek);
 
-  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? [];
+  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats, {
+    weekStart: weekStart.getTime(),
+    weekEnd: weekEnd.getTime(),
+  }) ?? [];
   const trends = useQuery((api as any).analytics.getRevenueTrends, { period: 'weekly', days: 84 }) ?? [];
 
   const branchRows = useMemo(() => (weeklyStats as any[]).map((s: any) => {
