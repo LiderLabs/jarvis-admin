@@ -111,18 +111,18 @@ const sidebarItems = [
     group: "system",
   },
   {
-    id: "maintenance",
-    label: "Maintenance",
-    icon: Wrench,
-    path: "/dashboard/maintenance",
-    group: "system",
-  },
-  {
     id: "customers",
     label: "Customers",
     icon: Users,
     path: "/dashboard/customers",
     group: "management",
+  },
+  {
+    id: "maintenance",
+    label: "Maintenance",
+    icon: Wrench,
+    path: "/dashboard/maintenance",
+    group: "system",
   },
 ]
 

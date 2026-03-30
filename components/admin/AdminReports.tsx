@@ -35,193 +35,99 @@ function WeekPicker({
   value: Date
   onChange: (weekStart: Date) => void
 }) {
-  const now        = new Date()
-  const isThisWeek = isSameWeek(value, now, { weekStartsOn: 1 })
-  const weekNum    = getISOWeek(value)
-  const weekYear   = getYear(value)
-  const weekStart  = startOfISOWeek(value)
-  const weekEnd    = endOfISOWeek(value)
+  const weeks = Array.from({ length: 17 }, (_, i) => {
+    const ws = startOfISOWeek(subWeeks(new Date(), i));
+    const we = endOfISOWeek(ws);
+    const wn = getISOWeek(ws);
+    const wy = getYear(ws);
+    return {
+      ws, we, wn, wy,
+      label: `W${wn} ${wy}  ·  ${format(ws, 'MMM d')} – ${format(we, 'MMM d')}`,
+      isCurrent: i === 0,
+    };
+  });
+
+  const selectedKey = `${getISOWeek(value)}-${getYear(value)}`;
 
   return (
-    <div className="flex items-center gap-1 bg-muted/50 border border-border rounded-lg px-1 py-1 h-9">
-      <button
-        onClick={() => onChange(startOfISOWeek(subWeeks(value, 1)))}
-        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-        title="Previous week"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-
-      <div className="flex items-center gap-1.5 px-2 min-w-[200px] justify-center">
-        <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-          W{weekNum} {weekYear}
-        </span>
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          · {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
-        </span>
-        {isThisWeek && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-            Now
-          </span>
-        )}
-      </div>
-
-      <button
-        onClick={() => { if (!isThisWeek) onChange(startOfISOWeek(addWeeks(value, 1))) }}
-        disabled={isThisWeek}
-        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-        title="Next week"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Stat Card
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatCard({ title, value, change }: { title: string; value: string | number; change?: number }) {
-  const isPos = (change ?? 0) >= 0;
-  return (
-    <div className="bg-card border border-border rounded-xl p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">{title}</p>
-      <p className="text-2xl font-bold text-foreground">{value}</p>
-      {change !== undefined && (
-        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${isPos ? 'text-green-600' : 'text-red-500'}`}>
-          {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          {isPos ? '+' : ''}{change}%
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Chart Tooltip
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-      <p className="text-xs text-muted-foreground mb-2">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.dataKey} className="text-sm font-semibold" style={{ color: p.color }}>
-          {p.name}: {p.dataKey === 'revenue' ? `GHS ${p.value.toFixed(2)}` : p.value}
-        </p>
+    <select
+      value={selectedKey}
+      onChange={e => {
+        const found = weeks.find(w => `${w.wn}-${w.wy}` === e.target.value);
+        if (found) onChange(found.ws);
+      }}
+      className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 w-full sm:w-auto sm:max-w-[280px] cursor-pointer"
+    >
+      {weeks.map(w => (
+        <option key={`${w.wn}-${w.wy}`} value={`${w.wn}-${w.wy}`}>
+          {w.isCurrent
+            ? `This week · ${format(w.ws, 'MMM d')} – ${format(w.we, 'MMM d')}`
+            : w.label}
+        </option>
       ))}
-    </div>
+    </select>
   );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CSV helper
-// ─────────────────────────────────────────────────────────────────────────────
-
-function downloadCSV(rows: (string | number)[][], filename: string) {
-  const csv  = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success('Exported');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Weekly Reports Page
+// Weekly Target Reports Page
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
-
-  // Week picker — defaults to current ISO week
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
 
-  const weekNum   = getISOWeek(selectedWeek)
-  const weekYear  = getYear(selectedWeek)
-  const weekStart = startOfISOWeek(selectedWeek)
-  const weekEnd   = endOfISOWeek(selectedWeek)
+  const weekNum   = getISOWeek(selectedWeek);
+  const weekYear  = getYear(selectedWeek);
+  const weekStart = startOfISOWeek(selectedWeek);
+  const weekEnd   = endOfISOWeek(selectedWeek);
 
   const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? [];
+  const trends = useQuery((api as any).analytics.getRevenueTrends, { period: 'weekly', days: 84 }) ?? [];
 
-  // 12 weeks of history (84 days)
-  const trends = useQuery((api as any).analytics.getRevenueTrends, {
-    period: 'weekly',
-    days: 84,
-  }) ?? [];
-
-  // Current week branch rows
   const branchRows = useMemo(() => (weeklyStats as any[]).map((s: any) => {
-    const target   = s.weeklyTarget ?? 0;
-    const orders   = s.weeklyOrders ?? 0;
-    const pct      = target > 0 ? (orders / target) * 100 : null;
-    const hit      = pct !== null && pct >= 100;
+    const target = s.weeklyTarget ?? 0;
+    const orders = s.weeklyOrders ?? 0;
+    const pct = target > 0 ? (orders / target) * 100 : null;
+    const hit = pct !== null && pct >= 100;
     const exceeded = hit && orders > target;
     return { ...s, target, orders, pct, hit, exceeded };
   }), [weeklyStats]);
 
-  // History rows: newest first, up to 12
-  const historyRows = useMemo(() =>
-    [...(trends as any[])].reverse().slice(0, 12),
-    [trends]
-  );
-
-  // Average based on fully completed weeks (skip the current in-progress one)
+  const historyRows = useMemo(() => [...(trends as any[])].reverse().slice(0, 12), [trends]);
   const completedWeeks = historyRows.slice(1);
   const avgOrders = completedWeeks.length > 0
-    ? Math.round(completedWeeks.reduce((s: number, r: any) => s + r.orders, 0) / completedWeeks.length)
-    : 0;
+    ? Math.round(completedWeeks.reduce((s: number, r: any) => s + r.orders, 0) / completedWeeks.length) : 0;
   const avgRevenue = completedWeeks.length > 0
-    ? completedWeeks.reduce((s: number, r: any) => s + r.revenue, 0) / completedWeeks.length
-    : 0;
+    ? completedWeeks.reduce((s: number, r: any) => s + r.revenue, 0) / completedWeeks.length : 0;
 
-  // Export current week
   const exportCurrentWeek = () => {
     const rows = [
       ['Week', 'Dates', 'Branch', 'Target', 'Total Orders', 'Status', 'Gap / Surplus'],
       ...branchRows.map(r => {
-        let status = 'In Progress';
-        let gap    = '';
-        if (!r.target)        { status = 'No Target'; }
-        else if (r.exceeded)  { status = 'Exceeded'; gap = `+${r.orders - r.target}`; }
-        else if (r.hit)       { status = 'Target Hit'; gap = '0'; }
-        else                  { status = 'Unachieved'; gap = `-${r.target - r.orders}`; }
-        return [
-          `W${weekNum} ${weekYear}`,
-          `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`,
-          r.branchName, r.target || '—', r.orders, status, gap,
-        ];
+        let status = 'In Progress', gap = '';
+        if (!r.target)       { status = 'No Target'; }
+        else if (r.exceeded) { status = 'Exceeded'; gap = `+${r.orders - r.target}`; }
+        else if (r.hit)      { status = 'Target Hit'; gap = '0'; }
+        else                 { status = 'Unachieved'; gap = `-${r.target - r.orders}`; }
+        return [`W${weekNum} ${weekYear}`, `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`, r.branchName, r.target || '—', r.orders, status, gap];
       }),
     ];
     downloadCSV(rows, `weekly-report-W${weekNum}-${weekYear}.csv`);
   };
 
-  // Export history
   const exportHistory = () => {
     const rows = [
       ['Week', 'Mon – Sun', 'Total Orders', 'Revenue (GHS)', 'vs Weekly Average'],
       ...historyRows.map((r: any, i: number) => {
-        const vsAvg = avgOrders > 0 && i > 0
-          ? ((r.orders - avgOrders) / avgOrders * 100).toFixed(1) + '%'
-          : i === 0 ? 'In Progress' : '—';
-
+        const vsAvg = avgOrders > 0 && i > 0 ? ((r.orders - avgOrders) / avgOrders * 100).toFixed(1) + '%' : i === 0 ? 'In Progress' : '—';
         let weekRangeLabel = '';
         try {
           const [wPart, yPart] = (r.period as string).split(' ');
-          const wn   = parseInt(wPart.replace('W', ''));
-          const yr   = parseInt(yPart);
-          const jan4 = new Date(yr, 0, 4);
-          const ws   = startOfISOWeek(new Date(jan4.getTime() + (wn - 1) * 7 * 86400000));
-          const we   = endOfISOWeek(ws);
-          weekRangeLabel = `${format(ws, 'MMM d')} – ${format(we, 'MMM d')}`;
+          const wn = parseInt(wPart.replace('W', '')), yr = parseInt(yPart);
+          const ws = startOfISOWeek(new Date(new Date(yr, 0, 4).getTime() + (wn - 1) * 7 * 86400000));
+          weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfISOWeek(ws), 'MMM d')}`;
         } catch {}
-
         return [r.period, weekRangeLabel, r.orders, r.revenue.toFixed(2), vsAvg];
       }),
     ];
@@ -230,19 +136,16 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="space-y-5 pb-8">
-
-      {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" /> Back
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Weekly Reports</h1>
+            <h1 className="text-xl font-bold text-foreground">Weekly Target Reports</h1>
             <p className="text-xs text-muted-foreground">Branch targets and weekly performance</p>
           </div>
         </div>
-
         <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'current' && (
             <>
@@ -260,264 +163,189 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-border gap-1">
         {(['current', 'history'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px
-              ${activeTab === tab
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-          >
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {tab === 'current' ? 'This Week' : 'Week History'}
           </button>
         ))}
       </div>
 
-      {/* ══ THIS WEEK ══ */}
       {activeTab === 'current' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">
-              W{weekNum} {weekYear}
-            </span>
+            <span className="font-medium text-foreground">W{weekNum} {weekYear}</span>
             <span>·</span>
             <span>{format(weekStart, 'EEEE, MMM d')} – {format(weekEnd, 'EEEE, MMM d')}</span>
           </div>
-
           {branchRows.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Target className="w-10 h-10 mb-3 opacity-20" />
-                <p className="text-sm">No branch data available.</p>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Target className="w-10 h-10 mb-3 opacity-20" /><p className="text-sm">No branch data available.</p>
+            </CardContent></Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Branch</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Target</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Orders</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3 w-44">Progress</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Result</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {branchRows.map(r => {
-                        const pct      = r.pct !== null ? Math.min(r.pct, 100) : 0;
-                        const barColor = r.exceeded ? 'bg-purple-500' : r.hit ? 'bg-green-500' : r.pct !== null && r.pct >= 75 ? 'bg-yellow-400' : 'bg-blue-500';
-
-                        let resultNode: React.ReactNode;
-                        if (!r.target) {
-                          resultNode = <span className="text-xs text-muted-foreground italic">No target set</span>;
-                        } else if (r.exceeded) {
-                          resultNode = (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Exceeded by {r.orders - r.target}
-                            </span>
-                          );
-                        } else if (r.hit) {
-                          resultNode = (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Target hit
-                            </span>
-                          );
-                        } else {
-                          const gap = r.target - r.orders;
-                          resultNode = (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500">
-                              <XCircle className="w-3.5 h-3.5" />
-                              {gap} order{gap !== 1 ? 's' : ''} to go
-                            </span>
-                          );
-                        }
-
-                        return (
-                          <tr key={r.branchId} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                            <td className="px-5 py-3">
-                              <p className="text-sm font-semibold text-foreground">{r.branchName}</p>
-                            </td>
-                            <td className="px-5 py-3 text-right text-sm text-muted-foreground">
-                              {r.target > 0 ? r.target : <span className="italic">—</span>}
-                            </td>
-                            <td className="px-5 py-3 text-right text-sm font-bold text-foreground">
-                              {r.orders}
-                            </td>
-                            <td className="px-5 py-3">
-                              {r.target > 0 ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full transition-all duration-700 ${barColor}`}
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs text-muted-foreground w-8 text-right shrink-0">
-                                    {r.pct !== null ? `${r.pct.toFixed(0)}%` : '—'}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-3">{resultNode}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full">
+              <thead><tr className="border-b border-border bg-muted/30">
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Branch</th>
+                <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Target</th>
+                <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Orders</th>
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3 w-44">Progress</th>
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Result</th>
+              </tr></thead>
+              <tbody>
+                {branchRows.map(r => {
+                  const pct = r.pct !== null ? Math.min(r.pct, 100) : 0;
+                  const barColor = r.exceeded ? 'bg-purple-500' : r.hit ? 'bg-green-500' : r.pct !== null && r.pct >= 75 ? 'bg-yellow-400' : 'bg-blue-500';
+                  let resultNode: React.ReactNode;
+                  if (!r.target) resultNode = <span className="text-xs text-muted-foreground italic">No target set</span>;
+                  else if (r.exceeded) resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600"><CheckCircle2 className="w-3.5 h-3.5" />Exceeded by {r.orders - r.target}</span>;
+                  else if (r.hit) resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />Target hit</span>;
+                  else { const gap = r.target - r.orders; resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500"><XCircle className="w-3.5 h-3.5" />{gap} order{gap !== 1 ? 's' : ''} to go</span>; }
+                  return (
+                    <tr key={r.branchId} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="px-5 py-3"><p className="text-sm font-semibold text-foreground">{r.branchName}</p></td>
+                      <td className="px-5 py-3 text-right text-sm text-muted-foreground">{r.target > 0 ? r.target : <span className="italic">—</span>}</td>
+                      <td className="px-5 py-3 text-right text-sm font-bold text-foreground">{r.orders}</td>
+                      <td className="px-5 py-3">{r.target > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-8 text-right shrink-0">{r.pct !== null ? `${r.pct.toFixed(0)}%` : '—'}</span>
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}</td>
+                      <td className="px-5 py-3">{resultNode}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table></div></CardContent></Card>
           )}
         </div>
       )}
 
-      {/* ══ WEEK HISTORY ══ */}
       {activeTab === 'history' && (
         <div className="space-y-4">
-
-          {/* Explanation banner */}
           <div className="bg-muted/40 border border-border rounded-xl px-4 py-3 space-y-1">
             <p className="text-sm font-semibold text-foreground">Week-by-week breakdown</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Each row is one ISO week (Monday – Sunday), newest at the top.
-              The <strong className="text-foreground">vs Average</strong> column shows how that week compared
-              to the typical weekly performance. The current week is marked "In Progress" — its numbers will
-              change until the week ends on Sunday.
-            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">Each row is one ISO week (Monday – Sunday), newest at the top.</p>
           </div>
-
-          {/* Averages summary */}
           {avgOrders > 0 && (
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3 bg-muted/30 border border-border rounded-xl px-4 py-3">
                 <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg orders / week</p>
-                  <p className="text-base font-bold text-foreground">{avgOrders.toLocaleString()}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">Avg orders / week</p><p className="text-base font-bold text-foreground">{avgOrders.toLocaleString()}</p></div>
               </div>
               <div className="flex items-center gap-3 bg-muted/30 border border-border rounded-xl px-4 py-3">
                 <BarChart2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg revenue / week</p>
-                  <p className="text-base font-bold text-foreground">
-                    GHS {avgRevenue.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">Avg revenue / week</p><p className="text-base font-bold text-foreground">GHS {avgRevenue.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p></div>
               </div>
             </div>
           )}
-
           {historyRows.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <BarChart2 className="w-10 h-10 mb-3 opacity-20" />
-                <p className="text-sm">No history available yet.</p>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <BarChart2 className="w-10 h-10 mb-3 opacity-20" /><p className="text-sm">No history available yet.</p>
+            </CardContent></Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Week</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Mon – Sun</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Total Orders</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Revenue</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">vs Average</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyRows.map((r: any, i: number) => {
-                        const isCurrent = i === 0;
-                        const vsAvg = avgOrders > 0 && !isCurrent
-                          ? ((r.orders - avgOrders) / avgOrders) * 100
-                          : null;
-                        const above = vsAvg !== null && vsAvg >= 0;
-
-                        // Derive Mon–Sun label from the period string e.g. "W12 2025"
-                        let weekRangeLabel = '';
-                        try {
-                          const [wPart, yPart] = (r.period as string).split(' ');
-                          const wn   = parseInt(wPart.replace('W', ''));
-                          const yr   = parseInt(yPart);
-                          const jan4 = new Date(yr, 0, 4);
-                          const ws   = startOfISOWeek(new Date(jan4.getTime() + (wn - 1) * 7 * 86400000));
-                          const we   = endOfISOWeek(ws);
-                          weekRangeLabel = `${format(ws, 'MMM d')} – ${format(we, 'MMM d')}`;
-                        } catch {}
-
-                        return (
-                          <tr
-                            key={r.period}
-                            className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors
-                              ${isCurrent ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''}`}
-                          >
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-foreground">{r.period}</span>
-                                {isCurrent && (
-                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-                                    In Progress
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-5 py-3">
-                              <span className="text-xs text-muted-foreground">{weekRangeLabel}</span>
-                            </td>
-                            <td className="px-5 py-3 text-right text-sm font-bold text-foreground">
-                              {r.orders.toLocaleString()}
-                            </td>
-                            <td className="px-5 py-3 text-right text-sm font-semibold text-foreground">
-                              GHS {r.revenue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              {vsAvg !== null ? (
-                                <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${above ? 'text-green-600' : 'text-red-500'}`}>
-                                  {above ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                                  {above ? '+' : ''}{vsAvg.toFixed(1)}%
-                                </span>
-                              ) : isCurrent ? (
-                                <span className="text-xs text-muted-foreground italic">In progress</span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full">
+              <thead><tr className="border-b border-border bg-muted/30">
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Week</th>
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Mon – Sun</th>
+                <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Total Orders</th>
+                <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Revenue</th>
+                <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">vs Average</th>
+              </tr></thead>
+              <tbody>
+                {historyRows.map((r: any, i: number) => {
+                  const isCurrent = i === 0;
+                  const vsAvg = avgOrders > 0 && !isCurrent ? ((r.orders - avgOrders) / avgOrders) * 100 : null;
+                  const above = vsAvg !== null && vsAvg >= 0;
+                  let weekRangeLabel = '';
+                  try {
+                    const [wPart, yPart] = (r.period as string).split(' ');
+                    const wn = parseInt(wPart.replace('W', '')), yr = parseInt(yPart);
+                    const ws = startOfISOWeek(new Date(new Date(yr, 0, 4).getTime() + (wn - 1) * 7 * 86400000));
+                    weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfISOWeek(ws), 'MMM d')}`;
+                  } catch {}
+                  return (
+                    <tr key={r.period} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${isCurrent ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''}`}>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">{r.period}</span>
+                          {isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">In Progress</span>}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3"><span className="text-xs text-muted-foreground">{weekRangeLabel}</span></td>
+                      <td className="px-5 py-3 text-right text-sm font-bold text-foreground">{r.orders.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-sm font-semibold text-foreground">GHS {r.revenue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-5 py-3 text-right">
+                        {vsAvg !== null ? (
+                          <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${above ? 'text-green-600' : 'text-red-500'}`}>
+                            {above ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                            {above ? '+' : ''}{vsAvg.toFixed(1)}%
+                          </span>
+                        ) : isCurrent ? <span className="text-xs text-muted-foreground italic">In progress</span> : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table></div></CardContent></Card>
           )}
-
-          <p className="text-xs text-muted-foreground">
-            Showing up to 12 weeks · all branches combined · based on {completedWeeks.length} completed weeks for averages.
-          </p>
+          <p className="text-xs text-muted-foreground">Showing up to 12 weeks · all branches combined · based on {completedWeeks.length} completed weeks for averages.</p>
         </div>
       )}
     </div>
   );
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reports Overview
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+function downloadCSV(rows: (string | number)[][], filename: string) {
+  const csv  = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success('Exported');
+}
+
+function StatCard({ title, value, change }: { title: string; value: string | number; change?: number }) {
+  const isPos = (change ?? 0) >= 0;
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">{title}</p>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      {change !== undefined && (
+        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${isPos ? 'text-green-600' : 'text-red-500'}`}>
+          {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {isPos ? '+' : ''}{change}%
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+      <p className="text-xs text-muted-foreground mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="text-sm font-semibold" style={{ color: p.color }}>
+          {p.name}: {p.dataKey === 'revenue' ? `GHS ${p.value.toFixed(2)}` : p.value}
+        </p>
+      ))}
+    </div>
+  );
+};
 
 const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   onViewReport?: (id: string) => void
@@ -623,14 +451,9 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         const card         = (r.cardAmount || 0) + (r.paystackAmount || 0);
         const totalRevenue = cash + mobile + card;
 
-        // Calculate token value from fields saved on the report
-        // washerPrice/dryerPrice default to 25 if not stored (matches backend default)
+        // Token value = report tokens + unpaid orders' tokens (unpaid orders are excluded from report totals)
         const washerPrice  = r.washerPrice || 25;
         const dryerPrice   = r.dryerPrice  || 25;
-        const tokenValue   = ((r.washerTokensUsed || 0) * washerPrice)
-                           + ((r.dryerTokensUsed  || 0) * dryerPrice);
-
-        // Unpaid: orders from this day not fully paid
         const reportDateStart = new Date(r.date + 'T00:00:00.000Z').getTime();
         const reportDateEnd   = new Date(r.date + 'T23:59:59.999Z').getTime();
         const dayOrders       = orders.filter((o: any) =>
@@ -638,13 +461,29 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
           o._creationTime >= reportDateStart &&
           o._creationTime <= reportDateEnd
         );
+        const unpaidTokenValue = dayOrders
+          .filter((o: any) => o.paymentStatus !== 'paid')
+          .reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
+        const tokenValue   = ((r.washerTokensUsed || 0) * washerPrice)
+                           + ((r.dryerTokensUsed  || 0) * dryerPrice)
+                           + unpaidTokenValue;
+
+        // Unpaid: orders from this day not fully paid
         const unpaidAmt = dayOrders
           .filter((o: any) => o.paymentStatus !== 'paid')
           .reduce((s: number, o: any) => s + Math.max(0, (o.finalPrice || 0) - (o.amountPaid || 0)), 0);
 
-        // Outstanding payment received = saved on report when submitted
-        // This is the total outstanding amount recorded at submission time
-        const outstandingReceived = r.outstandingAmount || 0;
+        // Outstanding Payment Received = payments received on this report date
+        // for orders created on PREVIOUS days (recovered outstanding)
+        const outstandingReceived = r.outstandingRecovered || orders
+          .filter((o: any) =>
+            o.branchId === r.branchId &&
+            o.paymentStatus === 'paid' &&
+            o._creationTime < reportDateStart &&
+            o._updatedAt >= reportDateStart &&
+            o._updatedAt <= reportDateEnd
+          )
+          .reduce((s: number, o: any) => s + (o.finalPrice || 0), 0);
 
         const vouchersUsed = (r.voucherBreakdown || []).reduce((s: number, v: any) => s + v.count, 0)
                            || r.vouchersUsed || r.freeWashCount || 0;
@@ -681,7 +520,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="h-9 text-xs px-3 gap-1.5" onClick={onWeeklyReports}>
-            <BarChart2 className="w-3.5 h-3.5" /> Weekly Reports
+            <BarChart2 className="w-3.5 h-3.5" /> Weekly Target Reports
           </Button>
           <DateRangePicker from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} />
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
