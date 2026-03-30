@@ -327,9 +327,11 @@ const AdminInventory = () => {
                       style={{ width: `${stockPct}%` }}
                     />
                   </div>
-                  <div className="flex justify-end text-xs mt-1">
-                    <span className="text-red-500">🔴 Alert below {item.minStock} {item.unit}</span>
-                  </div>
+                  {item.currentStock <= item.minStock && (
+                    <div className="flex justify-end text-xs mt-1">
+                      <span className="text-red-500">🔴 Below alert threshold ({item.minStock} {item.unit})</span>
+                    </div>
+                  )}
                 </div>
 
                 {item.scoopsPerUnit && (
