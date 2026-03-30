@@ -615,28 +615,58 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   }, [filtered, prevFiltered, dateFrom, dateTo, dailyReports]);
 
   const exportCSV = () => {
-    const ordersByDateBranch: Record<string, any[]> = {};
-    orders.forEach((o: any) => {
-      const key = `${format(new Date(o._creationTime), 'yyyy-MM-dd')}::${o.branchId}`;
-      if (!ordersByDateBranch[key]) ordersByDateBranch[key] = [];
-      ordersByDateBranch[key].push(o);
-    });
-
     const rows: (string | number)[][] = [
-      ['Date', 'Branch', 'Attendants', 'Tokens', 'Token Value (GHS)', 'Unpaid Orders', 'Outstanding Orders', 'Payment Received (GHS)', 'Cash (GHS)', 'Paystack / Card (GHS)', 'Total Revenue (GHS)', 'Vouchers Used', 'Status'],
+      ['Date', 'Branch', 'Attendants', 'Tokens Used', 'Token Value (GHS)', 'Unpaid Amount (GHS)', 'Outstanding Payment Received (GHS)', 'Cash (GHS)', 'Mobile Money (GHS)', 'Card (GHS)', 'Total Revenue (GHS)', 'Vouchers Used', 'Status'],
       ...(dailyReports as any[]).map((r: any) => {
-        const paystackAmt       = (r.cardAmount || 0) + (r.paystackAmount || 0) + (r.mobileMoneylAmount || 0);
-        const totalRevenue      = (r.cashAmount || 0) + paystackAmt;
-        const tokenValue        = r.tokenValue || r.totalTokensUsed || 0;
-        const key               = `${r.date}::${r.branchId}`;
-        const dayOrders         = ordersByDateBranch[key] ?? [];
-        const unpaidOrders      = dayOrders.filter((o: any) => o.paymentStatus !== 'paid').length;
-        const outstandingOrders = dayOrders.filter((o: any) => o.paymentStatus === 'outstanding' || o.paymentStatus === 'partial').length;
-        const outstandingAmt    = dayOrders.filter((o: any) => o.paymentStatus === 'outstanding' || o.paymentStatus === 'partial').reduce((s: number, o: any) => s + ((o.finalPrice || 0) - (o.amountPaid || 0)), 0);
-        const paymentReceived   = totalRevenue - outstandingAmt;
-        const vouchersUsed      = r.vouchersUsed ?? r.freeWashCount ?? 0;
-        const statusLabel       = r.status === 'submitted' ? 'Closed' : r.status === 'submitted_with_outstanding' ? 'Outstanding' : 'Draft';
-        return [r.date, r.branchName || branchMap[r.branchId] || '', (r.attendantsOnShift || []).join(' | '), r.totalTokensUsed || 0, tokenValue.toFixed ? tokenValue.toFixed(2) : tokenValue, unpaidOrders, `${outstandingOrders} / GHS ${outstandingAmt.toFixed(2)}`, paymentReceived.toFixed(2), (r.cashAmount || 0).toFixed(2), paystackAmt.toFixed(2), totalRevenue.toFixed(2), vouchersUsed, statusLabel];
+        const cash         = r.cashAmount || 0;
+        const mobile       = r.mobileMoneylAmount || 0;
+        const card         = (r.cardAmount || 0) + (r.paystackAmount || 0);
+        const totalRevenue = cash + mobile + card;
+
+        // Calculate token value from fields saved on the report
+        // washerPrice/dryerPrice default to 25 if not stored (matches backend default)
+        const washerPrice  = r.washerPrice || 25;
+        const dryerPrice   = r.dryerPrice  || 25;
+        const tokenValue   = ((r.washerTokensUsed || 0) * washerPrice)
+                           + ((r.dryerTokensUsed  || 0) * dryerPrice);
+
+        // Unpaid: orders from this day not fully paid
+        const reportDateStart = new Date(r.date + 'T00:00:00.000Z').getTime();
+        const reportDateEnd   = new Date(r.date + 'T23:59:59.999Z').getTime();
+        const dayOrders       = orders.filter((o: any) =>
+          o.branchId === r.branchId &&
+          o._creationTime >= reportDateStart &&
+          o._creationTime <= reportDateEnd
+        );
+        const unpaidAmt = dayOrders
+          .filter((o: any) => o.paymentStatus !== 'paid')
+          .reduce((s: number, o: any) => s + Math.max(0, (o.finalPrice || 0) - (o.amountPaid || 0)), 0);
+
+        // Outstanding payment received = saved on report when submitted
+        // This is the total outstanding amount recorded at submission time
+        const outstandingReceived = r.outstandingAmount || 0;
+
+        const vouchersUsed = (r.voucherBreakdown || []).reduce((s: number, v: any) => s + v.count, 0)
+                           || r.vouchersUsed || r.freeWashCount || 0;
+        const statusLabel  = r.status === 'submitted' ? 'Closed'
+                           : r.status === 'submitted_with_outstanding' ? 'Outstanding'
+                           : 'Draft';
+
+        return [
+          r.date,
+          r.branchName || branchMap[r.branchId] || '',
+          (r.attendantsOnShift || []).join(' | '),
+          r.totalTokensUsed || 0,
+          tokenValue.toFixed(2),
+          unpaidAmt.toFixed(2),
+          outstandingReceived.toFixed(2),
+          cash.toFixed(2),
+          mobile.toFixed(2),
+          card.toFixed(2),
+          totalRevenue.toFixed(2),
+          vouchersUsed,
+          statusLabel,
+        ];
       }),
     ];
     downloadCSV(rows, `washlab-reports-${format(new Date(), 'yyyy-MM-dd')}.csv`);

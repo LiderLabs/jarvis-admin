@@ -330,7 +330,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             <Lock className="w-4 h-4 text-muted-foreground" />
           </div>
           <p className="text-xs text-muted-foreground mb-0.5">Token Value</p>
-          <p className="text-2xl font-bold text-foreground mb-2">
+          <p className="text-2xl font-bold text-foreground mb-0.5">
             GHS {((report.washerTokensUsed || 0) * (report.washerPrice || 25) + (report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}
           </p>
           <div className="w-full h-1 bg-blue-500 rounded-full mb-3" />
