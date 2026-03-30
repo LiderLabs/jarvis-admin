@@ -447,7 +447,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
 
   const exportCSV = () => {
     const rows: (string | number)[][] = [
-      ['Date', 'Branch', 'Attendants', 'Tokens Used', 'Token Value (GHS)', 'Unpaid Amount (GHS)', 'Outstanding Payment Received (GHS)', 'Cash (GHS)', 'Mobile Money (GHS)', 'Card (GHS)', 'Total Revenue (GHS)', 'Vouchers Used', 'Status'],
+      ['Date', 'Branch', 'Attendants', 'Tokens Used', 'Token Value (GHS)', 'Unpaid Amount (GHS)', 'Outstanding Payment Received (GHS)', 'Cash (GHS)', 'Mobile Money (GHS)', 'Card (GHS)', 'Total Revenue (GHS)', 'End of Day Total (GHS)', 'Vouchers Used', 'Status'],
       ...(dailyReports as any[]).map((r: any) => {
         const cash         = r.cashAmount || 0;
         const mobile       = r.mobileMoneylAmount || 0;
@@ -506,6 +506,7 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
           mobile.toFixed(2),
           card.toFixed(2),
           totalRevenue.toFixed(2),
+          (totalRevenue + (outstandingReceived || 0)).toFixed(2),
           vouchersUsed,
           statusLabel,
         ];
