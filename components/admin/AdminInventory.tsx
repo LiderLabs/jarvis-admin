@@ -25,7 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
-type InventoryCategory = "cleaning_supplies" | "add_ons" | "facility" | "retail" | "operational";
+type InventoryCategory = "washing_supplies" | "equipment_parts" | "packaging" | "operational";
 type InventoryStatus = "critical" | "low" | "ok" | "ordered";
 
 interface InventoryItem {
@@ -50,11 +50,17 @@ interface InventoryItem {
   lastRestockedAt?: number;
 }
 
+
+const categoryDescriptions: Record<InventoryCategory, string> = {
+  washing_supplies: "Detergents, softeners, bleach, starch",
+  equipment_parts: "Machine parts, belts, filters, maintenance tools",
+  packaging: "Bags, hangers, tags, wrapping",
+  operational: "Gloves, aprons, cleaning cloths, consumables",
+};
 const categoryLabels: Record<InventoryCategory, string> = {
-  cleaning_supplies: "Cleaning Supplies",
-  add_ons: "Add-ons",
-  facility: "Facility",
-  retail: "Retail",
+  washing_supplies: "Washing Supplies",
+  equipment_parts: "Equipment & Parts",
+  packaging: "Packaging",
   operational: "Operational",
 };
 
@@ -74,7 +80,7 @@ function NumInput({ value, onChange, placeholder, min = "0" }: {
 }
 
 const emptyForm = () => ({
-  name: "", category: "cleaning_supplies" as InventoryCategory,
+  name: "", category: "washing_supplies" as InventoryCategory,
   unit: "", description: "",
   newStock: "",
   minStock: "", reorderPoint: "",
@@ -82,6 +88,8 @@ const emptyForm = () => ({
   branchId: null as Id<"branches"> | null,
 });
 
+
+const UNIT_OPTIONS = ["Bags", "Boxes", "Rolls", "Bottles", "Litres", "Kg", "Pieces", "Cartons", "Others"];
 const AdminInventory = () => {
   const [selectedBranch, setSelectedBranch] = useState<Id<"branches"> | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,6 +100,7 @@ const AdminInventory = () => {
   const [itemToDelete, setItemToDelete] = useState<Id<"inventoryItems"> | null>(null);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [itemForm, setItemForm] = useState(emptyForm());
+  const [customUnit, setCustomUnit] = useState("");
 
   const branches = useQuery(api.admin.getBranches, {
     includeInactive: false,
@@ -401,13 +410,28 @@ const AdminInventory = () => {
                 <Select value={itemForm.category} onValueChange={(v) => setItemForm({ ...itemForm, category: v as InventoryCategory })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(categoryLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                    {Object.entries(categoryLabels).map(([v, l]) => (
+                      <SelectItem key={v} value={v}>{l}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Unit *</Label>
-                <Input value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })} placeholder="e.g., Bags, Boxes, Rolls" />
+                <Select value={UNIT_OPTIONS.includes(itemForm.unit) ? itemForm.unit : (itemForm.unit ? "Others" : "")} onValueChange={(v) => {
+                  if (v === "Others") { setItemForm({ ...itemForm, unit: customUnit }); }
+                  else { setCustomUnit(""); setItemForm({ ...itemForm, unit: v }); }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectContent>
+                    {UNIT_OPTIONS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {(!UNIT_OPTIONS.includes(itemForm.unit) || itemForm.unit === "") && (itemForm.unit !== "" || customUnit !== "") || (!UNIT_OPTIONS.slice(0,-1).includes(itemForm.unit)) ? (
+                  <Input className="mt-2" value={itemForm.unit && !UNIT_OPTIONS.slice(0,-1).includes(itemForm.unit) ? itemForm.unit : customUnit}
+                    placeholder="Enter custom unit"
+                    onChange={(e) => { setCustomUnit(e.target.value); setItemForm({ ...itemForm, unit: e.target.value }); }} />
+                ) : null}
               </div>
               <div className="col-span-2">
                 <Label>Description</Label>

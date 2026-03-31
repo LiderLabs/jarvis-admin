@@ -55,13 +55,6 @@ const sidebarItems = [
     group: "management",
   },
   {
-    id: "inventory",
-    label: "Inventory",
-    icon: Package,
-    path: "/dashboard/inventory",
-    group: "management",
-  },
-  {
     id: "payments",
     label: "Payments",
     icon: CreditCard,
@@ -122,6 +115,13 @@ const sidebarItems = [
     label: "Maintenance",
     icon: Wrench,
     path: "/dashboard/maintenance",
+    group: "management",
+  },
+  {
+    id: "inventory",
+    label: "Inventory",
+    icon: Package,
+    path: "/dashboard/inventory",
     group: "management",
   },
 ]
