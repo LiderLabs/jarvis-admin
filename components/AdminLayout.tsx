@@ -122,7 +122,7 @@ const sidebarItems = [
     label: "Maintenance",
     icon: Wrench,
     path: "/dashboard/maintenance",
-    group: "system",
+    group: "management",
   },
 ]
 
