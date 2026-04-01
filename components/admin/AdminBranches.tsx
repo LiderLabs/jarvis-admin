@@ -261,9 +261,9 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<Id<"branchServices"> | null>(null)
-  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true })
+  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true, extraWashPrice: "", extraDryPrice: "" })
 
-  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true })
+  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true, extraWashPrice: "", extraDryPrice: "" })
 
   const handleAdd = async () => {
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
@@ -278,6 +278,8 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
         price: form.price,
         imageUrl,
         showOnCustomerSide: form.showOnCustomerSide,
+        extraWashPrice: form.extraWashPrice !== "" ? parseFloat(form.extraWashPrice as any) || undefined : undefined,
+        extraDryPrice: form.extraDryPrice !== "" ? parseFloat(form.extraDryPrice as any) || undefined : undefined,
       })
       toast.success("Service added")
       setShowAdd(false)
@@ -298,6 +300,8 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
         price: form.price,
         imageUrl,
         showOnCustomerSide: form.showOnCustomerSide,
+        extraWashPrice: form.extraWashPrice !== "" ? parseFloat(form.extraWashPrice as any) || undefined : undefined,
+        extraDryPrice: form.extraDryPrice !== "" ? parseFloat(form.extraDryPrice as any) || undefined : undefined,
       })
       toast.success("Service updated")
       setEditingId(null)
@@ -319,6 +323,8 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
       price: s.price,
       imageUrl: s.imageUrl || "",
       showOnCustomerSide: s.showOnCustomerSide ?? true,
+      extraWashPrice: s.extraWashPrice != null ? String(s.extraWashPrice) : "",
+      extraDryPrice: s.extraDryPrice != null ? String(s.extraDryPrice) : "",
     })
     setShowAdd(false)
   }
@@ -342,7 +348,17 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
               <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
                 <div className="grid grid-cols-2 gap-2">
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                  <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+                    <Input type="number" value={form.extraWashPrice} onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+                    <Input type="number" value={form.extraDryPrice} onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+                  </div>
+                </div>
                 </div>
                 <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
@@ -388,6 +404,16 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
               <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+              <Input type="number" value={form.extraWashPrice} onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+              <Input type="number" value={form.extraDryPrice} onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
             </div>
           </div>
           <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
