@@ -540,7 +540,7 @@ const AdminStaff = () => {
                           </div>
                           <div>
                             <p className='font-semibold text-foreground'>{attendant.name}</p>
-                            <div className='flex items-center gap-3 text-sm text-muted-foreground mt-0.5'>
+                            <div className='flex flex-col gap-0.5 text-sm text-muted-foreground mt-0.5'>
                               <span className='flex items-center gap-1'><Mail className='w-3 h-3' />{attendant.email}</span>
                               <span className='flex items-center gap-1'><Phone className='w-3 h-3' />{attendant.phoneNumber}</span>
                             </div>
