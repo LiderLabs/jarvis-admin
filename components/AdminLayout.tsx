@@ -18,6 +18,7 @@ import {
   Ticket,
   Award,
   FileText,
+  Banknote,
   MessageSquare,
   Settings,
   UserPlus,
@@ -94,6 +95,13 @@ const sidebarItems = [
     label: "Reports",
     icon: FileText,
     path: "/dashboard/reports",
+    group: "features",
+  },
+  {
+    id: "reconciliation",
+    label: "Cash Reconciliation",
+    icon: Banknote,
+    path: "/dashboard/reconciliation",
     group: "features",
   },
   {
