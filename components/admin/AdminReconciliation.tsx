@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@jordan6699/washlab-backend/api';
 import { Button } from '@/components/ui/button';
@@ -168,27 +168,22 @@ const AdminReconciliation = () => {
   const branches = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? [];
   const branchMap = Object.fromEntries(branches.map((b: any) => [b._id, b]));
 
-  const reconciliations = useQuery((api as any).cashReconciliation.getAllForAdmin, { limit: 500 }) as any[] | undefined;
-  const isLoading = reconciliations === undefined;
 
-  const cutoff = datePreset === 999 ? null : subDays(new Date(), datePreset).getTime();
+  const cutoff = useMemo(() => { if (datePreset === 999) return null; const d = new Date(); d.setHours(0, 0, 0, 0); if (datePreset === 0) return d.getTime(); d.setDate(d.getDate() - datePreset); return d.getTime(); }, [datePreset]);
+
+  const reconciliations = useQuery((api as any).cashReconciliation.getAllForAdmin, { limit: 500 }) as any[] | undefined;
+  const branchesWithCash = useQuery((api as any).cashReconciliation.getBranchesWithCashForAdmin, { since: cutoff ?? undefined }) as any[] | undefined;
+  const isLoading = reconciliations === undefined || branchesWithCash === undefined;
 
   const branchSummaries = (() => {
+    if (!branchesWithCash) return [];
     const map: Record<string, any> = {};
-    (reconciliations || []).forEach(r => {
-      const rDate = new Date(r.date).getTime();
-      if (cutoff && rDate < cutoff) return;
-      if (selectedBranch !== 'all' && r.branchId !== selectedBranch) return;
-      if (!map[r.branchId]) {
-        const branch = branchMap[r.branchId];
-        map[r.branchId] = {
-          branchId: r.branchId,
-          branchName: r.branchName,
-          phone: branch?.phoneNumber || null,
-          totalSent: 0,
-          sentEntries: [],
-        };
-      }
+    branchesWithCash.forEach((b: any) => {
+      if (selectedBranch !== 'all' && b.branchId !== selectedBranch) return;
+      map[b.branchId] = { branchId: b.branchId, branchName: b.branchName, phone: b.phone, totalSent: 0, sentEntries: [] };
+    });
+    (reconciliations || []).forEach((r: any) => {
+      if (!map[r.branchId]) return;
       if (r.status === 'completed') {
         map[r.branchId].totalSent += r.amountSent || 0;
         map[r.branchId].sentEntries.push(r);
