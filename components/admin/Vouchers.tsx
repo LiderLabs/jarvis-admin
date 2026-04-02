@@ -31,8 +31,7 @@ const Vouchers = () => {
   const vouchersData = useQuery((api as any).vouchers.getAll, { includeInactive: true });
   const vouchers = vouchersData?.page ?? [];
 
-  const branchesRaw = useQuery((api as any).admin.getBranches, {});
-  const branches: any[] = (branchesRaw?.page ?? branchesRaw ?? []).filter((b: any) => b.isActive && !b.isDeleted);
+  const branches: any[] = useQuery((api as any).branches.getActive) ?? [];
 
   const createVoucher = useMutation((api as any).vouchers.create);
   const updateVoucher = useMutation((api as any).vouchers.update);
