@@ -236,19 +236,6 @@ const SidebarContent = ({
           </div>
         ))}
       </nav>
-
-      {/* Bottom CTA */}
-      <div className='p-4 border-t border-sidebar-border'>
-        <Link href='/dashboard/staff'>
-          <Button
-            className='w-full gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-sm'
-            size='sm'
-          >
-            <UserPlus className='w-4 h-4' />
-            <span>Add New Staff</span>
-          </Button>
-        </Link>
-      </div>
     </>
   )
 }
@@ -328,14 +315,12 @@ export default function AdminLayout({
           <SheetContent
             side='left'
             className='w-72 max-w-[85vw] p-0 flex flex-col h-full overflow-hidden border-r border-sidebar-border [&>button]:z-10'
-            // Force solid bg regardless of theme — sidebar var falls back to card/background
             style={{
               backgroundColor: 'hsl(var(--sidebar, var(--card, var(--background))))',
               zIndex: 9999,
             }}
           >
             <SheetTitle className='sr-only'>Navigation Menu</SheetTitle>
-            {/* Inner wrapper inherits sidebar bg token properly */}
             <div className='flex flex-col flex-1 overflow-hidden bg-sidebar min-h-0'>
               <SidebarContent
                 groupedItems={groupedItems}

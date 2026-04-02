@@ -6,7 +6,7 @@ import { api } from '@jordan6699/washlab-backend/api';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, subDays } from 'date-fns';
-import { Banknote, CheckCircle, AlertTriangle, Download, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import { Banknote, CheckCircle, AlertTriangle, Download, Phone, ChevronDown, ChevronUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 
 function downloadCSV(rows: (string | number)[][], filename: string) {
   const csv = rows.map(r => r.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -26,11 +26,90 @@ const DATE_PRESETS = [
 ];
 
 const statusCls: Record<string, string> = {
-  completed: 'bg-green-100 text-green-700',
-  processing: 'bg-yellow-100 text-yellow-700',
-  pending: 'bg-blue-100 text-blue-700',
-  failed: 'bg-red-100 text-red-700',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  processing: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  pending: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 };
+
+// Per-branch expanded view — fetches its own daily breakdown
+function BranchDetail({ branchId, branchName, totalSent, sentEntries }: {
+  branchId: string;
+  branchName: string;
+  totalSent: number;
+  sentEntries: any[];
+}) {
+  const dailyBreakdown = useQuery(
+    (api as any).cashReconciliation.getDailyBreakdownForAdmin,
+    { branchId }
+  ) as { date: string; total: number; orderCount: number }[] | undefined;
+
+  if (!dailyBreakdown) {
+    return <div className='flex justify-center py-6'><div className='w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin' /></div>;
+  }
+
+  const totalCollected = dailyBreakdown.reduce((s, d) => s + d.total, 0);
+  const outstanding = Math.max(0, totalCollected - totalSent);
+
+  return (
+    <div className='border-t border-border p-4 space-y-5'>
+
+      {/* Cash Collected per day */}
+      <div>
+        <div className='flex items-center gap-2 mb-3'>
+          <ArrowDownCircle className='w-4 h-4 text-blue-500' />
+          <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide'>Cash Collected by Day</p>
+        </div>
+        {dailyBreakdown.length === 0 ? (
+          <p className='text-xs text-muted-foreground px-3'>No cash orders found</p>
+        ) : (
+          <div className='space-y-2'>
+            {dailyBreakdown.map((d) => (
+              <div key={d.date} className='flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border text-sm'>
+                <div>
+                  <p className='font-semibold text-foreground'>{d.date}</p>
+                  <p className='text-xs text-muted-foreground'>{d.orderCount} cash order{d.orderCount !== 1 ? 's' : ''}</p>
+                </div>
+                <p className='font-bold text-foreground'>{fmt(d.total)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className='flex justify-between items-center mt-2 px-3 py-2 rounded-lg bg-muted/60 text-sm'>
+          <span className='text-muted-foreground font-medium'>Total Collected</span>
+          <span className='font-bold text-foreground'>{fmt(totalCollected)}</span>
+        </div>
+      </div>
+
+      {/* Sent submissions + final line */}
+      <div className='pt-3 border-t border-border space-y-2'>
+        {sentEntries.length > 0 && (
+          <div className='space-y-2 mb-3'>
+            <div className='flex items-center gap-2'>
+              <ArrowUpCircle className='w-4 h-4 text-green-500' />
+              <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide'>Sent to Admin</p>
+            </div>
+            {sentEntries.map((r: any) => (
+              <div key={r._id} className='flex items-center justify-between p-3 rounded-lg bg-green-50/50 dark:bg-green-950/10 border border-green-200 dark:border-green-800 text-sm'>
+                <div>
+                  <p className='font-semibold text-foreground'>{r.date}</p>
+                  {r.senderMomoNumber && <p className='text-xs text-muted-foreground'>via {r.senderMomoNumber}</p>}
+                </div>
+                <p className='font-bold text-green-600'>{fmt(r.amountSent || 0)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className='flex justify-between text-sm pt-2 border-t border-border'>
+          <span className='font-semibold text-foreground'>Outstanding</span>
+          <span className={'font-bold text-lg ' + (outstanding > 0 ? 'text-red-600' : 'text-green-600')}>
+            {outstanding > 0 ? fmt(outstanding) : '✓ Fully settled'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const AdminReconciliation = () => {
   const [datePreset, setDatePreset] = useState(7);
@@ -60,12 +139,14 @@ const AdminReconciliation = () => {
           phone: branch?.phoneNumber || null,
           totalCollected: 0,
           totalSent: 0,
-          entries: [],
+          sentEntries: [],
         };
       }
       map[r.branchId].totalCollected += r.totalCashOrders || 0;
-      if (r.status === 'completed') map[r.branchId].totalSent += r.amountSent || 0;
-      map[r.branchId].entries.push(r);
+      if (r.status === 'completed') {
+        map[r.branchId].totalSent += r.amountSent || 0;
+        map[r.branchId].sentEntries.push(r);
+      }
     });
     return Object.values(map)
       .map(b => ({ ...b, outstanding: Math.max(0, b.totalCollected - b.totalSent) }))
@@ -81,10 +162,8 @@ const AdminReconciliation = () => {
 
   const exportCSV = () => {
     const rows: (string | number)[][] = [
-      ['Date', 'Branch', 'Cash Collected (GHS)', 'Amount Sent (GHS)', 'Orders', 'Status'],
-      ...branchSummaries.flatMap(b =>
-        b.entries.map((r: any) => [r.date, b.branchName, (r.totalCashOrders || 0).toFixed(2), (r.amountSent || 0).toFixed(2), r.orderCount || 0, r.status])
-      ),
+      ['Branch', 'Total Collected (GHS)', 'Total Sent (GHS)', 'Outstanding (GHS)'],
+      ...branchSummaries.map(b => [b.branchName, b.totalCollected.toFixed(2), b.totalSent.toFixed(2), b.outstanding.toFixed(2)]),
     ];
     downloadCSV(rows, 'reconciliations-' + format(new Date(), 'yyyy-MM-dd') + '.csv');
   };
@@ -121,6 +200,7 @@ const AdminReconciliation = () => {
         </Select>
       </div>
 
+      {/* Summary Cards */}
       <div className='grid grid-cols-2 lg:grid-cols-4 gap-3'>
         <div className='bg-card border border-border rounded-xl p-4'>
           <p className='text-xs text-muted-foreground uppercase tracking-wide mb-1'>Total Cash Collected</p>
@@ -159,6 +239,7 @@ const AdminReconciliation = () => {
           {branchSummaries.map(b => {
             const hasOutstanding = b.outstanding > 0;
             const isExpanded = expandedBranches[b.branchId];
+
             return (
               <div key={b.branchId} className={'rounded-xl border overflow-hidden ' + (hasOutstanding ? 'border-red-200 dark:border-red-800' : 'border-border')}>
 
@@ -173,24 +254,22 @@ const AdminReconciliation = () => {
                       <span className='font-semibold text-sm text-foreground'>{b.branchName}</span>
                       {hasOutstanding
                         ? <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600'>{fmt(b.outstanding)} outstanding</span>
-                        : <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-600'>✓ All sent</span>}
+                        : <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-600'>All clear</span>}
                     </div>
                   </div>
                   <div className='hidden sm:flex items-center gap-5 text-right flex-shrink-0'>
                     <div>
-                      <p className='text-[10px] text-muted-foreground uppercase'>Collected</p>
+                      <p className='text-[10px] text-muted-foreground uppercase'>Expected</p>
                       <p className='text-sm font-bold text-foreground'>{fmt(b.totalCollected)}</p>
                     </div>
                     <div>
                       <p className='text-[10px] text-muted-foreground uppercase'>Sent</p>
                       <p className='text-sm font-bold text-green-600'>{fmt(b.totalSent)}</p>
                     </div>
-                    {hasOutstanding && (
-                      <div>
-                        <p className='text-[10px] text-muted-foreground uppercase'>Outstanding</p>
-                        <p className='text-sm font-bold text-red-600'>{fmt(b.outstanding)}</p>
-                      </div>
-                    )}
+                    <div>
+                      <p className='text-[10px] text-muted-foreground uppercase'>Outstanding</p>
+                      <p className={'text-sm font-bold ' + (hasOutstanding ? 'text-red-600' : 'text-green-600')}>{hasOutstanding ? fmt(b.outstanding) : 'Clear'}</p>
+                    </div>
                   </div>
                   {b.phone && (
                     <a href={'tel:' + b.phone} onClick={e => e.stopPropagation()}
@@ -201,45 +280,14 @@ const AdminReconciliation = () => {
                   {isExpanded ? <ChevronUp className='w-4 h-4 text-muted-foreground flex-shrink-0' /> : <ChevronDown className='w-4 h-4 text-muted-foreground flex-shrink-0' />}
                 </div>
 
-                {/* Expanded: daily cards + summary */}
+                {/* Expanded detail — loads per-day breakdown from backend */}
                 {isExpanded && (
-                  <div className='border-t border-border p-4 space-y-2'>
-                    <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Daily Cash Collected</p>
-                    {b.entries
-                      .sort((a: any, x: any) => x.date.localeCompare(a.date))
-                      .map((r: any) => (
-                        <div key={r._id} className='flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border text-sm'>
-                          <div>
-                            <p className='font-semibold text-foreground'>{r.date}</p>
-                            <p className='text-xs text-muted-foreground'>{r.orderCount || 0} cash order{r.orderCount !== 1 ? 's' : ''}</p>
-                          </div>
-                          <div className='text-right'>
-                            <p className='font-bold text-foreground'>{fmt(r.totalCashOrders || 0)}</p>
-                            <span className={'text-[10px] font-semibold px-2 py-0.5 rounded-full ' + (statusCls[r.status] || 'bg-muted text-muted-foreground')}>
-                              {r.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* Totals footer */}
-                    <div className='mt-3 pt-3 border-t border-border space-y-1.5'>
-                      <div className='flex justify-between text-sm'>
-                        <span className='text-muted-foreground'>Total Collected (all days above)</span>
-                        <span className='font-bold text-foreground'>{fmt(b.totalCollected)}</span>
-                      </div>
-                      <div className='flex justify-between text-sm'>
-                        <span className='text-muted-foreground'>Total Sent to Admin</span>
-                        <span className='font-bold text-green-600'>{fmt(b.totalSent)}</span>
-                      </div>
-                      <div className='flex justify-between text-sm pt-1.5 border-t border-border'>
-                        <span className='font-semibold text-foreground'>Outstanding</span>
-                        <span className={'font-bold ' + (b.outstanding > 0 ? 'text-red-600' : 'text-green-600')}>
-                          {b.outstanding > 0 ? fmt(b.outstanding) : '✓ Fully settled'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <BranchDetail
+                    branchId={b.branchId}
+                    branchName={b.branchName}
+                    totalSent={b.totalSent}
+                    sentEntries={b.sentEntries}
+                  />
                 )}
               </div>
             );
