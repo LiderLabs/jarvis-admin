@@ -25,7 +25,6 @@ import {
   Phone,
   Mail,
   ShoppingBag,
-  DollarSign,
   Calendar,
 } from "lucide-react"
 import { format } from "date-fns"
@@ -160,7 +159,7 @@ export const CustomerTableRow = ({
       {/* Total Spent */}
       <TableCell>
         <div className="flex items-center gap-2">
-          <DollarSign className="w-4 h-4 text-muted-foreground" />
+          <span className="w-4 h-4 text-muted-foreground font-bold">₵</span>
           <span className="text-sm font-medium">
             ₵{(customer.totalSpent || 0).toFixed(2)}
           </span>

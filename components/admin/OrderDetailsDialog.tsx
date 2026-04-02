@@ -17,7 +17,6 @@ import {
   User,
   MapPin,
   Calendar,
-  DollarSign,
   Phone,
   Mail,
   Building2,
@@ -232,7 +231,7 @@ export const OrderDetailsDialog = ({
             {/* Pricing */}
             <div>
               <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
+                <span className="h-4 w-4 font-bold">₵</span>
                 Pricing
               </h3>
               <div className="rounded-lg border p-4 space-y-2">

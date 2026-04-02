@@ -9,7 +9,6 @@ import {
   Package,
   User,
   Calendar,
-  DollarSign,
   MoreVertical,
   Eye,
 } from "lucide-react"
@@ -119,7 +118,7 @@ export const OrderCard = ({
 
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="flex items-center gap-2 text-sm">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <span className="h-4 w-4 text-muted-foreground font-bold">₵</span>
               <span className="text-lg font-bold">
                 ₵{(order.finalPrice ?? 0).toFixed(2)}
               </span>
