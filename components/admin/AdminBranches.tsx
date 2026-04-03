@@ -124,11 +124,7 @@ const ServiceImagePicker = ({
     if (!file) return
     setUploading(true)
     try {
-      // Step 1 — get short-lived signed URL from Convex
       const uploadUrl = await generateUploadUrl()
-
-      // Step 2 — route through Next.js proxy to avoid CORS
-      // The proxy at /api/upload-proxy forwards to Convex server-side
       const res = await fetch("/api/upload-proxy", {
         method: "POST",
         headers: {
@@ -137,17 +133,12 @@ const ServiceImagePicker = ({
         },
         body: file,
       })
-
       if (!res.ok) {
         const errText = await res.text()
         throw new Error(`Upload failed (${res.status}): ${errText}`)
       }
-
-      // Step 3 — proxy returns Convex's { storageId } directly
       const { storageId } = await res.json()
       if (!storageId) throw new Error("No storageId returned")
-
-      // Step 4 — prefix so callers know to strip before saving to DB
       onChange(`convex-storage:${storageId}`)
     } catch (err: any) {
       console.error("Image upload error:", err)
@@ -212,7 +203,6 @@ const ServiceImagePicker = ({
   )
 }
 
-
 // ─── Service Image Resolver ───────────────────────────────────────────────────
 const ServiceImage = ({ imageUrl, alt, className }: { imageUrl: string; alt: string; className: string }) => {
   const isStorageId = imageUrl && !imageUrl.startsWith("http") && !imageUrl.startsWith("/") && !imageUrl.startsWith("convex-storage:")
@@ -222,10 +212,8 @@ const ServiceImage = ({ imageUrl, alt, className }: { imageUrl: string; alt: str
   )
   const fixUrl = (url: string | null) => {
     if (!url) return null
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || ""
-    const backendUrl = convexUrl.replace("convex-dashboard", "convex-backend")
     return url.replace("convex-dashboard.washlab.app", "convex-backend.washlab.app")
-      .replace("staging.convex-backend.washlab.app", backendUrl.replace("https://", ""))
+      .replace("staging.convex-backend.washlab.app", (process.env.NEXT_PUBLIC_CONVEX_URL || "").replace("https://", "").replace("convex-dashboard", "convex-backend"))
   }
   const resolvedUrl = isStorageId ? fixUrl(storageUrl ?? null) : imageUrl
   if (!resolvedUrl) return <div className={className + " bg-muted flex items-center justify-center"}><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>
@@ -346,19 +334,50 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           {services.map((s: any) => (
             editingId === s._id ? (
               <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
+                {/* ── Row 1: Name + Price ── */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                  <Input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Service name"
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    value={form.price || ""}
+                    onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
+                    placeholder="Price"
+                    className="h-8 text-sm"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                {/* ── Row 2: Extra Wash Price + Extra Dry Price ── */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
-                    <Input type="number" value={form.extraWashPrice} onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+                    <Input
+                      type="number"
+                      value={form.extraWashPrice}
+                      onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })}
+                      placeholder="Leave blank = default"
+                      className="h-8 text-sm"
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
-                    <Input type="number" value={form.extraDryPrice} onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+                    <Input
+                      type="number"
+                      value={form.extraDryPrice}
+                      onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })}
+                      placeholder="Leave blank = default"
+                      className="h-8 text-sm"
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
-                </div>
                 </div>
                 <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
                 <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
@@ -379,6 +398,12 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
                         <Badge variant="secondary" className="text-[10px] gap-1 py-0">
                           <EyeOff className="h-2.5 w-2.5" />Hidden from customers
                         </Badge>
+                      )}
+                      {s.extraWashPrice != null && (
+                        <Badge variant="outline" className="text-[10px] py-0">+wash &#8373;{s.extraWashPrice}</Badge>
+                      )}
+                      {s.extraDryPrice != null && (
+                        <Badge variant="outline" className="text-[10px] py-0">+dry &#8373;{s.extraDryPrice}</Badge>
                       )}
                     </div>
                   </div>
@@ -583,13 +608,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
     if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
     if (!adminId) { toast.error("Not authenticated"); return }
     try {
-      await createMachine({
-        branchId,
-        name: form.name.trim(),
-        serialNumber: form.serialNumber.trim() || undefined,
-        washPrice: form.washPrice,
-        adminId,
-      })
+      await createMachine({ branchId, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
       toast.success("Machine added")
       setShowAdd(false); resetForm()
     } catch (e: any) { toast.error(e.message || "Failed") }
@@ -599,13 +618,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
     if (!editingId || !adminId) return
     if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
     try {
-      await updateMachine({
-        machineId: editingId as any,
-        name: form.name.trim(),
-        serialNumber: form.serialNumber.trim() || undefined,
-        washPrice: form.washPrice,
-        adminId,
-      })
+      await updateMachine({ machineId: editingId as any, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
       toast.success("Machine updated")
       setEditingId(null); resetForm()
     } catch (e: any) { toast.error(e.message || "Failed") }
@@ -665,9 +678,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
                     <span className="font-medium text-sm">{m.name}</span>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {m.serialNumber && (
-                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
-                          SN: {m.serialNumber}
-                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">SN: {m.serialNumber}</span>
                       )}
                       {!m.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
                     </div>
@@ -814,16 +825,8 @@ const AdminBranches = () => {
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>([])
 
   const [formData, setFormData] = useState<FormData>({
-    name: "",
-    code: "",
-    address: "",
-    city: "",
-    country: "Ghana",
-    phoneNumber: "",
-    email: "",
-    deliveryFee: 10,
-    stationPin: "",
-    weeklyOrderTarget: 0,
+    name: "", code: "", address: "", city: "", country: "Ghana",
+    phoneNumber: "", email: "", deliveryFee: 10, stationPin: "", weeklyOrderTarget: 0,
   })
 
   const { results: branchesPages, status: paginationStatus, loadMore } = usePaginatedQuery(
@@ -853,25 +856,17 @@ const AdminBranches = () => {
   const handleOpenEditDialog = (branch: Branch) => {
     setSelectedBranch(branch)
     setFormData({
-      name: branch.name,
-      code: branch.code,
-      address: branch.address,
-      city: branch.city,
-      country: branch.country,
-      phoneNumber: branch.phoneNumber,
-      email: branch.email || "",
-      deliveryFee: branch.deliveryFee,
-      stationPin: "",
+      name: branch.name, code: branch.code, address: branch.address,
+      city: branch.city, country: branch.country, phoneNumber: branch.phoneNumber,
+      email: branch.email || "", deliveryFee: branch.deliveryFee, stationPin: "",
       weeklyOrderTarget: (branch as any).weeklyOrderTarget || 0,
     })
     setShowEditDialog(true)
   }
 
   const handleCloseDialogs = () => {
-    setShowAddDialog(false)
-    setShowEditDialog(false)
-    setSelectedBranch(null)
-    resetForm()
+    setShowAddDialog(false); setShowEditDialog(false)
+    setSelectedBranch(null); resetForm()
   }
 
   const handleCreateBranch = async () => {
@@ -884,29 +879,17 @@ const AdminBranches = () => {
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       const branchId = await createBranch({
-        name: formData.name.trim(),
-        code: normalizedCode,
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        country: formData.country.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        email: formData.email?.trim() || undefined,
-        pricingPerKg: 0,
-        deliveryFee: formData.deliveryFee,
-        stationPin: formData.stationPin.trim(),
-        weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
+        name: formData.name.trim(), code: normalizedCode, address: formData.address.trim(),
+        city: formData.city.trim(), country: formData.country.trim(), phoneNumber: formData.phoneNumber.trim(),
+        email: formData.email?.trim() || undefined, pricingPerKg: 0, deliveryFee: formData.deliveryFee,
+        stationPin: formData.stationPin.trim(), weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       for (const draft of serviceDrafts) {
         const imageUrl = draft.imageUrl?.startsWith("convex-storage:")
-          ? draft.imageUrl.replace("convex-storage:", "")
-          : draft.imageUrl || undefined
+          ? draft.imageUrl.replace("convex-storage:", "") : draft.imageUrl || undefined
         await (createBranchService as any)({
-          branchId: branchId as Id<"branches">,
-          name: draft.name,
-          code: draft.code,
-          price: draft.price,
-          imageUrl,
-          showOnCustomerSide: draft.showOnCustomerSide,
+          branchId: branchId as Id<"branches">, name: draft.name, code: draft.code,
+          price: draft.price, imageUrl, showOnCustomerSide: draft.showOnCustomerSide,
         })
       }
       toast.success("Branch created successfully!")
@@ -930,16 +913,10 @@ const AdminBranches = () => {
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       await updateBranch({
-        branchId: selectedBranch._id,
-        name: formData.name.trim(),
-        code: normalizedCode,
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        country: formData.country.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        email: formData.email?.trim() || undefined,
-        deliveryFee: formData.deliveryFee,
-        stationPin: formData.stationPin?.trim() || undefined,
+        branchId: selectedBranch._id, name: formData.name.trim(), code: normalizedCode,
+        address: formData.address.trim(), city: formData.city.trim(), country: formData.country.trim(),
+        phoneNumber: formData.phoneNumber.trim(), email: formData.email?.trim() || undefined,
+        deliveryFee: formData.deliveryFee, stationPin: formData.stationPin?.trim() || undefined,
         weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       toast.success("Branch updated successfully!")
@@ -963,8 +940,7 @@ const AdminBranches = () => {
     try {
       await deleteBranch({ branchId: branchToDelete })
       toast.success("Branch deleted successfully")
-      setShowDeleteDialog(false)
-      setBranchToDelete(null)
+      setShowDeleteDialog(false); setBranchToDelete(null)
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to delete branch")
     }
