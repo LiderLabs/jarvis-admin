@@ -40,6 +40,7 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react"
 import { toast } from "sonner"
 import { format, addDays, subDays, isToday } from "date-fns"
@@ -67,6 +68,19 @@ interface Branch {
   code: string
 }
 
+function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
+  const csv = rows
+    .map((r) => r.map((cell) => '"' + String(cell ?? "").replace(/"/g, '""') + '"').join(","))
+    .join("\n")
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 const AdminOrders = () => {
   const { isAuthenticated } = useConvexAuth()
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
@@ -78,6 +92,7 @@ const AdminOrders = () => {
   const [orderToDelete, setOrderToDelete] = useState<Doc<"orders"> | null>(null)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   const { results: branchesPages } = usePaginatedQuery(
     api.admin.getBranches,
@@ -158,6 +173,45 @@ const AdminOrders = () => {
     in_progress: dayOrders.filter((o) => ["sorting", "washing", "drying", "folding"].includes(o.status)).length,
   }), [dayOrders])
 
+  const handleExportCSV = () => {
+    if (filteredOrders.length === 0) { toast.error("No orders to export"); return }
+    setIsExporting(true)
+    try {
+      const branchMap = Object.fromEntries(branchesList.map((b: any) => [b._id, b.name]))
+      const headers = [
+        "Order Number", "Date", "Time", "Branch", "Customer Name", "Customer Phone",
+        "Service Type", "Order Type", "Status", "Payment Status", "Payment Method",
+        "Base Price (GHS)", "Final Price (GHS)", "Estimated Loads", "Bag Card"
+      ]
+      const rows = filteredOrders.map((o: any) => {
+        const date = new Date(o.createdAt ?? o._creationTime)
+        return [
+          o.orderNumber,
+          date.toLocaleDateString("en-GB"),
+          date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          branchMap[o.branchId] ?? o.branchId,
+          o.customerName ?? o.customerPhoneNumber ?? "",
+          o.customerPhoneNumber ?? "",
+          o.serviceType ?? "",
+          o.orderType ?? "walk_in",
+          o.status,
+          o.paymentStatus ?? "",
+          o.paymentMethod ?? "",
+          (o.basePrice ?? 0).toFixed(2),
+          (o.finalPrice ?? 0).toFixed(2),
+          o.estimatedLoads ?? "",
+          o.bagCardNumber ?? "",
+        ]
+      })
+      downloadCSV([headers, ...rows], `orders-${format(selectedDate, "yyyy-MM-dd")}.csv`)
+      toast.success(`Exported ${filteredOrders.length} orders`)
+    } catch {
+      toast.error("Export failed")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const handleViewDetails = (order: Doc<"orders">) => {
     setSelectedOrder(order)
     setShowDetailsDialog(true)
@@ -220,6 +274,16 @@ const AdminOrders = () => {
             Manage and track all orders
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportCSV}
+          disabled={isExporting || filteredOrders.length === 0}
+          className="gap-2 self-start sm:self-auto"
+        >
+          <Download className="w-4 h-4" />
+          {isExporting ? "Exporting..." : `Export CSV${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ""}`}
+        </Button>
       </div>
 
       {/* Date Selector */}
@@ -310,7 +374,6 @@ const AdminOrders = () => {
           </Card>
         </div>
 
-        {/* Wash Pipeline — simplified */}
         <Card>
           <CardContent className="py-3 px-5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Wash Pipeline</p>

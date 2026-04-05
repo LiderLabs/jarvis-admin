@@ -40,6 +40,7 @@ import {
   Search,
   Filter,
   MapPin,
+  Download,
 } from "lucide-react"
 import { CustomerTableRow } from "./CustomerTableRow"
 import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
@@ -58,6 +59,19 @@ const BRANCH_COLORS = [
   "bg-violet-500",
 ]
 
+function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
+  const csv = rows
+    .map((r) => r.map((cell) => '"' + String(cell ?? "").replace(/"/g, '""') + '"').join(","))
+    .join("\n")
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 const AdminCustomers = () => {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500)
@@ -72,6 +86,7 @@ const AdminCustomers = () => {
     newStatus: "active" | "blocked" | "suspended" | "restricted" | null
   } | null>(null)
   const [statusNote, setStatusNote] = useState("")
+  const [isExporting, setIsExporting] = useState(false)
 
   const customerStats = useQuery(api.admin.getCustomerStats, {
     branchId: branchFilter === "all" ? undefined : branchFilter as any,
@@ -107,6 +122,31 @@ const AdminCustomers = () => {
 
   const changeCustomerStatus = useMutation(api.admin.changeCustomerStatus)
   const deleteCustomer = useMutation(api.admin.deleteCustomer)
+
+  const handleExportCSV = async () => {
+    if (customers.length === 0) { toast.error("No customers to export"); return }
+    setIsExporting(true)
+    try {
+      const headers = ["Name", "Phone", "Email", "Type", "Status", "Branch", "Orders", "Total Spent (GHS)", "Joined"]
+      const rows = customers.map((c: any) => [
+        c.name ?? "",
+        c.phoneNumber ?? "",
+        c.email ?? "",
+        c.isRegistered ? "Online" : "Walk-in",
+        c.status ?? "active",
+        c.branchName ?? "",
+        c.orderCount ?? 0,
+        (c.totalSpent ?? 0).toFixed(2),
+        c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
+      ])
+      downloadCSV([headers, ...rows], `customers-${new Date().toISOString().split("T")[0]}.csv`)
+      toast.success(`Exported ${customers.length} customers`)
+    } catch {
+      toast.error("Export failed")
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const handleStatusChange = async () => {
     if (!selectedCustomer || !selectedCustomer.newStatus) return
@@ -170,6 +210,16 @@ const AdminCustomers = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Customers</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">Manage and view all customer accounts</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportCSV}
+          disabled={isExporting || customers.length === 0}
+          className="gap-2 self-start sm:self-auto"
+        >
+          <Download className="w-4 h-4" />
+          {isExporting ? "Exporting..." : `Export CSV${customers.length > 0 ? ` (${customers.length})` : ""}`}
+        </Button>
       </div>
 
       {/* Stats Grid */}
@@ -177,11 +227,7 @@ const AdminCustomers = () => {
         <CustomersStatsSkeleton />
       ) : customerStats ? (
         <div className="mb-8 space-y-3">
-
-          {/* Row 1: Total (full width), Online + Walk-in side by side */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-
-            {/* Total Customers — spans full width on mobile, 1 col on sm+ */}
             <div
               onClick={() => setBranchFilter("all")}
               className={`col-span-2 sm:col-span-1 bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-105 ${branchFilter === "all" ? "ring-2 ring-primary ring-offset-2" : ""}`}
@@ -198,7 +244,6 @@ const AdminCustomers = () => {
               </div>
             </div>
 
-            {/* Online Users */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="bg-green-500 p-3 rounded-lg">
@@ -211,7 +256,6 @@ const AdminCustomers = () => {
               </div>
             </div>
 
-            {/* Walk-in Users */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="bg-purple-500 p-3 rounded-lg">
@@ -223,10 +267,8 @@ const AdminCustomers = () => {
                 </div>
               </div>
             </div>
-
           </div>
 
-          {/* Row 2: Branch cards — always 2 per row on mobile, up to 4 on desktop */}
           {branchCounts.length > 0 && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {branchCounts.map((b: any, i: number) => {
@@ -252,7 +294,6 @@ const AdminCustomers = () => {
               })}
             </div>
           )}
-
         </div>
       ) : null}
 
@@ -306,7 +347,6 @@ const AdminCustomers = () => {
         </Select>
       </div>
 
-      {/* Active branch filter indicator */}
       {branchFilter !== "all" && (
         <div className="mb-4 flex items-center gap-2">
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -426,7 +466,6 @@ const AdminCustomers = () => {
         </div>
       )}
 
-      {/* Load More */}
       {!isTableLoading && hasMore && (
         <div className="mt-6 flex justify-center">
           <Button onClick={() => loadMore(20)} disabled={isLoadingMore} variant="outline" className="min-w-[150px]">
