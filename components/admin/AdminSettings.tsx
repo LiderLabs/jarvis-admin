@@ -31,12 +31,14 @@ const AdminSettings = () => {
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
   const systemSettings = useQuery(api.admin.getSystemSettings)
+  const updateReportEmailPref = useMutation(api.admin.updateReportEmailPreference)
 
   const [name, setName] = useState("")
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [receiveReportEmails, setReceiveReportEmails] = useState(false)
 
   const [notifications, setNotifications] = useState({
     notifyNewOrders: true,
@@ -55,7 +57,10 @@ const AdminSettings = () => {
   }, [])
 
   useEffect(() => {
-    if (adminProfile) setName(adminProfile.name || "")
+    if (adminProfile) {
+      setName(adminProfile.name || "")
+    setReceiveReportEmails((adminProfile as any).receiveReportEmails ?? true)
+    }
   }, [adminProfile])
 
   useEffect(() => {
@@ -109,6 +114,17 @@ const AdminSettings = () => {
       toast.error(e.message || "Failed to save settings")
     } finally {
       setSavingSettings(false)
+    }
+  }
+
+  const handleReportEmailToggle = async (value: boolean) => {
+    setReceiveReportEmails(value)
+    try {
+      await updateReportEmailPref({ receiveReportEmails: value })
+      toast.success(value ? "Daily reports enabled" : "Daily reports disabled")
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update preference")
+      setReceiveReportEmails(!value) // revert on failure
     }
   }
 
@@ -236,7 +252,6 @@ const AdminSettings = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                {/* Only render icon after mount to avoid hydration mismatch */}
                 {mounted && (isDark
                   ? <Moon className="w-4 h-4 text-foreground" />
                   : <Sun className="w-4 h-4 text-yellow-500" />
@@ -280,6 +295,33 @@ const AdminSettings = () => {
             <Switch
               checked={notifications.notifyCompletedOrders}
               onCheckedChange={(v) => setNotifications(n => ({ ...n, notifyCompletedOrders: v }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Daily Report Emails */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Mail className="w-4 h-4 text-primary" />
+            Daily Report Emails
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Receive an automatic end-of-day summary report to your email
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Send me daily reports</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Sent automatically at end of day to {adminProfile.email}
+              </p>
+            </div>
+            <Switch
+              checked={receiveReportEmails}
+              onCheckedChange={handleReportEmailToggle}
             />
           </div>
         </CardContent>
