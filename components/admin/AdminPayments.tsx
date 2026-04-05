@@ -5,49 +5,24 @@ import { usePaginatedQuery, useQuery, useConvexAuth } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import { Id, Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { PaymentTable } from "./PaymentTable"
 import { PaymentDetailsDialog } from "./PaymentDetailsDialog"
-import { format } from "date-fns"
 
 const PAYMENTS_LIMIT = 20
 
-type PaymentStatus =
-  | "pending"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "refunded"
-
+type PaymentStatus = "pending" | "processing" | "completed" | "failed" | "refunded"
 type PaymentMethod = "mobile_money" | "card" | "cash"
-
-interface Branch {
-  _id: Id<"branches">
-  name: string
-  code: string
-}
 
 const AdminPayments = () => {
   const { isAuthenticated } = useConvexAuth()
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [selectedMethod, setSelectedMethod] = useState<string>("all")
-  const todayStr = new Date().toISOString().split("T")[0]
-  const [startDate, setStartDate] = useState<string>(todayStr)
-  const [endDate, setEndDate] = useState<string>(todayStr)
+  const [dateFrom, setDateFrom] = useState<Date>(new Date())
+  const [dateTo, setDateTo] = useState<Date>(new Date())
   const [selectedPayment, setSelectedPayment] = useState<
     (Doc<"payments"> & {
       order?: Doc<"orders"> | null
@@ -56,19 +31,15 @@ const AdminPayments = () => {
     }) | null
   >(null)
 
-  const {
-    results: branchesPages,
-  } = usePaginatedQuery(
+  const { results: branchesPages } = usePaginatedQuery(
     api.admin.getBranches,
     isAuthenticated ? {} : "skip",
     { initialNumItems: 100 }
   )
   const branchesList = branchesPages?.flat() || []
 
-  const startTimestamp = startDate ? new Date(startDate).getTime() : undefined
-  const endTimestamp = endDate
-    ? new Date(endDate).getTime() + 24 * 60 * 60 * 1000 - 1
-    : undefined
+  const startTimestamp = dateFrom ? new Date(dateFrom).setHours(0, 0, 0, 0) : undefined
+  const endTimestamp = dateTo ? new Date(dateTo).setHours(23, 59, 59, 999) : undefined
 
   const {
     results: paymentsPages,
@@ -78,18 +49,9 @@ const AdminPayments = () => {
     api.payments.getTransactionHistory,
     isAuthenticated
       ? {
-          branchId:
-            selectedBranchId && selectedBranchId !== "all"
-              ? (selectedBranchId as Id<"branches">)
-              : undefined,
-          status:
-            selectedStatus && selectedStatus !== "all"
-              ? (selectedStatus as PaymentStatus)
-              : undefined,
-          paymentMethod:
-            selectedMethod && selectedMethod !== "all"
-              ? (selectedMethod as PaymentMethod)
-              : undefined,
+          branchId: selectedBranchId !== "all" ? (selectedBranchId as Id<"branches">) : undefined,
+          status: selectedStatus !== "all" ? (selectedStatus as PaymentStatus) : undefined,
+          paymentMethod: selectedMethod !== "all" ? (selectedMethod as PaymentMethod) : undefined,
           startDate: startTimestamp,
           endDate: endTimestamp,
         }
@@ -98,21 +60,14 @@ const AdminPayments = () => {
   )
 
   const allPayments = paymentsPages?.flat() || []
-  const isLoading =
-    paginationStatus === "LoadingFirstPage" ||
-    paginationStatus === "LoadingMore"
+  const isLoading = paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore"
   const hasMore = paginationStatus === "CanLoadMore"
-
-  const payments = allPayments
 
   const summary = useQuery(
     api.payments.getTransactionSummary,
     isAuthenticated
       ? {
-          branchId:
-            selectedBranchId && selectedBranchId !== "all"
-              ? (selectedBranchId as Id<"branches">)
-              : undefined,
+          branchId: selectedBranchId !== "all" ? (selectedBranchId as Id<"branches">) : undefined,
           startDate: startTimestamp,
           endDate: endTimestamp,
         }
@@ -127,8 +82,8 @@ const AdminPayments = () => {
     cash: summary?.byMethod?.cash || 0,
   }
 
-    const handleViewDetails = (payment: Doc<"payments">) => {
-    const paymentWithDetails = payments.find((p) => p._id === payment._id)
+  const handleViewDetails = (payment: Doc<"payments">) => {
+    const paymentWithDetails = allPayments.find((p) => p._id === payment._id)
     setSelectedPayment(paymentWithDetails || payment)
   }
 
@@ -136,23 +91,73 @@ const AdminPayments = () => {
     setSelectedBranchId("all")
     setSelectedStatus("all")
     setSelectedMethod("all")
-    setStartDate("")
-    setEndDate("")
+    setDateFrom(new Date())
+    setDateTo(new Date())
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Payment History</h1>
-        <p className="text-muted-foreground mt-2">
-          View and manage all payment transactions
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
+        <p className="text-sm text-muted-foreground mt-1">View and manage all payment transactions</p>
+      </div>
+
+      {/* Filters — full width row, wraps on mobile */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Date picker takes full width on mobile, auto on larger screens */}
+        <div className="w-full sm:w-auto">
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
+          />
+        </div>
+
+        <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Branches" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Branches</SelectItem>
+            {branchesList.map((branch) => (
+              <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedMethod} onValueChange={setSelectedMethod}>
+          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+            <SelectValue placeholder="All Methods" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Methods</SelectItem>
+            <SelectItem value="mobile_money">Mobile Money</SelectItem>
+            <SelectItem value="card">Card</SelectItem>
+            <SelectItem value="cash">Cash</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button variant="outline" size="sm" onClick={handleClearFilters} className="h-9 w-full sm:w-auto">
+          Clear Filters
+        </Button>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+        <Card className="col-span-2 lg:col-span-1 bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
           </CardHeader>
@@ -203,108 +208,17 @@ const AdminPayments = () => {
         </Card>
       </div>
 
-            {/* Filters */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Filters</CardTitle>
-            <Button variant="outline" size="sm" onClick={handleClearFilters}>
-              Clear Filters
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            {/* Branch Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Branch</label>
-              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Branches" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branchesList.map((branch) => (
-                    <SelectItem key={branch._id} value={branch._id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Status Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Payment Method Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Payment Method</label>
-              <Select value={selectedMethod} onValueChange={setSelectedMethod}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Methods" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Start Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start Date</label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-
-            {/* End Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End Date</label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Payments Table */}
       <PaymentTable
-        payments={payments as any}
-        isLoading={isLoading && payments.length === 0}
+        payments={allPayments as any}
+        isLoading={isLoading && allPayments.length === 0}
         onViewDetails={handleViewDetails}
       />
 
       {/* Load More */}
-      {hasMore && payments.length > 0 && (
+      {hasMore && allPayments.length > 0 && (
         <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => loadMore(PAYMENTS_LIMIT)}
-            disabled={isLoading}
-          >
+          <Button variant="outline" onClick={() => loadMore(PAYMENTS_LIMIT)} disabled={isLoading}>
             {isLoading ? "Loading..." : "Load More Payments"}
           </Button>
         </div>

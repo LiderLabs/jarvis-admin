@@ -285,3 +285,25 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/50;
 }
+
+/* Clerk modal fix */
+.cl-userProfileModal,
+[data-clerk-modal],
+.cl-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+.cl-modalContent,
+.cl-userProfile-root,
+.cl-card {
+  position: relative !important;
+  z-index: 100000 !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}

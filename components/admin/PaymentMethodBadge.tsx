@@ -2,7 +2,7 @@
 
 import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Badge } from "@/components/ui/badge"
-import { Wallet, CreditCard, DollarSign } from "lucide-react"
+import { Wallet, CreditCard } from "lucide-react"
 
 interface PaymentMethodBadgeProps {
   method: Doc<"payments">["paymentMethod"]
@@ -11,11 +11,11 @@ interface PaymentMethodBadgeProps {
 
 const methodConfig: Record<
   Doc<"payments">["paymentMethod"],
-  { label: string; icon: typeof Wallet }
+  { label: string; icon: typeof Wallet | null }
 > = {
   mobile_money: { label: "Mobile Money", icon: Wallet },
   card: { label: "Card", icon: CreditCard },
-  cash: { label: "Cash", icon: DollarSign },
+  cash: { label: "Cash", icon: null },
 }
 
 export const PaymentMethodBadge = ({
@@ -29,7 +29,8 @@ export const PaymentMethodBadge = ({
 
   return (
     <Badge variant={variant} className="gap-1.5">
-      <Icon className="h-3 w-3" />
+      {Icon && <Icon className="h-3 w-3" />}
+      {!Icon && <span className="font-bold text-xs">₵</span>}
       {label}
     </Badge>
   )

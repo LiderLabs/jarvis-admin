@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import {
   Building2,
@@ -37,6 +38,8 @@ import {
   Tag,
   ImagePlus,
   X,
+  Cpu,
+  EyeOff,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -76,6 +79,7 @@ interface ServiceDraft {
   code: string
   price: number
   imageUrl?: string
+  showOnCustomerSide: boolean
 }
 
 interface FormData {
@@ -88,6 +92,7 @@ interface FormData {
   email: string
   deliveryFee: number
   stationPin: string
+  weeklyOrderTarget: number
 }
 
 const BRANCHES_LIMIT = 20
@@ -120,31 +125,35 @@ const ServiceImagePicker = ({
     setUploading(true)
     try {
       const uploadUrl = await generateUploadUrl()
-      const res = await fetch(uploadUrl, {
+      const res = await fetch("/api/upload-proxy", {
         method: "POST",
-        headers: { "Content-Type": file.type },
+        headers: {
+          "x-upload-url": uploadUrl,
+          "x-content-type": file.type,
+        },
         body: file,
       })
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Upload failed (${res.status}): ${errText}`)
+      }
       const { storageId } = await res.json()
-      // Build a public URL from storageId — use getServiceImageUrl pattern
-      // We store the storageId as a special marker and resolve it on save
+      if (!storageId) throw new Error("No storageId returned")
       onChange(`convex-storage:${storageId}`)
-    } catch {
-      toast.error("Failed to upload image")
+    } catch (err: any) {
+      console.error("Image upload error:", err)
+      toast.error(err?.message || "Failed to upload image")
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ""
     }
   }
 
-  const preview = value?.startsWith("convex-storage:")
-    ? null // Can't preview until saved
-    : value
+  const preview = value?.startsWith("convex-storage:") ? null : value
 
   return (
     <div className="space-y-2">
       <Label className="text-xs">Service Image (optional)</Label>
-      {/* Default image picks */}
       <div className="flex gap-2 flex-wrap">
         {DEFAULT_IMAGES.map((img) => (
           <button
@@ -161,15 +170,14 @@ const ServiceImagePicker = ({
             )}
           </button>
         ))}
-        {/* Upload from device */}
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="w-16 h-16 rounded-lg border-2 border-dashed border-muted-foreground/40 flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-muted/50 transition-all"
+          className="w-16 h-16 rounded-lg border-2 border-dashed border-muted-foreground/40 flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-muted/50 transition-all disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4 text-muted-foreground" />}
-          <span className="text-[9px] text-muted-foreground">Upload</span>
+          <span className="text-[9px] text-muted-foreground">{uploading ? "Uploading…" : "Upload"}</span>
         </button>
         {value && (
           <button
@@ -182,19 +190,55 @@ const ServiceImagePicker = ({
           </button>
         )}
       </div>
-      {/* Preview uploaded image */}
       {preview && !DEFAULT_IMAGES.find(d => d.url === preview) && (
         <div className="mt-1">
           <img src={preview} alt="Preview" className="h-16 w-24 object-cover rounded-lg border" />
         </div>
       )}
       {value?.startsWith("convex-storage:") && (
-        <p className="text-xs text-muted-foreground">Image uploaded — will be saved with service</p>
+        <p className="text-xs text-muted-foreground">✓ Image ready — will be saved when you click Save / Add Service</p>
       )}
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
     </div>
   )
 }
+
+// ─── Service Image Resolver ───────────────────────────────────────────────────
+const ServiceImage = ({ imageUrl, alt, className }: { imageUrl: string; alt: string; className: string }) => {
+  const isStorageId = imageUrl && !imageUrl.startsWith("http") && !imageUrl.startsWith("/") && !imageUrl.startsWith("convex-storage:")
+  const storageUrl = useQuery(
+    api.admin.getServiceImageUrl,
+    isStorageId ? { storageId: imageUrl as any } : "skip"
+  )
+  const fixUrl = (url: string | null) => {
+    if (!url) return null
+    return url.replace("convex-dashboard.washlab.app", "convex-backend.washlab.app")
+      .replace("staging.convex-backend.washlab.app", (process.env.NEXT_PUBLIC_CONVEX_URL || "").replace("https://", "").replace("convex-dashboard", "convex-backend"))
+  }
+  const resolvedUrl = isStorageId ? fixUrl(storageUrl ?? null) : imageUrl
+  if (!resolvedUrl) return <div className={className + " bg-muted flex items-center justify-center"}><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>
+  return <img src={resolvedUrl} alt={alt} className={className} />
+}
+
+// ─── Customer Visibility Toggle ───────────────────────────────────────────────
+const CustomerVisibilityToggle = ({
+  value,
+  onChange,
+}: {
+  value: boolean
+  onChange: (v: boolean) => void
+}) => (
+  <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
+    <div className="flex items-center gap-2">
+      <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+      <div>
+        <p className="text-xs font-medium">Show on customer side</p>
+        <p className="text-[10px] text-muted-foreground">Customers will see this service in the app</p>
+      </div>
+    </div>
+    <Switch checked={value} onCheckedChange={onChange} />
+  </div>
+)
 
 // ─── Branch Services Panel ────────────────────────────────────────────────────
 const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
@@ -205,21 +249,9 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<Id<"branchServices"> | null>(null)
-  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "" })
+  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true, extraWashPrice: "", extraDryPrice: "" })
 
-  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "" })
-
-  const resolveImageUrl = async (imageUrl: string): Promise<string | undefined> => {
-    if (!imageUrl) return undefined
-    if (imageUrl.startsWith("convex-storage:")) {
-      const storageId = imageUrl.replace("convex-storage:", "")
-      // Return storageId to let the backend resolve — store as imageUrl with storageId format
-      // Actually we pass the URL directly, so we need to get the URL first
-      // For now store the storageId as a reference — the attendant will need to use getUrl
-      return storageId // backend stores storageId, attendant resolves it
-    }
-    return imageUrl
-  }
+  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true, extraWashPrice: "", extraDryPrice: "" })
 
   const handleAdd = async () => {
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
@@ -227,7 +259,16 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
       const imageUrl = form.imageUrl?.startsWith("convex-storage:")
         ? form.imageUrl.replace("convex-storage:", "")
         : form.imageUrl || undefined
-      await (createBranchService as any)({ branchId, name: form.name.trim(), code: toServiceCode(form.name), price: form.price, imageUrl })
+      await (createBranchService as any)({
+        branchId,
+        name: form.name.trim(),
+        code: toServiceCode(form.name),
+        price: form.price,
+        imageUrl,
+        showOnCustomerSide: form.showOnCustomerSide,
+        extraWashPrice: form.extraWashPrice !== "" ? parseFloat(form.extraWashPrice as any) || undefined : undefined,
+        extraDryPrice: form.extraDryPrice !== "" ? parseFloat(form.extraDryPrice as any) || undefined : undefined,
+      })
       toast.success("Service added")
       setShowAdd(false)
       resetForm()
@@ -241,7 +282,15 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
       const imageUrl = form.imageUrl?.startsWith("convex-storage:")
         ? form.imageUrl.replace("convex-storage:", "")
         : form.imageUrl || undefined
-      await (updateBranchService as any)({ serviceId: editingId, name: form.name.trim(), price: form.price, imageUrl })
+      await (updateBranchService as any)({
+        serviceId: editingId,
+        name: form.name.trim(),
+        price: form.price,
+        imageUrl,
+        showOnCustomerSide: form.showOnCustomerSide,
+        extraWashPrice: form.extraWashPrice !== "" ? parseFloat(form.extraWashPrice as any) || undefined : undefined,
+        extraDryPrice: form.extraDryPrice !== "" ? parseFloat(form.extraDryPrice as any) || undefined : undefined,
+      })
       toast.success("Service updated")
       setEditingId(null)
       resetForm()
@@ -257,7 +306,14 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
 
   const startEdit = (s: any) => {
     setEditingId(s._id)
-    setForm({ name: s.name, price: s.price, imageUrl: s.imageUrl || "" })
+    setForm({
+      name: s.name,
+      price: s.price,
+      imageUrl: s.imageUrl || "",
+      showOnCustomerSide: s.showOnCustomerSide ?? true,
+      extraWashPrice: s.extraWashPrice != null ? String(s.extraWashPrice) : "",
+      extraDryPrice: s.extraDryPrice != null ? String(s.extraDryPrice) : "",
+    })
     setShowAdd(false)
   }
 
@@ -278,11 +334,53 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           {services.map((s: any) => (
             editingId === s._id ? (
               <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
+                {/* ── Row 1: Name + Price ── */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
+                  <Input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Service name"
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    value={form.price || ""}
+                    onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
+                    placeholder="Price"
+                    className="h-8 text-sm"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                {/* ── Row 2: Extra Wash Price + Extra Dry Price ── */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+                    <Input
+                      type="number"
+                      value={form.extraWashPrice}
+                      onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })}
+                      placeholder="Leave blank = default"
+                      className="h-8 text-sm"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+                    <Input
+                      type="number"
+                      value={form.extraDryPrice}
+                      onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })}
+                      placeholder="Leave blank = default"
+                      className="h-8 text-sm"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
                 </div>
                 <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+                <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
@@ -291,10 +389,23 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
             ) : (
               <div key={s._id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 border">
                 <div className="flex items-center gap-3 flex-1">
-                  <img src={getDisplayImage(s)} alt={s.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                  <div>
+                  <ServiceImage imageUrl={getDisplayImage(s)} alt={s.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <div className="flex flex-col gap-0.5">
                     <span className="font-medium text-sm">{s.name}</span>
-                    {!s.isActive && <Badge variant="outline" className="text-xs ml-2">Inactive</Badge>}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {!s.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+                      {!s.showOnCustomerSide && (
+                        <Badge variant="secondary" className="text-[10px] gap-1 py-0">
+                          <EyeOff className="h-2.5 w-2.5" />Hidden from customers
+                        </Badge>
+                      )}
+                      {s.extraWashPrice != null && (
+                        <Badge variant="outline" className="text-[10px] py-0">+wash &#8373;{s.extraWashPrice}</Badge>
+                      )}
+                      {s.extraDryPrice != null && (
+                        <Badge variant="outline" className="text-[10px] py-0">+dry &#8373;{s.extraDryPrice}</Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -317,10 +428,21 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+              <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+              <Input type="number" value={form.extraWashPrice} onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
+              <Input type="number" value={form.extraDryPrice} onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
             </div>
           </div>
           <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+          <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Service</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
@@ -346,21 +468,35 @@ const ServiceDraftsPanel = ({
   generateUploadUrl: () => Promise<string>
 }) => {
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "" })
+  const [form, setForm] = useState({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true })
   const [editId, setEditId] = useState<string | null>(null)
 
-  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "" })
+  const resetForm = () => setForm({ name: "", price: 0, imageUrl: "", showOnCustomerSide: true })
 
   const handleAdd = () => {
     if (!form.name || form.price <= 0) { toast.error("Service name and price are required"); return }
-    onChange([...drafts, { id: `draft_${Date.now()}`, name: form.name.trim(), code: toServiceCode(form.name), price: form.price, imageUrl: form.imageUrl || undefined }])
+    onChange([...drafts, {
+      id: `draft_${Date.now()}`,
+      name: form.name.trim(),
+      code: toServiceCode(form.name),
+      price: form.price,
+      imageUrl: form.imageUrl || undefined,
+      showOnCustomerSide: form.showOnCustomerSide,
+    }])
     setShowAdd(false)
     resetForm()
   }
 
   const handleUpdate = () => {
     if (!editId) return
-    onChange(drafts.map(d => d.id === editId ? { ...d, name: form.name, code: toServiceCode(form.name), price: form.price, imageUrl: form.imageUrl || undefined } : d))
+    onChange(drafts.map(d => d.id === editId ? {
+      ...d,
+      name: form.name,
+      code: toServiceCode(form.name),
+      price: form.price,
+      imageUrl: form.imageUrl || undefined,
+      showOnCustomerSide: form.showOnCustomerSide,
+    } : d))
     setEditId(null)
     resetForm()
   }
@@ -369,7 +505,7 @@ const ServiceDraftsPanel = ({
 
   const startEdit = (d: ServiceDraft) => {
     setEditId(d.id)
-    setForm({ name: d.name, price: d.price, imageUrl: d.imageUrl || "" })
+    setForm({ name: d.name, price: d.price, imageUrl: d.imageUrl || "", showOnCustomerSide: d.showOnCustomerSide })
     setShowAdd(false)
   }
 
@@ -391,14 +527,22 @@ const ServiceDraftsPanel = ({
                 <div className="flex-1 space-y-2 mr-2">
                   <div className="grid grid-cols-2 gap-2">
                     <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
-                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
+                    <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" min="0" step="0.01" />
                   </div>
                   <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+                  <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
                 </div>
               ) : (
                 <div className="flex items-center gap-3 flex-1">
-                  <img src={getDisplayImage(d)} alt={d.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                  <span className="font-medium text-sm">{d.name}</span>
+                  <ServiceImage imageUrl={getDisplayImage(d)} alt={d.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium text-sm">{d.name}</span>
+                    {!d.showOnCustomerSide && (
+                      <Badge variant="secondary" className="text-[10px] gap-1 py-0 w-fit">
+                        <EyeOff className="h-2.5 w-2.5" />Hidden from customers
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="flex items-center gap-2 shrink-0">
@@ -429,10 +573,11 @@ const ServiceDraftsPanel = ({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Price per load (&#8373;) *</Label>
-              <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+              <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
             </div>
           </div>
           <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
+          <CustomerVisibilityToggle value={form.showOnCustomerSide} onChange={(v) => setForm({ ...form, showOnCustomerSide: v })} />
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Service</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
@@ -441,6 +586,146 @@ const ServiceDraftsPanel = ({
       ) : (
         <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditId(null) }}>
           <Plus className="h-3.5 w-3.5 mr-1.5" />Add Service
+        </Button>
+      )}
+    </div>
+  )
+}
+
+// ─── Branch Machines Panel ────────────────────────────────────────────────────
+const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
+  const machines = useQuery((api as any).branchMachines.listByBranch, { branchId }) ?? []
+  const createMachine = useMutation((api as any).branchMachines.create)
+  const updateMachine = useMutation((api as any).branchMachines.update)
+  const removeMachine = useMutation((api as any).branchMachines.remove)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState({ name: "", serialNumber: "", washPrice: 0 })
+  const adminId = (useQuery(api.admin.getCurrentUser) as any)?._id
+  const resetForm = () => setForm({ name: "", serialNumber: "", washPrice: 0 })
+
+  const handleAdd = async () => {
+    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
+    if (!adminId) { toast.error("Not authenticated"); return }
+    try {
+      await createMachine({ branchId, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
+      toast.success("Machine added")
+      setShowAdd(false); resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleUpdate = async () => {
+    if (!editingId || !adminId) return
+    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
+    try {
+      await updateMachine({ machineId: editingId as any, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
+      toast.success("Machine updated")
+      setEditingId(null); resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleToggle = async (machine: any) => {
+    if (!adminId) return
+    try {
+      await updateMachine({ machineId: machine._id, isActive: !machine.isActive, adminId })
+      toast.success(machine.isActive ? "Deactivated" : "Activated")
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  const handleRemove = async (machineId: string) => {
+    if (!adminId) return
+    try {
+      await removeMachine({ machineId: machineId as any, adminId })
+      toast.success("Machine removed")
+    } catch (e: any) { toast.error(e.message || "Failed") }
+  }
+
+  return (
+    <div className="space-y-3">
+      {machines.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-3">No machines configured. Add machines to enable fault tracking.</p>
+      ) : (
+        <div className="space-y-2">
+          {(machines as any[]).map((m: any) => (
+            editingId === m._id ? (
+              <div key={m._id} className="border rounded-lg p-3 space-y-2 bg-background">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Machine Name *</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Machine name" className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Wash Price (&#8373;) *</Label>
+                    <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} placeholder="Wash price" className="h-8 text-sm" min="0" step="0.01" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Serial Number</Label>
+                  <Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="e.g., SN-20240001" className="h-8 text-sm" />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div key={m._id} className={"flex items-center justify-between px-3 py-2 rounded-lg border " + (m.isActive ? "bg-muted/50" : "bg-muted/20 opacity-60")}>
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Cpu className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium text-sm">{m.name}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {m.serialNumber && (
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">SN: {m.serialNumber}</span>
+                      )}
+                      {!m.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold text-primary text-sm">&#8373;{m.washPrice.toFixed(2)}</span>
+                  <span className="text-xs text-muted-foreground">wash</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                    setEditingId(m._id)
+                    setForm({ name: m.name, serialNumber: m.serialNumber || "", washPrice: m.washPrice })
+                    setShowAdd(false)
+                  }}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleToggle(m)}>
+                    <span className="text-xs">{m.isActive ? "Off" : "On"}</span>
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemove(m._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+      {showAdd ? (
+        <div className="border rounded-lg p-3 space-y-2 bg-background">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Machine Name *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Washer 1" className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Wash Price (&#8373;) *</Label>
+              <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Serial Number <span className="text-muted-foreground">(optional)</span></Label>
+            <Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="e.g., SN-20240001" className="h-8 text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Machine</Button>
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+          <Plus className="h-3.5 w-3.5 mr-1.5" />Add Machine
         </Button>
       )}
     </div>
@@ -487,7 +772,7 @@ const BranchFormFields = ({
     <div className='grid grid-cols-2 gap-4'>
       <div className='space-y-2'>
         <Label htmlFor={`${prefix}phoneNumber`}>Phone Number *</Label>
-        <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder='0XX XXX XXXX' />
+        <Input id={`${prefix}phoneNumber`} type='tel' value={formData.phoneNumber} onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 10); setFormData({ ...formData, phoneNumber: digits }); }} placeholder='0XX XXX XXXX' maxLength={10} inputMode='numeric' />
       </div>
       <div className='space-y-2'>
         <Label htmlFor={`${prefix}email`}>Email</Label>
@@ -497,7 +782,13 @@ const BranchFormFields = ({
     <Separator />
     <div className='space-y-2'>
       <Label htmlFor={`${prefix}deliveryFee`}>Delivery Fee (&#8373;)</Label>
-      <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
+      <Input id={`${prefix}deliveryFee`} type='number' min='0' step='0.01' value={formData.deliveryFee || ""} onChange={(e) => setFormData({ ...formData, deliveryFee: parseFloat(e.target.value) || 0 })} />
+    </div>
+    <Separator />
+    <div className='space-y-2'>
+      <Label htmlFor={`${prefix}weeklyOrderTarget`}>Weekly Order Target</Label>
+      <Input id={`${prefix}weeklyOrderTarget`} type='number' min='0' value={formData.weeklyOrderTarget || ""} onChange={(e) => setFormData({ ...formData, weeklyOrderTarget: parseInt(e.target.value) || 0 })} placeholder='e.g., 150' />
+      <p className='text-xs text-muted-foreground'>Target number of orders per week for this branch.</p>
     </div>
     <Separator />
     <div className='space-y-2'>
@@ -534,15 +825,8 @@ const AdminBranches = () => {
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>([])
 
   const [formData, setFormData] = useState<FormData>({
-    name: "",
-    code: "",
-    address: "",
-    city: "",
-    country: "Ghana",
-    phoneNumber: "",
-    email: "",
-    deliveryFee: 10,
-    stationPin: "",
+    name: "", code: "", address: "", city: "", country: "Ghana",
+    phoneNumber: "", email: "", deliveryFee: 10, stationPin: "", weeklyOrderTarget: 0,
   })
 
   const { results: branchesPages, status: paginationStatus, loadMore } = usePaginatedQuery(
@@ -563,7 +847,7 @@ const AdminBranches = () => {
   const generateUploadUrl = useMutation(api.admin.generateServiceImageUploadUrl)
 
   const resetForm = () => {
-    setFormData({ name: "", code: "", address: "", city: "", country: "Ghana", phoneNumber: "", email: "", deliveryFee: 10, stationPin: "" })
+    setFormData({ name: "", code: "", address: "", city: "", country: "Ghana", phoneNumber: "", email: "", deliveryFee: 10, stationPin: "", weeklyOrderTarget: 0 })
     setServiceDrafts([])
   }
 
@@ -572,24 +856,17 @@ const AdminBranches = () => {
   const handleOpenEditDialog = (branch: Branch) => {
     setSelectedBranch(branch)
     setFormData({
-      name: branch.name,
-      code: branch.code,
-      address: branch.address,
-      city: branch.city,
-      country: branch.country,
-      phoneNumber: branch.phoneNumber,
-      email: branch.email || "",
-      deliveryFee: branch.deliveryFee,
-      stationPin: "",
+      name: branch.name, code: branch.code, address: branch.address,
+      city: branch.city, country: branch.country, phoneNumber: branch.phoneNumber,
+      email: branch.email || "", deliveryFee: branch.deliveryFee, stationPin: "",
+      weeklyOrderTarget: (branch as any).weeklyOrderTarget || 0,
     })
     setShowEditDialog(true)
   }
 
   const handleCloseDialogs = () => {
-    setShowAddDialog(false)
-    setShowEditDialog(false)
-    setSelectedBranch(null)
-    resetForm()
+    setShowAddDialog(false); setShowEditDialog(false)
+    setSelectedBranch(null); resetForm()
   }
 
   const handleCreateBranch = async () => {
@@ -602,22 +879,18 @@ const AdminBranches = () => {
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       const branchId = await createBranch({
-        name: formData.name.trim(),
-        code: normalizedCode,
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        country: formData.country.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        email: formData.email?.trim() || undefined,
-        pricingPerKg: 0,
-        deliveryFee: formData.deliveryFee,
-        stationPin: formData.stationPin.trim(),
+        name: formData.name.trim(), code: normalizedCode, address: formData.address.trim(),
+        city: formData.city.trim(), country: formData.country.trim(), phoneNumber: formData.phoneNumber.trim(),
+        email: formData.email?.trim() || undefined, pricingPerKg: 0, deliveryFee: formData.deliveryFee,
+        stationPin: formData.stationPin.trim(), weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       for (const draft of serviceDrafts) {
         const imageUrl = draft.imageUrl?.startsWith("convex-storage:")
-          ? draft.imageUrl.replace("convex-storage:", "")
-          : draft.imageUrl || undefined
-        await (createBranchService as any)({ branchId: branchId as Id<"branches">, name: draft.name, code: draft.code, price: draft.price, imageUrl })
+          ? draft.imageUrl.replace("convex-storage:", "") : draft.imageUrl || undefined
+        await (createBranchService as any)({
+          branchId: branchId as Id<"branches">, name: draft.name, code: draft.code,
+          price: draft.price, imageUrl, showOnCustomerSide: draft.showOnCustomerSide,
+        })
       }
       toast.success("Branch created successfully!")
       handleCloseDialogs()
@@ -640,16 +913,11 @@ const AdminBranches = () => {
     try {
       const normalizedCode = formData.code.toUpperCase().trim().replace(/\s+/g, "")
       await updateBranch({
-        branchId: selectedBranch._id,
-        name: formData.name.trim(),
-        code: normalizedCode,
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        country: formData.country.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        email: formData.email?.trim() || undefined,
-        deliveryFee: formData.deliveryFee,
-        stationPin: formData.stationPin?.trim() || undefined,
+        branchId: selectedBranch._id, name: formData.name.trim(), code: normalizedCode,
+        address: formData.address.trim(), city: formData.city.trim(), country: formData.country.trim(),
+        phoneNumber: formData.phoneNumber.trim(), email: formData.email?.trim() || undefined,
+        deliveryFee: formData.deliveryFee, stationPin: formData.stationPin?.trim() || undefined,
+        weeklyOrderTarget: formData.weeklyOrderTarget || undefined,
       } as any)
       toast.success("Branch updated successfully!")
       handleCloseDialogs()
@@ -672,8 +940,7 @@ const AdminBranches = () => {
     try {
       await deleteBranch({ branchId: branchToDelete })
       toast.success("Branch deleted successfully")
-      setShowDeleteDialog(false)
-      setBranchToDelete(null)
+      setShowDeleteDialog(false); setBranchToDelete(null)
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to delete branch")
     }
@@ -775,7 +1042,7 @@ const AdminBranches = () => {
                 <Tag className='h-4 w-4 text-primary' />
                 <Label className='text-base font-semibold'>Services & Pricing</Label>
               </div>
-              <p className='text-xs text-muted-foreground mb-3'>Add the services this branch offers. Each service is priced per load.</p>
+              <p className='text-xs text-muted-foreground mb-3'>Add the services this branch offers. Toggle visibility to control what customers see.</p>
               <ServiceDraftsPanel drafts={serviceDrafts} onChange={setServiceDrafts} generateUploadUrl={generateUploadUrl} />
             </div>
           </div>
@@ -801,8 +1068,17 @@ const AdminBranches = () => {
                 <Tag className='h-4 w-4 text-primary' />
                 <Label className='text-base font-semibold'>Services & Pricing</Label>
               </div>
-              <p className='text-xs text-muted-foreground mb-3'>Manage the services this branch offers. Changes apply immediately.</p>
+              <p className='text-xs text-muted-foreground mb-3'>Manage the services this branch offers. Toggle visibility to control what customers see.</p>
               {selectedBranch && <BranchServicesPanel branchId={selectedBranch._id} />}
+            </div>
+            <Separator />
+            <div>
+              <div className='flex items-center gap-2 mb-3'>
+                <Cpu className='h-4 w-4 text-primary' />
+                <Label className='text-base font-semibold'>Machines</Label>
+              </div>
+              <p className='text-xs text-muted-foreground mb-3'>Configure machines for fault tracking. Serial numbers help identify machines during maintenance.</p>
+              {selectedBranch && <BranchMachinesPanel branchId={selectedBranch._id} />}
             </div>
           </div>
           <DialogFooter>

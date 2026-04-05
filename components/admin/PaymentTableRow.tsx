@@ -11,7 +11,6 @@ import {
 import {
   Eye,
   Calendar,
-  DollarSign,
   CreditCard,
   User,
   Package,
@@ -71,7 +70,7 @@ export const PaymentTableRow = ({
             <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 w-fit">FREE</span>
           ) : (
             <div className="flex items-center gap-1">
-              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="h-3.5 w-3.5 text-muted-foreground font-bold">₵</span>
               <span className="font-semibold text-green-600">
                 {payment.currency} {(payment.order?.finalPrice != null ? payment.order.finalPrice : (payment.amount ?? 0)).toFixed(2)}
               </span>

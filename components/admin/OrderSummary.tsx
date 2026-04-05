@@ -8,7 +8,6 @@ import {
   Package,
   User,
   Calendar,
-  DollarSign,
   MapPin,
   Building2,
   CreditCard,

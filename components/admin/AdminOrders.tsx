@@ -30,12 +30,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { OrderTable } from "./OrderTable"
 import { OrderDetailsDialog } from "./OrderDetailsDialog"
 import { OrderStatusDialog } from "./OrderStatusDialog"
@@ -79,7 +73,6 @@ const AdminOrders = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [calendarOpen, setCalendarOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Doc<"orders"> | null>(null)
   const [orderToUpdate, setOrderToUpdate] = useState<Doc<"orders"> | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Doc<"orders"> | null>(null)
@@ -159,13 +152,10 @@ const AdminOrders = () => {
     total: dayOrders.length,
     pending_dropoff: dayOrders.filter((o) => o.status === "pending_dropoff").length,
     checked_in: dayOrders.filter((o) => o.status === "checked_in").length,
-    sorting: dayOrders.filter((o) => o.status === "sorting").length,
-    washing: dayOrders.filter((o) => o.status === "washing").length,
-    drying: dayOrders.filter((o) => o.status === "drying").length,
-    folding: dayOrders.filter((o) => o.status === "folding").length,
     ready: dayOrders.filter((o) => o.status === "ready" || o.status === "ready_for_pickup").length,
     completed: dayOrders.filter((o) => o.status === "completed" || o.status === "delivered").length,
     cancelled: dayOrders.filter((o) => o.status === "cancelled").length,
+    in_progress: dayOrders.filter((o) => ["sorting", "washing", "drying", "folding"].includes(o.status)).length,
   }), [dayOrders])
 
   const handleViewDetails = (order: Doc<"orders">) => {
@@ -218,8 +208,6 @@ const AdminOrders = () => {
 
   const goToPrevDay = () => setSelectedDate((d) => subDays(d, 1))
   const goToNextDay = () => setSelectedDate((d) => addDays(d, 1))
-  const goToToday = () => setSelectedDate(new Date())
-
   const isSelectedToday = isToday(selectedDate)
 
   return (
@@ -241,8 +229,6 @@ const AdminOrders = () => {
             <span className="text-sm font-medium text-muted-foreground shrink-0 mr-1">
               Viewing orders for:
             </span>
-
-            {/* Prev */}
             <Button
               variant="outline"
               size="icon"
@@ -251,34 +237,30 @@ const AdminOrders = () => {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-
-            {/* Calendar trigger */}
             <div className="flex items-center gap-2">
-                <div className="relative flex items-center">
-                  <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
-                  <input
-                    type="date"
-                    value={format(selectedDate, "yyyy-MM-dd")}
-                    max={format(new Date(), "yyyy-MM-dd")}
-                    onChange={(e) => {
-                      if (e.target.value) setSelectedDate(new Date(e.target.value + "T12:00:00"))
-                    }}
-                    className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
-                  />
-                </div>
-                {!isSelectedToday && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
-                    onClick={() => setSelectedDate(new Date())}
-                  >
-                    Today
-                  </Button>
-                )}
+              <div className="relative flex items-center">
+                <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
+                <input
+                  type="date"
+                  value={format(selectedDate, "yyyy-MM-dd")}
+                  max={format(new Date(), "yyyy-MM-dd")}
+                  onChange={(e) => {
+                    if (e.target.value) setSelectedDate(new Date(e.target.value + "T12:00:00"))
+                  }}
+                  className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                />
+              </div>
+              {!isSelectedToday && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
+                  onClick={() => setSelectedDate(new Date())}
+                >
+                  Today
+                </Button>
+              )}
             </div>
-
-            {/* Next */}
             <Button
               variant="outline"
               size="icon"
@@ -288,7 +270,6 @@ const AdminOrders = () => {
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-
           </div>
         </CardContent>
       </Card>
@@ -322,27 +303,23 @@ const AdminOrders = () => {
             <CardContent className="py-4 px-5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">In Progress</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-yellow-600">
-                  {stats.checked_in + stats.sorting + stats.washing + stats.drying + stats.folding}
-                </span>
+                <span className="text-4xl font-bold text-yellow-600">{stats.in_progress}</span>
                 <span className="text-xs text-muted-foreground">active now</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Wash Pipeline — simplified */}
         <Card>
           <CardContent className="py-3 px-5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Wash Pipeline</p>
-            <div className="grid grid-cols-7 divide-x divide-border">
+            <div className="grid grid-cols-4 divide-x divide-border">
               {[
-                { label: "Pending\nDropoff",  value: stats.pending_dropoff, color: "text-orange-500" },
-                { label: "Checked\nIn",       value: stats.checked_in,     color: "text-cyan-600"   },
-                { label: "Sorting",           value: stats.sorting,         color: "text-purple-600" },
-                { label: "Washing",           value: stats.washing,         color: "text-indigo-600" },
-                { label: "Drying",            value: stats.drying,          color: "text-sky-600"    },
-                { label: "Folding",           value: stats.folding,         color: "text-violet-600" },
-                { label: "Ready",             value: stats.ready,           color: "text-blue-600"   },
+                { label: "Pending\nDropoff", value: stats.pending_dropoff, color: "text-orange-500" },
+                { label: "Checked\nIn",      value: stats.checked_in,     color: "text-cyan-600"   },
+                { label: "In\nProgress",     value: stats.in_progress,    color: "text-indigo-600" },
+                { label: "Ready",            value: stats.ready,           color: "text-blue-600"   },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex flex-col items-center px-3 first:pl-0 last:pr-0">
                   <span className={`text-3xl font-bold ${color}`}>{value}</span>
@@ -405,10 +382,6 @@ const AdminOrders = () => {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="pending_dropoff">Pending Dropoff</SelectItem>
                   <SelectItem value="checked_in">Checked In</SelectItem>
-                  <SelectItem value="sorting">Sorting</SelectItem>
-                  <SelectItem value="washing">Washing</SelectItem>
-                  <SelectItem value="drying">Drying</SelectItem>
-                  <SelectItem value="folding">Folding</SelectItem>
                   <SelectItem value="ready">Ready for Pickup</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
-import { useUser, useClerk } from "@clerk/nextjs"
+import { useUser, UserProfile } from "@clerk/nextjs"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,13 +12,21 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
-  User, Lock, Bell, Palette, Shield, ExternalLink,
-  Save, Moon, Sun, Loader2, CheckCircle, Mail, Crown
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  User, Lock, Bell, Palette, Shield,
+  Save, Moon, Sun, Loader2, CheckCircle, Mail, Crown, Settings
 } from "lucide-react"
 
 const AdminSettings = () => {
   const { user: clerkUser } = useUser()
-  const { openUserProfile } = useClerk()
+  const [showClerkProfile, setShowClerkProfile] = useState(false)
+  const [clerkProfileTab, setClerkProfileTab] = useState<"profile" | "security">("profile")
+
   const adminProfile = useQuery(api.admin.getCurrentUser)
   const updateProfile = useMutation((api as any).admin.updateAdminProfile)
   const updateSystemSettings = useMutation(api.admin.updateSystemSettings)
@@ -28,6 +36,7 @@ const AdminSettings = () => {
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [isDark, setIsDark] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   const [notifications, setNotifications] = useState({
     notifyNewOrders: true,
@@ -38,6 +47,12 @@ const AdminSettings = () => {
     requireBiometricPayment: true,
     autoLogoutMinutes: 30,
   })
+
+  // Read actual DOM class on mount — single source of truth
+  useEffect(() => {
+    setMounted(true)
+    setIsDark(document.documentElement.classList.contains("dark"))
+  }, [])
 
   useEffect(() => {
     if (adminProfile) setName(adminProfile.name || "")
@@ -55,13 +70,6 @@ const AdminSettings = () => {
       })
     }
   }, [systemSettings])
-
-  useEffect(() => {
-    const saved = localStorage.getItem("washlab-theme")
-    const dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    setIsDark(dark)
-    document.documentElement.classList.toggle("dark", dark)
-  }, [])
 
   const toggleTheme = () => {
     const next = !isDark
@@ -166,13 +174,18 @@ const AdminSettings = () => {
                 Clerk
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Email is managed via Clerk. Change it in account settings.</p>
+            <p className="text-xs text-muted-foreground">Email is managed via Clerk.</p>
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => openUserProfile()}>
-              <ExternalLink className="w-3 h-3" />
-              Manage Clerk Account
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={() => { setClerkProfileTab("profile"); setShowClerkProfile(true) }}
+            >
+              <Settings className="w-3 h-3" />
+              Manage Account
             </Button>
             <Button size="sm" className="text-xs gap-1.5" onClick={saveProfile} disabled={savingProfile}>
               {savingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
@@ -195,10 +208,15 @@ const AdminSettings = () => {
           <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
             <div>
               <p className="text-sm font-medium">Change Password</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Password is managed securely via Clerk</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Update your login password</p>
             </div>
-            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0" onClick={() => openUserProfile()}>
-              <ExternalLink className="w-3 h-3" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5 shrink-0"
+              onClick={() => { setClerkProfileTab("security"); setShowClerkProfile(true) }}
+            >
+              <Lock className="w-3 h-3" />
               Change Password
             </Button>
           </div>
@@ -218,14 +236,18 @@ const AdminSettings = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                {isDark ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-yellow-500" />}
+                {/* Only render icon after mount to avoid hydration mismatch */}
+                {mounted && (isDark
+                  ? <Moon className="w-4 h-4 text-foreground" />
+                  : <Sun className="w-4 h-4 text-yellow-500" />
+                )}
               </div>
               <div>
-                <p className="text-sm font-medium">{isDark ? "Dark Mode" : "Light Mode"}</p>
+                <p className="text-sm font-medium">{mounted && isDark ? "Dark Mode" : "Light Mode"}</p>
                 <p className="text-xs text-muted-foreground">Toggle the app theme</p>
               </div>
             </div>
-            <Switch checked={isDark} onCheckedChange={toggleTheme} />
+            <Switch checked={mounted ? isDark : false} onCheckedChange={toggleTheme} />
           </div>
         </CardContent>
       </Card>
@@ -303,6 +325,29 @@ const AdminSettings = () => {
           Save All Settings
         </Button>
       </div>
+
+      {/* Clerk UserProfile Dialog */}
+      <Dialog open={showClerkProfile} onOpenChange={setShowClerkProfile}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="text-base font-semibold">
+              {clerkProfileTab === "security" ? "Password & Security" : "Manage Account"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-2 pb-4">
+            <UserProfile
+              routing="hash"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "shadow-none border-0 w-full",
+                  navbar: clerkProfileTab === "security" ? "hidden" : undefined,
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

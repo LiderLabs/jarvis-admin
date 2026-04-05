@@ -17,7 +17,6 @@ import {
   User,
   Package,
   Calendar,
-  DollarSign,
   Building2,
   Clock,
   CheckCircle2,
@@ -65,7 +64,7 @@ export const PaymentDetailsDialog = ({
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Amount</h3>
                 <div className="flex items-center gap-2 text-2xl font-bold">
-                  <DollarSign className="h-5 w-5" />
+                  <span className="h-5 w-5 font-bold">₵</span>
                   <span>
                     {payment.currency} {payment.amount.toFixed(2)}
                   </span>

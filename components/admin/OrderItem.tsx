@@ -8,7 +8,6 @@ import {
   Package,
   User,
   Calendar,
-  DollarSign,
   MapPin,
   Phone,
 } from "lucide-react"
@@ -49,7 +48,7 @@ export const OrderItem = ({
                 {order.customerPhoneNumber}
               </span>
               <span className="flex items-center gap-1">
-                <DollarSign className="h-3 w-3" />
+                <span className="h-3 w-3 font-bold">₵</span>
                 ₵{order.finalPrice.toFixed(2)}
               </span>
             </div>
@@ -135,7 +134,7 @@ export const OrderItem = ({
 
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="flex items-center gap-2 text-sm">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <span className="h-4 w-4 text-muted-foreground font-bold">₵</span>
               <span className="text-lg font-bold">₵{order.finalPrice.toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-2">

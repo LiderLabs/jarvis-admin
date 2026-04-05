@@ -19,7 +19,7 @@ import { LoyaltyPointsTable } from "./LoyaltyPointsTable"
 import { LoyaltyTransactionsTable } from "./LoyaltyTransactionsTable"
 import { AdjustPointsDialog } from "./AdjustPointsDialog"
 import { TransactionDetailsDialog } from "./TransactionDetailsDialog"
-import { Award, TrendingUp, Users, Gift, Search, Filter, Loader2, History } from "lucide-react"
+import { Award, TrendingUp, Users, Gift, Search, Loader2, History } from "lucide-react"
 import { Id } from "@jordan6699/washlab-backend/dataModel"
 
 type ViewMode = "points" | "transactions"
@@ -29,7 +29,7 @@ export default function AdminLoyaltyPoints() {
   const [viewMode, setViewMode] = useState<ViewMode>("points")
   const [searchQuery, setSearchQuery] = useState("")
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<"all" | "earned" | "redeemed" | "adjusted">("all")
-  const [transactionCustomerFilter, setTransactionCustomerFilter] = useState<string>("all")
+  const [transactionsViewCustomerId, setTransactionsViewCustomerId] = useState<string | null>(null)
   const [selectedLoyaltyPoints, setSelectedLoyaltyPoints] = useState<
     (Doc<"loyaltyPoints"> & {
       customer?: {
@@ -41,10 +41,14 @@ export default function AdminLoyaltyPoints() {
     }) | null
   >(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Doc<"loyaltyTransactions"> | null>(null)
-  const [transactionsViewCustomerId, setTransactionsViewCustomerId] = useState<string | null>(null)
 
-  // Fetch loyalty points (paginated)
-  // Note: Type assertion needed until Convex types are regenerated after backend fix
+  // ── Dedicated stats query — always reads full table, never depends on pagination ──
+  const loyaltyStats = useQuery(
+    (api as any).loyalty.getLoyaltyStats,
+    isAuthenticated ? {} : "skip"
+  )
+
+  // ── Paginated loyalty points (for the table only) ──
   const {
     results: loyaltyPointsPages,
     status: loyaltyPointsStatus,
@@ -57,20 +61,9 @@ export default function AdminLoyaltyPoints() {
   const allLoyaltyPoints = loyaltyPointsPages?.flat() ?? []
   const hasMorePoints = loyaltyPointsStatus === "CanLoadMore"
   const isLoadingMorePoints = loyaltyPointsStatus === "LoadingMore"
+  const isLoadingPoints = loyaltyPointsStatus === "LoadingFirstPage" && allLoyaltyPoints.length === 0
 
-  // Filter loyalty points by search query (already filtered on backend, but we can add more filtering here if needed)
-  const filteredLoyaltyPoints = allLoyaltyPoints
-
-  // Calculate stats from loyalty points
-  const stats = {
-    totalCustomers: allLoyaltyPoints.length,
-    totalPoints: allLoyaltyPoints.reduce((sum, lp) => sum + lp.points, 0),
-    totalEarned: allLoyaltyPoints.reduce((sum, lp) => sum + lp.totalEarned, 0),
-    totalRedeemed: allLoyaltyPoints.reduce((sum, lp) => sum + lp.totalRedeemed, 0),
-    freeWashesEarned: allLoyaltyPoints.reduce((sum, lp) => sum + Math.floor(lp.totalEarned / 10), 0),
-  }
-
-  // Fetch transactions (paginated)
+  // ── Paginated transactions (for the table only) ──
   const {
     results: transactionsPages,
     status: transactionsStatus,
@@ -88,33 +81,30 @@ export default function AdminLoyaltyPoints() {
   const allTransactions = transactionsPages?.flat() ?? []
   const hasMoreTransactions = transactionsStatus === "CanLoadMore"
   const isLoadingMoreTransactions = transactionsStatus === "LoadingMore"
-
-  // Check if any transactions are adjusted (for showing adjuster column)
+  const isLoadingTransactions = transactionsStatus === "LoadingFirstPage" && allTransactions.length === 0
   const hasAdjustedTransactions = allTransactions.some((t) => t.type === "adjusted")
 
-  const isLoadingPoints = loyaltyPointsStatus === "LoadingFirstPage" && allLoyaltyPoints.length === 0
-  const isLoadingTransactions = transactionsStatus === "LoadingFirstPage" && allTransactions.length === 0
-
   const handleAdjustPoints = (loyaltyPoints: Doc<"loyaltyPoints"> & {
-    customer?: {
-      _id: string
-      name?: string
-      phoneNumber?: string
-      email?: string
-    } | null
-  }) => {
-    setSelectedLoyaltyPoints(loyaltyPoints)
-  }
+    customer?: { _id: string; name?: string; phoneNumber?: string; email?: string } | null
+  }) => setSelectedLoyaltyPoints(loyaltyPoints)
 
   const handleViewTransactions = (customerId: string) => {
     setTransactionsViewCustomerId(customerId)
     setViewMode("transactions")
-    setTransactionCustomerFilter(customerId)
   }
 
   const handleClearCustomerFilter = () => {
     setTransactionsViewCustomerId(null)
-    setTransactionCustomerFilter("all")
+  }
+
+  // Use dedicated stats — accurate regardless of pagination
+  const stats = {
+    totalCustomers: loyaltyStats?.totalCustomers ?? 0,
+    totalPoints: loyaltyStats?.totalPoints ?? 0,
+    totalEarned: loyaltyStats?.totalEarned ?? 0,
+    totalRedeemed: loyaltyStats?.totalRedeemed ?? 0,
+    freeWashesEarned: loyaltyStats?.freeWashesEarned ?? 0,
+    activePoints: loyaltyStats?.activePoints ?? 0,
   }
 
   return (
@@ -127,7 +117,7 @@ export default function AdminLoyaltyPoints() {
         </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — powered by dedicated query, always accurate */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -135,10 +125,10 @@ export default function AdminLoyaltyPoints() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCustomers}</div>
-            <p className="text-xs text-muted-foreground">
-              With loyalty points
-            </p>
+            <div className="text-2xl font-bold">
+              {loyaltyStats === undefined ? <Loader2 className="w-5 h-5 animate-spin" /> : stats.totalCustomers}
+            </div>
+            <p className="text-xs text-muted-foreground">With loyalty points</p>
           </CardContent>
         </Card>
 
@@ -148,7 +138,9 @@ export default function AdminLoyaltyPoints() {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPoints}</div>
+            <div className="text-2xl font-bold">
+              {loyaltyStats === undefined ? <Loader2 className="w-5 h-5 animate-spin" /> : stats.totalPoints}
+            </div>
             <p className="text-xs text-muted-foreground">
               {stats.totalEarned} earned, {stats.totalRedeemed} redeemed
             </p>
@@ -161,10 +153,10 @@ export default function AdminLoyaltyPoints() {
             <Gift className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.freeWashesEarned}</div>
-            <p className="text-xs text-muted-foreground">
-              Total rewards earned
-            </p>
+            <div className="text-2xl font-bold">
+              {loyaltyStats === undefined ? <Loader2 className="w-5 h-5 animate-spin" /> : stats.freeWashesEarned}
+            </div>
+            <p className="text-xs text-muted-foreground">Total rewards earned</p>
           </CardContent>
         </Card>
 
@@ -174,10 +166,10 @@ export default function AdminLoyaltyPoints() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPoints - stats.totalRedeemed}</div>
-            <p className="text-xs text-muted-foreground">
-              Currently available
-            </p>
+            <div className="text-2xl font-bold">
+              {loyaltyStats === undefined ? <Loader2 className="w-5 h-5 animate-spin" /> : stats.activePoints}
+            </div>
+            <p className="text-xs text-muted-foreground">Currently available</p>
           </CardContent>
         </Card>
       </div>
@@ -202,11 +194,7 @@ export default function AdminLoyaltyPoints() {
         </div>
 
         {viewMode === "transactions" && transactionsViewCustomerId && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearCustomerFilter}
-          >
+          <Button variant="outline" size="sm" onClick={handleClearCustomerFilter}>
             Clear Customer Filter
           </Button>
         )}
@@ -214,124 +202,104 @@ export default function AdminLoyaltyPoints() {
 
       {/* Points View */}
       {viewMode === "points" && (
-        <div className="space-y-4">
-          {/* Search */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Loyalty Points</CardTitle>
-              <CardDescription>
-                View and manage customer loyalty point balances
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4 mb-4">
-                <div className="flex-1">
-                  <Label htmlFor="search">Search Customers</Label>
-                  <div className="relative mt-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search"
-                      placeholder="Search by name, phone, or email..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Loyalty Points</CardTitle>
+            <CardDescription>View and manage customer loyalty point balances</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4 mb-4">
+              <div className="flex-1">
+                <Label htmlFor="search">Search Customers</Label>
+                <div className="relative mt-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Search by name, phone, or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
               </div>
+            </div>
 
-              <LoyaltyPointsTable
-                loyaltyPoints={filteredLoyaltyPoints}
-                isLoading={isLoadingPoints}
-                onAdjustPoints={handleAdjustPoints}
-                onViewTransactions={handleViewTransactions}
-              />
+            <LoyaltyPointsTable
+              loyaltyPoints={allLoyaltyPoints}
+              isLoading={isLoadingPoints}
+              onAdjustPoints={handleAdjustPoints}
+              onViewTransactions={handleViewTransactions}
+            />
 
-              {hasMorePoints && (
-                <div className="flex justify-center mt-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => loadMorePoints(20)}
-                    disabled={isLoadingMorePoints}
-                  >
-                    {isLoadingMorePoints ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Load More"
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            {hasMorePoints && (
+              <div className="flex justify-center mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => loadMorePoints(20)}
+                  disabled={isLoadingMorePoints}
+                >
+                  {isLoadingMorePoints ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading...</>
+                  ) : "Load More"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Transactions View */}
       {viewMode === "transactions" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Loyalty Point Transactions</CardTitle>
-              <CardDescription>
-                View all loyalty point transactions and history
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <Label htmlFor="type">Transaction Type</Label>
-                  <Select
-                    value={transactionTypeFilter}
-                    onValueChange={(value: "all" | "earned" | "redeemed" | "adjusted") =>
-                      setTransactionTypeFilter(value)
-                    }
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="earned">Earned</SelectItem>
-                      <SelectItem value="redeemed">Redeemed</SelectItem>
-                      <SelectItem value="adjusted">Adjusted</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Loyalty Point Transactions</CardTitle>
+            <CardDescription>View all loyalty point transactions and history</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label htmlFor="type">Transaction Type</Label>
+                <Select
+                  value={transactionTypeFilter}
+                  onValueChange={(value: "all" | "earned" | "redeemed" | "adjusted") =>
+                    setTransactionTypeFilter(value)
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="earned">Earned</SelectItem>
+                    <SelectItem value="redeemed">Redeemed</SelectItem>
+                    <SelectItem value="adjusted">Adjusted</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
 
-              <LoyaltyTransactionsTable
-                transactions={allTransactions}
-                isLoading={isLoadingTransactions}
-                showAdjuster={hasAdjustedTransactions}
-                onViewDetails={setSelectedTransaction}
-              />
+            <LoyaltyTransactionsTable
+              transactions={allTransactions}
+              isLoading={isLoadingTransactions}
+              showAdjuster={hasAdjustedTransactions}
+              onViewDetails={setSelectedTransaction}
+            />
 
-              {hasMoreTransactions && (
-                <div className="flex justify-center mt-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => loadMoreTransactions(20)}
-                    disabled={isLoadingMoreTransactions}
-                  >
-                    {isLoadingMoreTransactions ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Load More"
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            {hasMoreTransactions && (
+              <div className="flex justify-center mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => loadMoreTransactions(20)}
+                  disabled={isLoadingMoreTransactions}
+                >
+                  {isLoadingMoreTransactions ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading...</>
+                  ) : "Load More"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Dialogs */}
@@ -353,4 +321,3 @@ export default function AdminLoyaltyPoints() {
     </div>
   )
 }
-
