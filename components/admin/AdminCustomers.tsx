@@ -40,6 +40,7 @@ import {
   Search,
   Filter,
   MapPin,
+  Download,
 } from "lucide-react"
 import { CustomerTableRow } from "./CustomerTableRow"
 import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
@@ -58,6 +59,19 @@ const BRANCH_COLORS = [
   "bg-violet-500",
 ]
 
+function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
+  const csv = rows
+    .map((r) => r.map((cell) => '"' + String(cell ?? "").replace(/"/g, '""') + '"').join(","))
+    .join("\n")
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 const AdminCustomers = () => {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500)
@@ -72,12 +86,32 @@ const AdminCustomers = () => {
     newStatus: "active" | "blocked" | "suspended" | "restricted" | null
   } | null>(null)
   const [statusNote, setStatusNote] = useState("")
+  const [isExporting, setIsExporting] = useState(false)
 
   const customerStats = useQuery(api.admin.getCustomerStats, {
     branchId: branchFilter === "all" ? undefined : branchFilter as any,
   } as any)
 
   const branches = useQuery(api.branches.getActive, {}) ?? []
+
+  // ─── Fetch ALL customers for export (no pagination) ───────────────────────
+ const allCustomersForExport = useQuery(
+  (api.admin as any).getAllCustomersForExport,
+    {
+      search: debouncedSearchQuery || undefined,
+      status:
+        statusFilter === "all"
+          ? undefined
+          : (statusFilter as "active" | "blocked" | "suspended" | "restricted"),
+      isRegistered:
+        typeFilter === "registered"
+          ? true
+          : typeFilter === "walkin"
+            ? false
+            : undefined,
+      branchId: branchFilter === "all" ? undefined : branchFilter as any,
+    }
+  )
 
   const {
     results: customersPages,
@@ -107,6 +141,104 @@ const AdminCustomers = () => {
 
   const changeCustomerStatus = useMutation(api.admin.changeCustomerStatus)
   const deleteCustomer = useMutation(api.admin.deleteCustomer)
+
+  // ─── Export: all customers CSV + branch orders summary CSV ─────────────────
+  const handleExportCSV = async () => {
+    const data: any[] = allCustomersForExport ?? []
+    if (data.length === 0) {
+      toast.error("No customers to export — data may still be loading")
+      return
+    }
+
+    setIsExporting(true)
+    try {
+      // ── File 1: Customers ──────────────────────────────────────────────────
+      const customerHeaders = [
+        "Name", "Phone", "Email", "Type", "Status",
+        "Branch", "Orders", "Total Spent (GHS)", "Joined",
+      ]
+      const customerRows = data.map((c: any) => [
+        c.name ?? "",
+        c.phoneNumber ?? "",
+        c.email ?? "",
+        c.isRegistered ? "Online" : "Walk-in",
+        c.status ?? "active",
+        c.branchName ?? "",
+        c.orderCount ?? 0,
+        (c.totalSpent ?? 0).toFixed(2),
+        c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
+      ])
+      downloadCSV(
+        [customerHeaders, ...customerRows],
+        `customers-${new Date().toISOString().split("T")[0]}.csv`
+      )
+
+      // ── File 2: Branch Orders Summary ──────────────────────────────────────
+      // Build a map: branchName → { customers, orders, revenue }
+      const branchMap = new Map<string, {
+        name: string
+        customers: number
+        orders: number
+        revenue: number
+      }>()
+
+      for (const c of data) {
+        const key = (c.branchName as string) || "Unknown / No Branch"
+        if (!branchMap.has(key)) {
+          branchMap.set(key, { name: key, customers: 0, orders: 0, revenue: 0 })
+        }
+        const b = branchMap.get(key)!
+        b.customers += 1
+        b.orders += (c.orderCount as number) ?? 0
+        b.revenue += (c.totalSpent as number) ?? 0
+      }
+
+      // Also pull in branches that may have 0 customers in the current filter
+      const branchCounts: any[] = (customerStats as any)?.branchCustomerCounts ?? []
+      for (const bc of branchCounts) {
+        if (!branchMap.has(bc.branchName)) {
+          branchMap.set(bc.branchName, {
+            name: bc.branchName,
+            customers: 0,
+            orders: 0,
+            revenue: 0,
+          })
+        }
+      }
+
+      const branchHeaders = [
+        "Branch",
+        "Customers",
+        "Total Orders",
+        "Total Revenue (GHS)",
+        "Avg Spend per Customer (GHS)",
+        "Avg Orders per Customer",
+      ]
+      const branchRows = Array.from(branchMap.values())
+        .sort((a, b) => b.orders - a.orders)
+        .map((b) => [
+          b.name,
+          b.customers,
+          b.orders,
+          b.revenue.toFixed(2),
+          b.customers > 0 ? (b.revenue / b.customers).toFixed(2) : "0.00",
+          b.customers > 0 ? (b.orders / b.customers).toFixed(1) : "0",
+        ])
+
+      downloadCSV(
+        [branchHeaders, ...branchRows],
+        `branch-orders-summary-${new Date().toISOString().split("T")[0]}.csv`
+      )
+
+      toast.success(
+        `Exported ${data.length} customers + branch orders summary (2 files)`
+      )
+    } catch {
+      toast.error("Export failed")
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const handleStatusChange = async () => {
     if (!selectedCustomer || !selectedCustomer.newStatus) return
@@ -155,12 +287,14 @@ const AdminCustomers = () => {
   const isStatsLoading = customerStats === undefined
   const isTableLoading = paginationStatus === "LoadingFirstPage"
   const isLoadingMore = paginationStatus === "LoadingMore"
+  const isExportDataLoading = allCustomersForExport === undefined
 
   if (isStatsLoading && isTableLoading) {
     return <CustomersSkeleton />
   }
 
   const branchCounts = (customerStats as any)?.branchCustomerCounts ?? []
+  const exportCount = allCustomersForExport?.length ?? 0
 
   return (
     <div>
@@ -170,6 +304,20 @@ const AdminCustomers = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Customers</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">Manage and view all customer accounts</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportCSV}
+          disabled={isExporting || isExportDataLoading || exportCount === 0}
+          className="gap-2 self-start sm:self-auto"
+        >
+          <Download className="w-4 h-4" />
+          {isExporting
+            ? "Exporting..."
+            : isExportDataLoading
+              ? "Loading..."
+              : `Export CSV${exportCount > 0 ? ` (${exportCount})` : ""}`}
+        </Button>
       </div>
 
       {/* Stats Grid */}
@@ -177,11 +325,7 @@ const AdminCustomers = () => {
         <CustomersStatsSkeleton />
       ) : customerStats ? (
         <div className="mb-8 space-y-3">
-
-          {/* Row 1: Total (full width), Online + Walk-in side by side */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-
-            {/* Total Customers — spans full width on mobile, 1 col on sm+ */}
             <div
               onClick={() => setBranchFilter("all")}
               className={`col-span-2 sm:col-span-1 bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-105 ${branchFilter === "all" ? "ring-2 ring-primary ring-offset-2" : ""}`}
@@ -198,7 +342,6 @@ const AdminCustomers = () => {
               </div>
             </div>
 
-            {/* Online Users */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="bg-green-500 p-3 rounded-lg">
@@ -211,7 +354,6 @@ const AdminCustomers = () => {
               </div>
             </div>
 
-            {/* Walk-in Users */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="bg-purple-500 p-3 rounded-lg">
@@ -223,10 +365,8 @@ const AdminCustomers = () => {
                 </div>
               </div>
             </div>
-
           </div>
 
-          {/* Row 2: Branch cards — always 2 per row on mobile, up to 4 on desktop */}
           {branchCounts.length > 0 && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {branchCounts.map((b: any, i: number) => {
@@ -252,7 +392,6 @@ const AdminCustomers = () => {
               })}
             </div>
           )}
-
         </div>
       ) : null}
 
@@ -306,7 +445,6 @@ const AdminCustomers = () => {
         </Select>
       </div>
 
-      {/* Active branch filter indicator */}
       {branchFilter !== "all" && (
         <div className="mb-4 flex items-center gap-2">
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -426,7 +564,6 @@ const AdminCustomers = () => {
         </div>
       )}
 
-      {/* Load More */}
       {!isTableLoading && hasMore && (
         <div className="mt-6 flex justify-center">
           <Button onClick={() => loadMore(20)} disabled={isLoadingMore} variant="outline" className="min-w-[150px]">
@@ -444,7 +581,9 @@ const AdminCustomers = () => {
 
       {!isTableLoading && !hasMore && customers.length > 0 && (
         <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">All customers loaded ({customers.length} total)</p>
+          <p className="text-sm text-muted-foreground">
+            Showing {customers.length} of {exportCount} total customers
+          </p>
         </div>
       )}
     </div>
