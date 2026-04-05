@@ -173,24 +173,34 @@ const AdminOrders = () => {
     in_progress: dayOrders.filter((o) => ["sorting", "washing", "drying", "folding"].includes(o.status)).length,
   }), [dayOrders])
 
-  const handleExportCSV = () => {
+  // ── Export: all orders CSV + one CSV per branch ─────────────────────────
+  const handleExportCSV = async () => {
     if (filteredOrders.length === 0) { toast.error("No orders to export"); return }
     setIsExporting(true)
     try {
       const branchMap = Object.fromEntries(branchesList.map((b: any) => [b._id, b.name]))
+
       const headers = [
         "Order Number", "Date", "Time", "Branch", "Customer Name", "Customer Phone",
         "Service Type", "Order Type", "Status", "Payment Status", "Payment Method",
-        "Base Price (GHS)", "Final Price (GHS)", "Estimated Loads", "Bag Card"
+        "Base Price (GHS)", "Final Price (GHS)", "Estimated Loads", "Bag Card",
       ]
-      const rows = filteredOrders.map((o: any) => {
+
+      const buildRow = (o: any) => {
         const date = new Date(o.createdAt ?? o._creationTime)
+        // customerName may be stored directly on the order, or on an enriched field
+        // fall back gracefully so the phone number never appears in the Name column
+        const customerName =
+          o.customerName ||
+          o.name ||
+          o.customer?.name ||
+          "" // empty string — never fall back to phone
         return [
           o.orderNumber,
           date.toLocaleDateString("en-GB"),
           date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
           branchMap[o.branchId] ?? o.branchId,
-          o.customerName ?? o.customerPhoneNumber ?? "",
+          customerName,
           o.customerPhoneNumber ?? "",
           o.serviceType ?? "",
           o.orderType ?? "walk_in",
@@ -202,9 +212,37 @@ const AdminOrders = () => {
           o.estimatedLoads ?? "",
           o.bagCardNumber ?? "",
         ]
-      })
-      downloadCSV([headers, ...rows], `orders-${format(selectedDate, "yyyy-MM-dd")}.csv`)
-      toast.success(`Exported ${filteredOrders.length} orders`)
+      }
+
+      // ── File 1: All orders combined ──────────────────────────────────────
+      downloadCSV(
+        [headers, ...filteredOrders.map(buildRow)],
+        `orders-all-${format(selectedDate, "yyyy-MM-dd")}.csv`
+      )
+
+      // ── File per branch (only if multiple branches present) ───────────────
+      const ordersByBranch = new Map<string, { name: string; orders: any[] }>()
+      for (const o of filteredOrders as any[]) {
+        const branchName = branchMap[o.branchId] ?? "Unknown"
+        if (!ordersByBranch.has(o.branchId)) {
+          ordersByBranch.set(o.branchId, { name: branchName, orders: [] })
+        }
+        ordersByBranch.get(o.branchId)!.orders.push(o)
+      }
+
+      if (ordersByBranch.size > 1) {
+        for (const { name, orders: branchOrders } of ordersByBranch.values()) {
+          downloadCSV(
+            [headers, ...branchOrders.map(buildRow)],
+            `orders-${name.replace(/\s+/g, "-").toLowerCase()}-${format(selectedDate, "yyyy-MM-dd")}.csv`
+          )
+        }
+        toast.success(
+          `Exported ${filteredOrders.length} orders across ${ordersByBranch.size} branches (${ordersByBranch.size + 1} files)`
+        )
+      } else {
+        toast.success(`Exported ${filteredOrders.length} orders`)
+      }
     } catch {
       toast.error("Export failed")
     } finally {
