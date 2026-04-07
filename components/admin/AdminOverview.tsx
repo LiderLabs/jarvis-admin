@@ -598,12 +598,98 @@ const AdminOverview = () => {
       o.status === "completed" || o.status === "delivered"
     ).length
 
-    const dDiff           = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
-    const selectedRevenue = (selectedStats as any)?.totalRevenue ?? 0
+    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIX: Build a per-date accumulator from daily reports.
+    //
+    // The old code did dayMap[key] = r.xxx which OVERWROTE on each report,
+    // meaning when multiple branches submit for the same date only the last
+    // branch's numbers survived. We now ACCUMULATE (+=) so all branches
+    // for a given date are summed correctly.
+    // ─────────────────────────────────────────────────────────────────────────
+    const reportAccumulator: Record<string, {
+      mobileMoney: number
+      cash: number
+      card: number
+      hasData: boolean
+    }> = {}
+
+    ;(dailyReports as any[]).forEach((r: any) => {
+      const dateStr = r.date // already "yyyy-MM-dd"
+      if (!reportAccumulator[dateStr]) {
+        reportAccumulator[dateStr] = { mobileMoney: 0, cash: 0, card: 0, hasData: false }
+      }
+      reportAccumulator[dateStr].mobileMoney += r.mobileMoneylAmount ?? 0
+      reportAccumulator[dateStr].cash        += r.cashAmount ?? 0
+      reportAccumulator[dateStr].card        += (r.cardAmount ?? 0) + (r.paystackAmount ?? 0)
+      reportAccumulator[dateStr].hasData      = true
+    })
+
+    // Proportional ratios from payment stats — used only as fallback for days
+    // where no daily report was submitted yet
     const totalMobileMoney = (selectedStats as any)?.mobileMoneylAmount ?? 0
     const totalCard        = (selectedStats as any)?.cardAmount ?? 0
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
+    const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
+    const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
+    const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
+    const cashRatio = liveTotalForProportion > 0 ? totalCash        / liveTotalForProportion : 1
+
+    const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
+
+    // Summary accumulators — built from the same source as chartData so
+    // the numbers shown in stat cards match the chart bars exactly
+    let summaryMM      = 0
+    let summaryCard    = 0
+    let summaryCash    = 0
+    let summaryRevenue = 0
+
+    const chartData = []
+
+    for (let i = dDiff - 1; i >= 0; i--) {
+      const date    = subDays(dateTo, i)
+      const dateStr = format(date, "yyyy-MM-dd")
+      const key     = format(date, "MMM d")
+      const showLabel = (dDiff - 1 - i) % step === 0
+
+      const report = reportAccumulator[dateStr]
+
+      let mm: number, card: number, cash: number
+
+      if (report?.hasData) {
+        // ✅ Use accumulated daily report data — most accurate, covers all branches
+        mm   = report.mobileMoney
+        card = report.card
+        cash = report.cash
+      } else {
+        // Fallback: proportional split of payment stats for this day
+        const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
+          ? (selectedStats as any).byDay[dateStr]
+          : 0
+        mm   = Math.round(dayTotal * mmRatio   * 100) / 100
+        card = Math.round(dayTotal * cardRatio * 100) / 100
+        cash = Math.round(dayTotal * cashRatio * 100) / 100
+      }
+
+      summaryMM      += mm
+      summaryCard    += card
+      summaryCash    += cash
+      summaryRevenue += mm + card + cash
+
+      chartData.push({
+        date:        key,
+        displayDate: showLabel ? key : "",
+        mobileMoney: mm,
+        card,
+        cash,
+      })
+    }
+
+    // Use report-derived revenue when available, fall back to payment stats total
+    const selectedRevenue = summaryRevenue > 0
+      ? summaryRevenue
+      : ((selectedStats as any)?.totalRevenue ?? 0)
 
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
@@ -613,47 +699,12 @@ const AdminOverview = () => {
     const expectedOrders = avgDailyOrders * dDiff
     const ordersChange   = expectedOrders > 0 ? ((selectedOrders.length - expectedOrders) / expectedOrders) * 100 : 0
 
-    const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
-    const dayMap: Record<string, { mobileMoney: number; cash: number; card: number; displayDate: string }> = {}
-
-    const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
-    const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
-    const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
-    const cashRatio = liveTotalForProportion > 0 ? totalCash        / liveTotalForProportion : 1
-
-    for (let i = dDiff - 1; i >= 0; i--) {
-      const date     = subDays(dateTo, i)
-      const key      = format(date, "MMM d")
-      const dateStr  = format(date, "yyyy-MM-dd")
-      const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
-        ? (selectedStats as any).byDay[dateStr]
-        : 0
-
-      dayMap[key] = {
-        mobileMoney: Math.round(dayTotal * mmRatio   * 100) / 100,
-        cash:        Math.round(dayTotal * cashRatio * 100) / 100,
-        card:        Math.round(dayTotal * cardRatio * 100) / 100,
-        displayDate: (dDiff - 1 - i) % step === 0 ? key : "",
-      }
-    }
-
-    ;(dailyReports as any[]).forEach((r: any) => {
-      const key = format(new Date(r.date), "MMM d")
-      if (dayMap[key]) {
-        dayMap[key].mobileMoney = r.mobileMoneylAmount || 0
-        dayMap[key].cash        = r.cashAmount || 0
-        dayMap[key].card        = (r.cardAmount || 0) + (r.paystackAmount || 0)
-      }
-    })
-
-    const chartData = Object.entries(dayMap).map(([date, v]) => ({ date, ...v }))
-
     return {
-      selectedOrders: selectedOrders.length,
+      selectedOrders:  selectedOrders.length,
       selectedRevenue,
-      totalMobileMoney,
-      totalCard,
-      totalCash,
+      totalMobileMoney: summaryMM,
+      totalCard:        summaryCard,
+      totalCash:        summaryCash,
       pendingOrders,
       completedInRange,
       revenueChange,
