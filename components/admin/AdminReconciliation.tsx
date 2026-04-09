@@ -304,7 +304,7 @@ function BranchRow({ branch, allRecons, allDeductions, historyFrom, historyTo }:
               {branchDeductions.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                    Cash Used (Deductions)
+                    Cash Used 
                   </p>
                   <div className="space-y-2">
                     {branchDeductions.map(d => (
