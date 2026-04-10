@@ -386,14 +386,11 @@ function BranchRow({ summary, allRecons, historyFrom, historyTo }: BranchRowProp
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  {/* ── Two stat boxes: Sent + Transactions (removed "Sent all time") ── */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Sent (period)</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Sent</p>
                       <p className="text-lg font-bold text-green-600">{fmt(historySentTotal)}</p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-muted/30 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Sent (all time)</p>
-                      <p className="text-lg font-bold text-foreground">{fmt(summary.totalSent)}</p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
@@ -450,7 +447,7 @@ function BranchRow({ summary, allRecons, historyFrom, historyTo }: BranchRowProp
                       <tfoot>
                         <tr className="bg-muted/40 border-t-2 border-border">
                           <td colSpan={4} className="px-4 py-2.5 text-xs font-bold text-muted-foreground">
-                            Period total sent
+                            Total sent
                           </td>
                           <td className="px-4 py-2.5 text-sm font-bold text-green-600">{fmt(historySentTotal)}</td>
                           <td />
@@ -477,9 +474,7 @@ export default function AdminReconciliation() {
   const [historyFrom, setHistoryFrom]   = useState<Date>(subDays(today, 30))
   const [historyTo, setHistoryTo]       = useState<Date>(today)
 
-  // Single query — correct numbers come from actual orders, not recon records
   const summaries  = useQuery((api as any).cashReconciliation.getBranchCashSummariesForAdmin) as BranchSummary[] | undefined
-  // Still need allRecons for the history tab table rows
   const allRecons  = useQuery((api as any).cashReconciliation.getAllReconciliationsForAdmin) as Reconciliation[] | undefined
 
   const isLoading = summaries === undefined || allRecons === undefined
