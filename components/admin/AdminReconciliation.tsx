@@ -30,17 +30,32 @@ import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Branch {
+interface BranchSummary {
+  branchId: string
+  branchName: string
+  totalCollected: number
+  totalSent: number
+  totalDeducted: number
+  outstanding: number
+  inProgressRecons: InProgressRecon[]
+  allDeductions: Deduction[]
+  lastActivityTs: number | null
+}
+
+interface InProgressRecon {
   _id: string
-  name: string
-  code: string
-  momoNumber?: string
+  date: string
+  amountSent: number
+  senderMomoNumber: string
+  orderCount: number
+  status: 'pending' | 'processing'
+  createdAt: number
+  paystackReference?: string
 }
 
 interface Reconciliation {
   _id: string
   branchId: string
-  branchName?: string
   date: string
   amountSent: number
   senderMomoNumber: string
@@ -49,13 +64,12 @@ interface Reconciliation {
   status: 'pending' | 'processing' | 'completed' | 'failed'
   createdAt: number
   completedAt?: number
-  notes?: string
   paystackReference?: string
 }
 
 interface Deduction {
   _id: string
-  branchId: string
+  branchId?: string
   amount: number
   reason: string
   createdAt: number
@@ -78,7 +92,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// Always show positive amounts — no minus signs
 function fmt(n: number) {
   return `₵${Math.abs(n).toFixed(2)}`
 }
@@ -88,13 +101,10 @@ function fmtDate(ts: number) {
 }
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
-// Builds one sheet per branch. Pass a single branch for single-branch export,
-// or all branches for the "all" export.
 
 function exportBranchesExcel(
-  branches: Branch[],
+  summaries: BranchSummary[],
   allRecons: Reconciliation[],
-  allDeductions: Deduction[],
   filename: string
 ) {
   let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -103,29 +113,26 @@ function exportBranchesExcel(
   <head><meta charset="UTF-8">
   <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>`
 
-  for (const b of branches) {
-    const safeName = b.name.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
+  for (const s of summaries) {
+    const safeName = s.branchName.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
     html += `<x:ExcelWorksheet><x:Name>${safeName}</x:Name><x:WorksheetOptions><x:Selected/></x:WorksheetOptions></x:ExcelWorksheet>`
   }
 
   html += `</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>`
 
-  for (const b of branches) {
-    const recons     = allRecons.filter(r => r.branchId === b._id).sort((a, z) => z.createdAt - a.createdAt)
-    const deductions = allDeductions.filter(d => d.branchId === b._id).sort((a, z) => z.createdAt - a.createdAt)
-
-    const totalSent      = recons.filter(r => r.status === 'completed' || r.status === 'processing').reduce((s, r) => s + r.amountSent, 0)
-    const totalDeducted  = deductions.reduce((s, d) => s + d.amount, 0)
-    const totalCollected = recons.reduce((s, r) => s + (r.totalCashOrders || 0), 0)
-    const outstanding    = Math.max(0, Math.round((totalCollected - totalSent - totalDeducted) * 100) / 100)
-    const safeName       = b.name.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
+  for (const summary of summaries) {
+    const safeName = summary.branchName.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
+    const recons = allRecons
+      .filter(r => r.branchId === summary.branchId)
+      .sort((a, z) => z.createdAt - a.createdAt)
 
     html += `<table x:Name="${safeName}">
-    <tr><td colspan="6" style="font-size:14px;font-weight:bold;background:#e8f0fe;padding:8px">${b.name} — Cash Reconciliation</td></tr>
+    <tr><td colspan="6" style="font-size:14px;font-weight:bold;background:#e8f0fe;padding:8px">${summary.branchName} — Cash Reconciliation</td></tr>
     <tr>
-      <td style="font-weight:bold">Total Collected</td><td>₵${totalCollected.toFixed(2)}</td>
-      <td style="font-weight:bold">Total Sent</td><td>₵${totalSent.toFixed(2)}</td>
-      <td style="font-weight:bold">Outstanding</td><td>₵${outstanding.toFixed(2)}</td>
+      <td style="font-weight:bold">Total Collected</td><td>₵${summary.totalCollected.toFixed(2)}</td>
+      <td style="font-weight:bold">Total Sent</td><td>₵${summary.totalSent.toFixed(2)}</td>
+      <td style="font-weight:bold">Total Deducted</td><td>₵${summary.totalDeducted.toFixed(2)}</td>
+      <td style="font-weight:bold">Outstanding</td><td>₵${summary.outstanding.toFixed(2)}</td>
     </tr>
     <tr></tr>
     <tr style="background:#dbeafe;font-weight:bold">
@@ -142,7 +149,7 @@ function exportBranchesExcel(
         <td>${r.status.charAt(0).toUpperCase() + r.status.slice(1)}</td>
       </tr>`
     }
-    for (const d of deductions) {
+    for (const d of summary.allDeductions) {
       html += `<tr>
         <td>${fmtDate(d.createdAt)}</td>
         <td>Cash Used</td>
@@ -170,42 +177,37 @@ function exportBranchesExcel(
 // ─── Branch Row ───────────────────────────────────────────────────────────────
 
 interface BranchRowProps {
-  branch: Branch
+  summary: BranchSummary
   allRecons: Reconciliation[]
-  allDeductions: Deduction[]
   historyFrom: Date
   historyTo: Date
 }
 
-function BranchRow({ branch, allRecons, allDeductions, historyFrom, historyTo }: BranchRowProps) {
+function BranchRow({ summary, allRecons, historyFrom, historyTo }: BranchRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [tab, setTab]           = useState<'outstanding' | 'history'>('outstanding')
 
-  const branchRecons     = allRecons.filter(r => r.branchId === branch._id)
-  const branchDeductions = allDeductions.filter(d => d.branchId === branch._id)
-
-  const totalCollected = useMemo(() => branchRecons.reduce((s, r) => s + (r.totalCashOrders || 0), 0), [branchRecons])
-  const totalSent      = useMemo(() => branchRecons.filter(r => r.status === 'completed' || r.status === 'processing').reduce((s, r) => s + r.amountSent, 0), [branchRecons])
-  const totalDeducted  = useMemo(() => branchDeductions.reduce((s, d) => s + d.amount, 0), [branchDeductions])
-  const outstanding    = Math.max(0, Math.round((totalCollected - totalSent - totalDeducted) * 100) / 100)
-
-  const inProgressRecons = branchRecons.filter(r => r.status === 'pending' || r.status === 'processing')
+  const { outstanding, totalCollected, totalDeducted, inProgressRecons, allDeductions } = summary
 
   const fromTs = startOfDay(historyFrom).getTime()
   const toTs   = endOfDay(historyTo).getTime()
 
-  const historyRecons = branchRecons
+  // History: completed/failed recons in the selected date range
+  const historyRecons = allRecons
+    .filter(r => r.branchId === summary.branchId)
     .filter(r => r.status === 'completed' || r.status === 'failed')
     .filter(r => r.createdAt >= fromTs && r.createdAt <= toTs)
     .sort((a, b) => b.createdAt - a.createdAt)
 
-  const historyDeductions = branchDeductions
+  const historyDeductions = allDeductions
     .filter(d => d.createdAt >= fromTs && d.createdAt <= toTs)
     .sort((a, b) => b.createdAt - a.createdAt)
 
-  const lastActivity     = branchRecons.length > 0 ? Math.max(...branchRecons.map(r => r.createdAt)) : null
-  const hasActivity      = branchRecons.length > 0 || branchDeductions.length > 0
-  const historySentTotal = historyRecons.filter(r => r.status === 'completed').reduce((s, r) => s + r.amountSent, 0)
+  const historySentTotal = historyRecons
+    .filter(r => r.status === 'completed')
+    .reduce((s, r) => s + r.amountSent, 0)
+
+  const hasActivity = allRecons.some(r => r.branchId === summary.branchId) || allDeductions.length > 0
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card shadow-sm">
@@ -219,9 +221,9 @@ function BranchRow({ branch, allRecons, allDeductions, historyFrom, historyTo }:
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground text-sm">{branch.name}</p>
+          <p className="font-semibold text-foreground text-sm">{summary.branchName}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {lastActivity ? `Last activity ${fmtDate(lastActivity)}` : 'No activity yet'}
+            {summary.lastActivityTs ? `Last activity ${fmtDate(summary.lastActivityTs)}` : 'No activity yet'}
           </p>
         </div>
 
@@ -301,13 +303,13 @@ function BranchRow({ branch, allRecons, allDeductions, historyFrom, historyTo }:
               </div>
 
               {/* Deductions */}
-              {branchDeductions.length > 0 && (
+              {allDeductions.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                    Cash Used 
+                    Cash Used
                   </p>
                   <div className="space-y-2">
-                    {branchDeductions.map(d => (
+                    {allDeductions.map(d => (
                       <div
                         key={d._id}
                         className="flex items-center justify-between text-sm px-4 py-3 rounded-lg bg-orange-50 dark:bg-orange-950/10 border border-orange-200 dark:border-orange-800"
@@ -384,15 +386,14 @@ function BranchRow({ branch, allRecons, allDeductions, historyFrom, historyTo }:
                 </div>
               ) : (
                 <>
-                  {/* History summary cards */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Total Sent (period)</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Sent (period)</p>
                       <p className="text-lg font-bold text-green-600">{fmt(historySentTotal)}</p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Total Sent (all time)</p>
-                      <p className="text-lg font-bold text-foreground">{fmt(totalSent)}</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Sent (all time)</p>
+                      <p className="text-lg font-bold text-foreground">{fmt(summary.totalSent)}</p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
@@ -476,72 +477,41 @@ export default function AdminReconciliation() {
   const [historyFrom, setHistoryFrom]   = useState<Date>(subDays(today, 30))
   const [historyTo, setHistoryTo]       = useState<Date>(today)
 
-  const branches      = useQuery((api as any).branches.getActive) as Branch[] | undefined
-  const allRecons     = useQuery((api as any).cashReconciliation.getAllReconciliationsForAdmin) as Reconciliation[] | undefined
-  const allDeductions = useQuery((api as any).cashReconciliation.getAllDeductionsForAdmin) as Deduction[] | undefined
+  // Single query — correct numbers come from actual orders, not recon records
+  const summaries  = useQuery((api as any).cashReconciliation.getBranchCashSummariesForAdmin) as BranchSummary[] | undefined
+  // Still need allRecons for the history tab table rows
+  const allRecons  = useQuery((api as any).cashReconciliation.getAllReconciliationsForAdmin) as Reconciliation[] | undefined
 
-  const isLoading = branches === undefined || allRecons === undefined || allDeductions === undefined
+  const isLoading = summaries === undefined || allRecons === undefined
 
-  const outstandingByBranch = useMemo(() => {
-    if (!branches || !allRecons || !allDeductions) return {}
-    const map: Record<string, number> = {}
-    for (const b of branches) {
-      const recons     = allRecons.filter(r => r.branchId === b._id)
-      const deductions = allDeductions.filter(d => d.branchId === b._id)
-      const collected  = recons.reduce((s, r) => s + (r.totalCashOrders || 0), 0)
-      const sent       = recons.filter(r => r.status === 'completed' || r.status === 'processing').reduce((s, r) => s + r.amountSent, 0)
-      const deducted   = deductions.reduce((s, d) => s + d.amount, 0)
-      map[b._id] = Math.max(0, Math.round((collected - sent - deducted) * 100) / 100)
-    }
-    return map
-  }, [branches, allRecons, allDeductions])
+  const totalOutstanding        = summaries?.reduce((s, b) => s + b.outstanding, 0) ?? 0
+  const branchesWithOutstanding = summaries?.filter(b => b.outstanding > 0).length ?? 0
 
-  const totalOutstanding        = Object.values(outstandingByBranch).reduce((s, v) => s + v, 0)
-  const branchesWithOutstanding = Object.values(outstandingByBranch).filter(v => v > 0).length
+  const filteredSummaries = useMemo(() => {
+    if (!summaries) return []
+    return summaries
+      .filter(b => branchFilter === 'all' || b.branchId === branchFilter)
+      .filter(b => !searchQuery || b.branchName.toLowerCase().includes(searchQuery.toLowerCase()))
+  }, [summaries, branchFilter, searchQuery])
 
-  const filteredBranches = useMemo(() => {
-    if (!branches) return []
-    return branches
-      .filter(b => branchFilter === 'all' || b._id === branchFilter)
-      .filter(b => !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  }, [branches, branchFilter, searchQuery])
-
-  // ── Context-aware export ──────────────────────────────────────────────────
-  // If a specific branch is selected, export only that branch (still multi-sheet
-  // in case we later add more sheets like "Summary"). If "all", export all.
   function handleExport() {
-    if (!branches || !allRecons || !allDeductions) return
-
-    if (branchFilter !== 'all') {
-      // Single branch selected
-      const branch = branches.find(b => b._id === branchFilter)
-      if (!branch) return
-      const safeName = branch.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()
-      exportBranchesExcel(
-        [branch],
-        allRecons,
-        allDeductions,
-        `reconciliation-${safeName}-${format(new Date(), 'yyyy-MM-dd')}.xls`
-      )
-    } else {
-      // All branches
-      exportBranchesExcel(
-        branches,
-        allRecons,
-        allDeductions,
-        `reconciliation-all-branches-${format(new Date(), 'yyyy-MM-dd')}.xls`
-      )
-    }
+    if (!summaries || !allRecons) return
+    const toExport = branchFilter !== 'all'
+      ? summaries.filter(b => b.branchId === branchFilter)
+      : summaries
+    const label = branchFilter !== 'all'
+      ? toExport[0]?.branchName.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'branch'
+      : 'all-branches'
+    exportBranchesExcel(toExport, allRecons, `reconciliation-${label}-${format(new Date(), 'yyyy-MM-dd')}.xls`)
   }
 
-  // Export button label reflects current view
   const exportLabel = useMemo(() => {
-    if (branchFilter !== 'all' && branches) {
-      const branch = branches.find(b => b._id === branchFilter)
-      return branch ? `Export ${branch.name}` : 'Export'
+    if (branchFilter !== 'all' && summaries) {
+      const branch = summaries.find(b => b.branchId === branchFilter)
+      return branch ? `Export ${branch.branchName}` : 'Export'
     }
     return 'Export All Branches'
-  }, [branchFilter, branches])
+  }, [branchFilter, summaries])
 
   return (
     <div className="space-y-6">
@@ -569,7 +539,7 @@ export default function AdminReconciliation() {
       <div className="grid grid-cols-3 gap-4">
         <Card className="p-5">
           <p className="text-xs text-muted-foreground mb-1">Total Branches</p>
-          <p className="text-3xl font-bold">{branches?.length ?? '—'}</p>
+          <p className="text-3xl font-bold">{summaries?.length ?? '—'}</p>
         </Card>
         <Card className={`p-5 ${branchesWithOutstanding > 0 ? 'border-red-200 bg-red-50/40 dark:bg-red-950/10' : ''}`}>
           <p className="text-xs text-muted-foreground mb-1">Branches w/ Outstanding</p>
@@ -603,8 +573,8 @@ export default function AdminReconciliation() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All branches</SelectItem>
-            {branches?.map(b => (
-              <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>
+            {summaries?.map(b => (
+              <SelectItem key={b.branchId} value={b.branchId}>{b.branchName}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -621,19 +591,18 @@ export default function AdminReconciliation() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredBranches.length === 0 ? (
+      ) : filteredSummaries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Building2 className="w-10 h-10 mb-3 opacity-20" />
           <p className="text-sm">No branches found.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredBranches.map(branch => (
+          {filteredSummaries.map(summary => (
             <BranchRow
-              key={branch._id}
-              branch={branch}
+              key={summary.branchId}
+              summary={summary}
               allRecons={allRecons ?? []}
-              allDeductions={allDeductions ?? []}
               historyFrom={historyFrom}
               historyTo={historyTo}
             />
