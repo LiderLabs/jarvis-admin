@@ -25,12 +25,21 @@ import {
   AlertCircle,
   Search,
   Download,
-  X,
   ArrowLeft,
 } from 'lucide-react'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface UnsettledOrder {
+  _id: string
+  orderNumber: string
+  customerName: string | null
+  customerPhoneNumber: string | null
+  finalPrice: number
+  serviceType: string | null
+  createdAt: number
+}
 
 interface BranchSummary {
   branchId: string
@@ -40,6 +49,7 @@ interface BranchSummary {
   totalSent: number
   totalDeducted: number
   outstanding: number
+  unsettledOrders: UnsettledOrder[]
   inProgressRecons: InProgressRecon[]
   allDeductions: Deduction[]
   lastActivityTs: number | null
@@ -97,6 +107,8 @@ function StatusBadge({ status }: { status: string }) {
 
 function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
 function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
+function fmtTime(ts: number) { return format(new Date(ts), 'h:mm a') }
+function fmtDay(ts: number)  { return format(new Date(ts), 'd MMM yyyy') }
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
 
@@ -159,7 +171,6 @@ function exportBranchesExcel(
 }
 
 // ─── Branch History Drawer ────────────────────────────────────────────────────
-// Full-screen overlay showing just the history for one branch.
 
 interface BranchHistoryDrawerProps {
   summary: BranchSummary
@@ -208,10 +219,7 @@ function BranchHistoryDrawer({ summary, allRecons, onClose }: BranchHistoryDrawe
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
-
-      {/* ── Sticky header ── */}
       <div className="shrink-0 border-b border-border bg-background px-4 sm:px-6 pt-4 pb-4 space-y-3">
-        {/* Row 1: back */}
         <button
           onClick={onClose}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -219,8 +227,6 @@ function BranchHistoryDrawer({ summary, allRecons, onClose }: BranchHistoryDrawe
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
-
-        {/* Row 2: title left, controls right */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">{summary.branchName}</h1>
@@ -240,10 +246,7 @@ function BranchHistoryDrawer({ summary, allRecons, onClose }: BranchHistoryDrawe
         </div>
       </div>
 
-      {/* ── Scrollable body — fills all remaining height ── */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
-
-        {/* Stat cards — stretch full width */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="p-5">
             <p className="text-xs font-medium text-muted-foreground mb-1">Sent (period)</p>
@@ -265,7 +268,6 @@ function BranchHistoryDrawer({ summary, allRecons, onClose }: BranchHistoryDrawe
           </Card>
         </div>
 
-        {/* Table — fills width */}
         {allEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 py-24 text-muted-foreground">
             <History className="w-10 h-10 mb-3 opacity-20" />
@@ -344,6 +346,7 @@ function BranchHistoryDrawer({ summary, allRecons, onClose }: BranchHistoryDrawe
     </div>
   )
 }
+
 // ─── Branch Row ───────────────────────────────────────────────────────────────
 
 interface BranchRowProps {
@@ -355,19 +358,19 @@ interface BranchRowProps {
 function BranchRow({ summary, allRecons, onViewHistory }: BranchRowProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const { outstanding, totalCollected, totalDeducted, inProgressRecons, allDeductions } = summary
+  const { outstanding, totalCollected, totalDeducted, inProgressRecons, allDeductions, unsettledOrders } = summary
   const hasActivity = allRecons.some(r => r.branchId === summary.branchId) || allDeductions.length > 0
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card shadow-sm">
       {/* ── Header row ── */}
-    <div
-  onClick={() => setExpanded(v => !v)}
-  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors text-left cursor-pointer"
-  role="button"
-  tabIndex={0}
-  onKeyDown={(e) => e.key === 'Enter' && setExpanded(v => !v)}
->
+      <div
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors text-left cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && setExpanded(v => !v)}
+      >
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-muted shrink-0">
           <Building2 className="w-4 h-4 text-muted-foreground" />
         </div>
@@ -379,7 +382,6 @@ function BranchRow({ summary, allRecons, onViewHistory }: BranchRowProps) {
           </p>
         </div>
 
-        {/* History button — stops propagation so it doesn't toggle expand */}
         <button
           onClick={(e) => { e.stopPropagation(); onViewHistory(summary) }}
           className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-xs font-semibold text-muted-foreground"
@@ -407,9 +409,9 @@ function BranchRow({ summary, allRecons, onViewHistory }: BranchRowProps) {
         <div className="shrink-0 text-muted-foreground">
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
-     </div>
+      </div>
 
-      {/* ── Expanded: Outstanding only ── */}
+      {/* ── Expanded panel ── */}
       {expanded && (
         <div className="border-t border-border bg-background p-5 space-y-5">
 
@@ -432,6 +434,61 @@ function BranchRow({ summary, allRecons, onViewHistory }: BranchRowProps) {
               <p className="text-[10px] text-muted-foreground mt-1">all time balance</p>
             </div>
           </div>
+
+          {/* Unsettled orders table */}
+          {unsettledOrders && unsettledOrders.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                Unsettled Cash Orders
+                <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-red-500 text-white text-xs font-bold">
+                  {unsettledOrders.length}
+                </span>
+              </p>
+              <div className="rounded-lg border border-red-200 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-red-50/60 dark:bg-red-950/20 border-b border-red-200">
+                      <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Order</th>
+                      <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Customer</th>
+                      <th className="text-left px-3 py-2 font-semibold text-muted-foreground hidden sm:table-cell">Service</th>
+                      <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Amount</th>
+                      <th className="text-right px-3 py-2 font-semibold text-muted-foreground hidden sm:table-cell">Date</th>
+                      <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unsettledOrders.map((order) => (
+                      <tr key={order._id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                        <td className="px-3 py-2 font-mono font-semibold text-primary">{order.orderNumber}</td>
+                        <td className="px-3 py-2">
+                          <p className="font-medium">{order.customerName || '—'}</p>
+                          {order.customerPhoneNumber && (
+                            <p className="text-muted-foreground">{order.customerPhoneNumber}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">{order.serviceType || '—'}</td>
+                        <td className="px-3 py-2 text-right font-bold">₵{(order.finalPrice ?? 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground hidden sm:table-cell">{fmtDay(order.createdAt)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">{fmtTime(order.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/40 border-t border-border">
+                      <td colSpan={3} className="px-3 py-2 font-semibold text-muted-foreground hidden sm:table-cell">
+                        Total ({unsettledOrders.length} orders)
+                      </td>
+                      <td colSpan={2} className="px-3 py-2 font-semibold text-muted-foreground sm:hidden">Total</td>
+                      <td className="px-3 py-2 text-right font-bold text-red-600">
+                        ₵{unsettledOrders.reduce((s, o) => s + (o.finalPrice ?? 0), 0).toFixed(2)}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Deductions */}
           {allDeductions.length > 0 && (
@@ -493,21 +550,6 @@ function BranchRow({ summary, allRecons, onViewHistory }: BranchRowProps) {
               </div>
             </div>
           )}
-
-          {inProgressRecons.length === 0 && outstanding === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <CheckCircle2 className="w-8 h-8 mb-2 text-green-500 opacity-60" />
-              <p className="text-sm">All cash is settled for this branch.</p>
-            </div>
-          )}
-
-          {inProgressRecons.length === 0 && outstanding > 0 && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <AlertCircle className="w-8 h-8 mb-2 text-red-400 opacity-70" />
-              <p className="text-sm font-bold text-red-600">{fmt(outstanding)} outstanding — no payment in progress</p>
-              <p className="text-xs mt-1 text-muted-foreground">The attendant at this branch needs to send the cash.</p>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -520,11 +562,9 @@ export default function AdminReconciliation() {
   const today = new Date()
   const [searchQuery, setSearchQuery]   = useState('')
   const [branchFilter, setBranchFilter] = useState('all')
-  // Date window for the "Total Collected" display — does NOT affect outstanding
   const [dateFrom, setDateFrom] = useState<Date>(startOfDay(today))
   const [dateTo, setDateTo]     = useState<Date>(endOfDay(today))
 
-  // Which branch's history drawer is open (null = none)
   const [historyBranch, setHistoryBranch] = useState<BranchSummary | null>(null)
 
   const summaries = useQuery(
@@ -549,7 +589,6 @@ export default function AdminReconciliation() {
     return summaries
       .filter(b => branchFilter === 'all' || b.branchId === branchFilter)
       .filter(b => !searchQuery || b.branchName.toLowerCase().includes(searchQuery.toLowerCase()))
-      // Branches with outstanding first, then settled, then no-activity
       .sort((a, b) => {
         if (a.outstanding > 0 && b.outstanding === 0) return -1
         if (a.outstanding === 0 && b.outstanding > 0) return 1
@@ -578,7 +617,6 @@ export default function AdminReconciliation() {
 
   return (
     <>
-      {/* History drawer — full-screen overlay for one branch */}
       {historyBranch && allRecons && (
         <BranchHistoryDrawer
           summary={historyBranch}
@@ -588,7 +626,6 @@ export default function AdminReconciliation() {
       )}
 
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Cash Reconciliation</h1>
@@ -608,7 +645,6 @@ export default function AdminReconciliation() {
           </Button>
         </div>
 
-        {/* Summary cards */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="p-5">
             <p className="text-xs text-muted-foreground mb-1">Total Branches</p>
@@ -628,7 +664,6 @@ export default function AdminReconciliation() {
           </Card>
         </div>
 
-        {/* Filters */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -652,7 +687,6 @@ export default function AdminReconciliation() {
             </SelectContent>
           </Select>
 
-          {/* Date range for "Total Collected" display (not outstanding) */}
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
@@ -660,7 +694,6 @@ export default function AdminReconciliation() {
           />
         </div>
 
-        {/* Branch list */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
