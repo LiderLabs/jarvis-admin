@@ -167,14 +167,12 @@ function WeeklyReportsModal({
   const weekNum  = getISOWeek(selectedWeek)
   const weekYear = getYear(selectedWeek)
 
-  // Sort by leaderboard before building rows
   const sortedStats = useMemo(() => sortByLeaderboard(weeklyStats), [weeklyStats])
 
   const branchRows = sortedStats.map((s: any, idx: number) => {
     const pct   = s.weeklyTarget > 0 ? (s.weeklyOrders / s.weeklyTarget) * 100 : null
     const hit   = pct !== null && pct >= 100
     const close = pct !== null && pct >= 75 && !hit
-    // Only assign medals to branches that have a target
     const medal = s.weeklyTarget > 0 && idx < 3 ? MEDALS[idx] : null
     return { ...s, pct, hit, close, medal }
   })
@@ -237,8 +235,6 @@ function WeeklyReportsModal({
           {/* ── This Week ── */}
           {activeTab === "current" && (
             <div className="p-6 space-y-5">
-
-              {/* Week picker */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <WeekPicker value={selectedWeek} onChange={setSelectedWeek} />
                 <div className="flex flex-wrap gap-2">
@@ -353,7 +349,6 @@ function WeeklyReportsModal({
           {/* ── Week History ── */}
           {activeTab === "history" && (
             <div className="p-6 space-y-5">
-
               <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
                 <p className="text-sm font-semibold text-foreground mb-0.5">How to read this</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -513,7 +508,6 @@ function WeeklyTargetCard({
   return (
     <div className={`border rounded-xl px-4 py-3 ${wrapColor} w-full`}>
       <div className="flex items-center gap-3">
-        {/* Rank / medal */}
         <div className="shrink-0 w-7 text-center">
           {medal ? (
             <span className="text-base leading-none">{medal}</span>
@@ -595,9 +589,13 @@ const AdminOverview = () => {
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
   const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
 
+  // ── KEY FIX: use the same payment stats source as the Payments page ─────────
+  // Previously the overview used dailyReports (submitted report snapshots) which
+  // diverged from the live payment totals shown on the Payments page. Now both
+  // pages read from getPaymentStats → consistent numbers everywhere.
   const selectedStats = useQuery(api.admin.getPaymentStats, {
     startDate: startDateStr,
-    endDate: endDateStr,
+    endDate:   endDateStr,
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
   }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {} }
 
@@ -607,16 +605,7 @@ const AdminOverview = () => {
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
   }) ?? { totalRevenue: 0 }
 
-  const weeklyStats  = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
-  const dailyReports = useQuery(
-    (api as any).dailyReports.getAll,
-    {
-      startDate: startDateStr,
-      endDate:   endDateStr,
-      ...(selectedBranch !== "all" ? { branchId: selectedBranch } : {}),
-      limit: 100,
-    }
-  ) ?? []
+  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
   const stats = useMemo(() => {
     const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
@@ -633,28 +622,14 @@ const AdminOverview = () => {
 
     const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
 
-    // Accumulate daily reports by date (fixes multi-branch double-count issue)
-    const reportAccumulator: Record<string, {
-      mobileMoney: number
-      cash: number
-      card: number
-      hasData: boolean
-    }> = {}
-
-    ;(dailyReports as any[]).forEach((r: any) => {
-      const dateStr = r.date
-      if (!reportAccumulator[dateStr]) {
-        reportAccumulator[dateStr] = { mobileMoney: 0, cash: 0, card: 0, hasData: false }
-      }
-      reportAccumulator[dateStr].mobileMoney += r.mobileMoneylAmount ?? 0
-      reportAccumulator[dateStr].cash        += r.cashAmount ?? 0
-      reportAccumulator[dateStr].card        += (r.cardAmount ?? 0) + (r.paystackAmount ?? 0)
-      reportAccumulator[dateStr].hasData      = true
-    })
-
+    // ── Revenue figures: always from live payment stats (same source as
+    // the Payments page) — no daily-report snapshot override ──────────────────
     const totalMobileMoney = (selectedStats as any)?.mobileMoneylAmount ?? 0
     const totalCard        = (selectedStats as any)?.cardAmount ?? 0
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
+    const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
+
+    // Split per-day using the byDay totals + payment-type ratios
     const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
     const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
     const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
@@ -662,53 +637,25 @@ const AdminOverview = () => {
 
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
 
-    let summaryMM      = 0
-    let summaryCard    = 0
-    let summaryCash    = 0
-    let summaryRevenue = 0
-
     const chartData = []
-
     for (let i = dDiff - 1; i >= 0; i--) {
-      const date    = subDays(dateTo, i)
-      const dateStr = format(date, "yyyy-MM-dd")
-      const key     = format(date, "MMM d")
+      const date      = subDays(dateTo, i)
+      const dateStr   = format(date, "yyyy-MM-dd")
+      const key       = format(date, "MMM d")
       const showLabel = (dDiff - 1 - i) % step === 0
 
-      const report = reportAccumulator[dateStr]
-
-      let mm: number, card: number, cash: number
-
-      if (report?.hasData) {
-        mm   = report.mobileMoney
-        card = report.card
-        cash = report.cash
-      } else {
-        const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
-          ? (selectedStats as any).byDay[dateStr]
-          : 0
-        mm   = Math.round(dayTotal * mmRatio   * 100) / 100
-        card = Math.round(dayTotal * cardRatio * 100) / 100
-        cash = Math.round(dayTotal * cashRatio * 100) / 100
-      }
-
-      summaryMM      += mm
-      summaryCard    += card
-      summaryCash    += cash
-      summaryRevenue += mm + card + cash
+      const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
+        ? (selectedStats as any).byDay[dateStr]
+        : 0
 
       chartData.push({
         date:        key,
         displayDate: showLabel ? key : "",
-        mobileMoney: mm,
-        card,
-        cash,
+        mobileMoney: Math.round(dayTotal * mmRatio   * 100) / 100,
+        card:        Math.round(dayTotal * cardRatio * 100) / 100,
+        cash:        Math.round(dayTotal * cashRatio * 100) / 100,
       })
     }
-
-    const selectedRevenue = summaryRevenue > 0
-      ? summaryRevenue
-      : ((selectedStats as any)?.totalRevenue ?? 0)
 
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
@@ -721,20 +668,19 @@ const AdminOverview = () => {
     return {
       selectedOrders:  selectedOrders.length,
       selectedRevenue,
-      totalMobileMoney: summaryMM,
-      totalCard:        summaryCard,
-      totalCash:        summaryCash,
+      totalMobileMoney,
+      totalCard,
+      totalCash,
       pendingOrders,
       completedInRange,
       revenueChange,
       ordersChange,
       chartData,
     }
-  }, [orders, last30Stats, selectedStats, dailyReports, dateFrom, dateTo])
+  }, [orders, last30Stats, selectedStats, dateFrom, dateTo])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
-  // Sort by leaderboard (highest % first, no-target branches last)
   const filteredWeeklyStats = useMemo(() => {
     const base = selectedBranch === "all"
       ? (weeklyStats as any[])
