@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Week Picker — navigate ISO weeks with arrows, no calendar popup needed
+// Week Picker
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeekPicker({
@@ -82,10 +82,33 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
   const weekStart = startOfISOWeek(selectedWeek);
   const weekEnd   = endOfISOWeek(selectedWeek);
 
-  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats, {
-    weekStart: weekStart.getTime(),
-    weekEnd: weekEnd.getTime(),
-  }) ?? [];
+  // ── KEY FIX: use UTC-aligned timestamps so they match the backend's
+  // getUtcDayWindow. For the current ISO week, pass NO args (identical to the
+  // dashboard query that shows the correct reset values). For historical weeks,
+  // pass UTC-midnight-aligned start/end so the backend window is exact.
+  const isCurrentWeek = isSameWeek(selectedWeek, new Date(), { weekStartsOn: 1 });
+
+  const weekStartUtcMs = Date.UTC(
+    weekStart.getFullYear(),
+    weekStart.getMonth(),
+    weekStart.getDate(),
+    0, 0, 0, 0,
+  );
+  const weekEndUtcMs = Date.UTC(
+    weekEnd.getFullYear(),
+    weekEnd.getMonth(),
+    weekEnd.getDate(),
+    23, 59, 59, 999,
+  );
+
+  const weeklyStats = useQuery(
+    (api as any).admin.getWeeklyOrderStats,
+    // For the current week: no args → backend uses its own UTC week window
+    // (same as the dashboard modal, guaranteed to show correct reset values).
+    // For past weeks: pass UTC-aligned boundaries.
+    isCurrentWeek ? {} : { weekStart: weekStartUtcMs, weekEnd: weekEndUtcMs },
+  ) ?? [];
+
   const trends = useQuery((api as any).analytics.getRevenueTrends, { period: 'weekly', days: 84 }) ?? [];
 
   const branchRows = useMemo(() => (weeklyStats as any[]).map((s: any) => {
@@ -181,6 +204,11 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
             <span className="font-medium text-foreground">W{weekNum} {weekYear}</span>
             <span>·</span>
             <span>{format(weekStart, 'EEEE, MMM d')} – {format(weekEnd, 'EEEE, MMM d')}</span>
+            {isCurrentWeek && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                Live
+              </span>
+            )}
           </div>
           {branchRows.length === 0 ? (
             <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -454,7 +482,6 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         const card         = (r.cardAmount || 0) + (r.paystackAmount || 0);
         const totalRevenue = cash + mobile + card;
 
-        // Token value = report tokens + unpaid orders' tokens (unpaid orders are excluded from report totals)
         const washerPrice  = r.washerPrice || 25;
         const dryerPrice   = r.dryerPrice  || 25;
         const reportDateStart = new Date(r.date + 'T00:00:00.000Z').getTime();
@@ -471,13 +498,10 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
                            + ((r.dryerTokensUsed  || 0) * dryerPrice)
                            + unpaidTokenValue;
 
-        // Unpaid: orders from this day not fully paid
         const unpaidAmt = dayOrders
           .filter((o: any) => o.paymentStatus !== 'paid')
           .reduce((s: number, o: any) => s + Math.max(0, (o.finalPrice || 0) - (o.amountPaid || 0)), 0);
 
-        // Outstanding Payment Received = payments received on this report date
-        // for orders created on PREVIOUS days (recovered outstanding)
         const outstandingReceived = r.outstandingRecovered || orders
           .filter((o: any) =>
             o.branchId === r.branchId &&
