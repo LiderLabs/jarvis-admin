@@ -589,10 +589,6 @@ const AdminOverview = () => {
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
   const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
 
-  // ── KEY FIX: use the same payment stats source as the Payments page ─────────
-  // Previously the overview used dailyReports (submitted report snapshots) which
-  // diverged from the live payment totals shown on the Payments page. Now both
-  // pages read from getPaymentStats → consistent numbers everywhere.
   const selectedStats = useQuery(api.admin.getPaymentStats, {
     startDate: startDateStr,
     endDate:   endDateStr,
@@ -622,14 +618,11 @@ const AdminOverview = () => {
 
     const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
 
-    // ── Revenue figures: always from live payment stats (same source as
-    // the Payments page) — no daily-report snapshot override ──────────────────
     const totalMobileMoney = (selectedStats as any)?.mobileMoneylAmount ?? 0
     const totalCard        = (selectedStats as any)?.cardAmount ?? 0
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
     const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
 
-    // Split per-day using the byDay totals + payment-type ratios
     const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
     const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
     const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
@@ -710,7 +703,7 @@ const AdminOverview = () => {
   return (
     <div className="space-y-4 pb-8">
 
-      {/* Modal */}
+      {/* Modal — still accessible if needed elsewhere */}
       {showWeeklyReports && (
         <WeeklyReportsModal
           weeklyStats={filteredWeeklyStats.length > 0 ? filteredWeeklyStats : weeklyStats as any[]}
@@ -755,7 +748,7 @@ const AdminOverview = () => {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Weekly Target Leaderboard */}
+        {/* Weekly Target Leaderboard — Weekly Reports button removed */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -765,23 +758,12 @@ const AdminOverview = () => {
                 </CardTitle>
                 <CardDescription className="text-xs">Ranked by completion % — highest to lowest</CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs px-2.5 gap-1.5"
-                  onClick={() => setShowWeeklyReports(true)}
-                >
-                  <BarChart2 className="w-3 h-3" />
-                  Weekly Reports
-                </Button>
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <Zap className="w-3 h-3 text-yellow-500" />
-                  <span className="text-xs">
-                    {filteredWeeklyStats.length}{" "}
-                    {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
-                  </span>
-                </div>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <Zap className="w-3 h-3 text-yellow-500" />
+                <span className="text-xs">
+                  {filteredWeeklyStats.length}{" "}
+                  {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
+                </span>
               </div>
             </div>
           </CardHeader>
