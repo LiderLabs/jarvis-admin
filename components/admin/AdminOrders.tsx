@@ -43,7 +43,7 @@ import {
   Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, addDays, subDays, isToday } from 'date-fns'
+import { format, addDays, subDays } from 'date-fns'
 
 const ORDERS_LIMIT = 100
 
@@ -81,12 +81,31 @@ function downloadCSV(rows: (string | number | null | undefined)[][], filename: s
   URL.revokeObjectURL(url)
 }
 
+/**
+ * Returns local-timezone day boundaries as UTC ms timestamps.
+ *
+ * The date input gives us a yyyy-MM-dd string. Parsing it as
+ * `new Date(str + 'T00:00:00')` (no trailing Z) gives us local midnight,
+ * which is what we want — orders' `createdAt` is `Date.now()` (UTC ms) on
+ * the server, so a local-midnight window correctly brackets the day.
+ */
+function getLocalDayBounds(dateStr: string): { dayStart: number; dayEnd: number } {
+  const start = new Date(dateStr + 'T00:00:00')
+  const end = new Date(dateStr + 'T00:00:00')
+  end.setDate(end.getDate() + 1)
+  return { dayStart: start.getTime(), dayEnd: end.getTime() }
+}
+
 const AdminOrders = () => {
   const { isAuthenticated } = useConvexAuth()
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+
+  // Keep date as a yyyy-MM-dd string — avoids all timezone/Date constructor issues
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(todayStr)
+
   const [selectedOrder, setSelectedOrder] = useState<Doc<'orders'> | null>(null)
   const [orderToUpdate, setOrderToUpdate] = useState<Doc<'orders'> | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Doc<'orders'> | null>(null)
@@ -101,11 +120,11 @@ const AdminOrders = () => {
   )
   const branchesList = branchesPages?.flat() || []
 
-  // ── Date-scoped query params ────────────────────────────────────────────────
-  // Pass the selected date to the backend so it can index-filter by timestamp.
-  // This means navigating to any past date will fetch that day's orders directly
-  // rather than relying on a rolling in-memory window that only covers recent data.
-  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd')
+  // Compute local-timezone-aware day boundaries from the date string
+  const { dayStart, dayEnd } = useMemo(
+    () => getLocalDayBounds(selectedDateStr),
+    [selectedDateStr]
+  )
 
   const queryArgs = isAuthenticated
     ? {
@@ -115,10 +134,8 @@ const AdminOrders = () => {
         ...(selectedStatus && selectedStatus !== 'all'
           ? { status: selectedStatus as OrderStatus }
           : {}),
-        // Pass date so backend can filter to the right day.
-        // If your backend doesn't support `date` yet, fall back to the
-        // client-side dayStart/dayEnd filter below — both approaches are safe.
-        date: selectedDateStr,
+        startDate: dayStart,
+        endDate: dayEnd,
       }
     : ('skip' as const)
 
@@ -143,22 +160,12 @@ const AdminOrders = () => {
   const isLoading =
     paginationStatus === 'LoadingFirstPage' || paginationStatus === 'LoadingMore'
 
-  // Client-side day boundary filter (guards against backends that ignore `date`)
-  const { dayStart, dayEnd } = useMemo(() => {
-    const d = new Date(selectedDate)
-    d.setHours(0, 0, 0, 0)
-    const dayStart = d.getTime()
-    const dayEnd = dayStart + 24 * 60 * 60 * 1000
-    return { dayStart, dayEnd }
-  }, [selectedDate])
-
-  const dayOrders = useMemo(() => {
-    // If the backend already filters by date the results will all fall within
-    // this window anyway; if not, this client-side pass catches stragglers.
-    return orders.filter(
-      (o) => o._creationTime >= dayStart && o._creationTime < dayEnd
-    )
-  }, [orders, dayStart, dayEnd])
+  // Client-side safety net: ensures only orders within the selected day are shown,
+  // even if the backend returns extras (e.g. due to cursor overlap).
+  const dayOrders = useMemo(
+    () => orders.filter((o) => o._creationTime >= dayStart && o._creationTime < dayEnd),
+    [orders, dayStart, dayEnd]
+  )
 
   const filteredOrders = useMemo(() => {
     return dayOrders.filter((order) => {
@@ -235,7 +242,7 @@ const AdminOrders = () => {
 
       downloadCSV(
         [headers, ...filteredOrders.map(buildRow)],
-        `orders-all-${format(selectedDate, 'yyyy-MM-dd')}.csv`
+        `orders-all-${selectedDateStr}.csv`
       )
 
       const ordersByBranch = new Map<string, { name: string; orders: any[] }>()
@@ -251,7 +258,7 @@ const AdminOrders = () => {
         for (const { name, orders: branchOrders } of ordersByBranch.values()) {
           downloadCSV(
             [headers, ...branchOrders.map(buildRow)],
-            `orders-${name.replace(/\s+/g, '-').toLowerCase()}-${format(selectedDate, 'yyyy-MM-dd')}.csv`
+            `orders-${name.replace(/\s+/g, '-').toLowerCase()}-${selectedDateStr}.csv`
           )
         }
         toast.success(
@@ -315,9 +322,20 @@ const AdminOrders = () => {
     }
   }
 
-  const goToPrevDay = () => setSelectedDate((d) => subDays(d, 1))
-  const goToNextDay = () => setSelectedDate((d) => addDays(d, 1))
-  const isSelectedToday = isToday(selectedDate)
+  const isSelectedToday = selectedDateStr === todayStr
+
+  const goToPrevDay = () => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    setSelectedDateStr(format(subDays(d, 1), 'yyyy-MM-dd'))
+  }
+
+  const goToNextDay = () => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    setSelectedDateStr(format(addDays(d, 1), 'yyyy-MM-dd'))
+  }
+
+  // Use noon to avoid any DST-related date shifts when formatting for display
+  const selectedDateForDisplay = new Date(selectedDateStr + 'T12:00:00')
 
   return (
     <div>
@@ -363,11 +381,10 @@ const AdminOrders = () => {
                 <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
                 <input
                   type="date"
-                  value={format(selectedDate, 'yyyy-MM-dd')}
-                  max={format(new Date(), 'yyyy-MM-dd')}
+                  value={selectedDateStr}
+                  max={todayStr}
                   onChange={(e) => {
-                    if (e.target.value)
-                      setSelectedDate(new Date(e.target.value + 'T12:00:00'))
+                    if (e.target.value) setSelectedDateStr(e.target.value)
                   }}
                   className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
                 />
@@ -377,7 +394,7 @@ const AdminOrders = () => {
                   variant="outline"
                   size="sm"
                   className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
-                  onClick={() => setSelectedDate(new Date())}
+                  onClick={() => setSelectedDateStr(todayStr)}
                 >
                   Today
                 </Button>
@@ -407,7 +424,7 @@ const AdminOrders = () => {
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-primary">{stats.total}</span>
                 <span className="text-xs text-muted-foreground">
-                  {isSelectedToday ? 'today' : format(selectedDate, 'MMM d')}
+                  {isSelectedToday ? 'today' : format(selectedDateForDisplay, 'MMM d')}
                 </span>
               </div>
             </CardContent>
