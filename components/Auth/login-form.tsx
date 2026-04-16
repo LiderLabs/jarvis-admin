@@ -81,7 +81,7 @@ export default function LoginForm() {
                             Welcome back
                           </h1>
                           <p className='text-sm text-muted-foreground'>
-                            Sign in to your WashLab admin account to continue
+                            Sign in to your Jarvis admin account to continue
                           </p>
                         </div>
 
@@ -282,7 +282,7 @@ export default function LoginForm() {
         {/* Footer */}
         <div className='p-8 text-center'>
           <p className='text-xs text-muted-foreground'>
-            © {new Date().getFullYear()} WashLab · Powered by Lider Technologies LTD
+            © {new Date().getFullYear()} Jarvis · Powered by Lider Technologies LTD
           </p>
         </div>
       </div>
@@ -291,7 +291,7 @@ export default function LoginForm() {
       <div className='hidden lg:block lg:w-1/2 relative overflow-hidden'>
         <Image
           src='/assets/stacked-clothes.jpg'
-          alt='WashLab laundry service'
+          alt='Jarvis Admin'
           fill
           className='object-cover'
           priority
