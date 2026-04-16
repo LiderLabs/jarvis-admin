@@ -593,7 +593,7 @@ const AdminOverview = () => {
     startDate: startDateStr,
     endDate:   endDateStr,
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
-  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {} }
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {}, byDayByMethod: {} }
 
   const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
@@ -623,10 +623,13 @@ const AdminOverview = () => {
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
     const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
 
-    const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
-    const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
-    const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
-    const cashRatio = liveTotalForProportion > 0 ? totalCash        / liveTotalForProportion : 1
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIX: Use byDayByMethod from the backend so each day shows its own real
+    // breakdown. This means report submissions NEVER change historical bars —
+    // each day's cash/MM/card values are stored against that day's payments,
+    // not derived from period-wide ratios that shift as new payments come in.
+    // ─────────────────────────────────────────────────────────────────────────
+    const byDayByMethod = (selectedStats as any)?.byDayByMethod ?? {}
 
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
 
@@ -637,16 +640,15 @@ const AdminOverview = () => {
       const key       = format(date, "MMM d")
       const showLabel = (dDiff - 1 - i) % step === 0
 
-      const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
-        ? (selectedStats as any).byDay[dateStr]
-        : 0
+      const dayMethods = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
 
       chartData.push({
         date:        key,
         displayDate: showLabel ? key : "",
-        mobileMoney: Math.round(dayTotal * mmRatio   * 100) / 100,
-        card:        Math.round(dayTotal * cardRatio * 100) / 100,
-        cash:        Math.round(dayTotal * cashRatio * 100) / 100,
+        // Each day gets its OWN actual figures — no ratio approximation
+        mobileMoney: Math.round((dayMethods.mobile_money ?? 0) * 100) / 100,
+        card:        Math.round((dayMethods.card ?? 0) * 100) / 100,
+        cash:        Math.round((dayMethods.cash ?? 0) * 100) / 100,
       })
     }
 
@@ -703,7 +705,7 @@ const AdminOverview = () => {
   return (
     <div className="space-y-4 pb-8">
 
-      {/* Modal — still accessible if needed elsewhere */}
+      {/* Modal */}
       {showWeeklyReports && (
         <WeeklyReportsModal
           weeklyStats={filteredWeeklyStats.length > 0 ? filteredWeeklyStats : weeklyStats as any[]}
@@ -748,7 +750,7 @@ const AdminOverview = () => {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Weekly Target Leaderboard — Weekly Reports button removed */}
+        {/* Weekly Target Leaderboard */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
