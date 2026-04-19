@@ -15,8 +15,8 @@ import {
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
 import {
-  format, subDays, getISOWeek, getYear,
-  startOfISOWeek, endOfISOWeek, addWeeks, subWeeks, isSameWeek,
+  format, subDays, getYear,
+  startOfWeek, endOfWeek, addWeeks, subWeeks, isSameWeek,
 } from "date-fns"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -24,7 +24,20 @@ import {
 } from "recharts"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Week Picker
+// Sunday-start week helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEK_OPTS = { weekStartsOn: 0 } as const // 0 = Sunday
+
+function getSundayWeekNumber(date: Date): number {
+  const jan1 = new Date(date.getFullYear(), 0, 1)
+  const startOfJan1Week = startOfWeek(jan1, WEEK_OPTS)
+  const diff = startOfWeek(date, WEEK_OPTS).getTime() - startOfJan1Week.getTime()
+  return Math.round(diff / (7 * 24 * 60 * 60 * 1000)) + 1
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week Picker — Sunday-start
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeekPicker({
@@ -35,16 +48,16 @@ function WeekPicker({
   onChange: (weekStart: Date) => void
 }) {
   const now        = new Date()
-  const isThisWeek = isSameWeek(value, now, { weekStartsOn: 1 })
-  const weekNum    = getISOWeek(value)
-  const weekYear   = getYear(value)
-  const weekStart  = startOfISOWeek(value)
-  const weekEnd    = endOfISOWeek(value)
+  const isThisWeek = isSameWeek(value, now, WEEK_OPTS)
+  const weekNum    = getSundayWeekNumber(value)
+  const weekYear   = startOfWeek(value, WEEK_OPTS).getFullYear()
+  const weekStart  = startOfWeek(value, WEEK_OPTS)
+  const weekEnd    = endOfWeek(value, WEEK_OPTS)
 
-  const prev = () => onChange(startOfISOWeek(subWeeks(value, 1)))
+  const prev = () => onChange(startOfWeek(subWeeks(value, 1), WEEK_OPTS))
   const next = () => {
     if (isThisWeek) return
-    onChange(startOfISOWeek(addWeeks(value, 1)))
+    onChange(startOfWeek(addWeeks(value, 1), WEEK_OPTS))
   }
 
   return (
@@ -164,8 +177,8 @@ function WeeklyReportsModal({
     days: 84,
   }) ?? []
 
-  const weekNum  = getISOWeek(selectedWeek)
-  const weekYear = getYear(selectedWeek)
+  const weekNum  = getSundayWeekNumber(selectedWeek)
+  const weekYear = startOfWeek(selectedWeek, WEEK_OPTS).getFullYear()
 
   const sortedStats = useMemo(() => sortByLeaderboard(weeklyStats), [weeklyStats])
 
@@ -205,7 +218,7 @@ function WeeklyReportsModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-foreground">Weekly Reports</h2>
-              <p className="text-xs text-muted-foreground">Order targets &amp; performance history</p>
+              <p className="text-xs text-muted-foreground">Order targets &amp; performance history · Sun – Sat</p>
             </div>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
@@ -341,7 +354,7 @@ function WeeklyReportsModal({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Ranked by completion % — highest to lowest. Navigate weeks using the arrows above.
+                Ranked by completion % — highest to lowest. Week runs Sunday – Saturday.
               </p>
             </div>
           )}
@@ -352,7 +365,7 @@ function WeeklyReportsModal({
               <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
                 <p className="text-sm font-semibold text-foreground mb-0.5">How to read this</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Each row is one complete ISO week (Mon – Sun), sorted newest first.
+                  Each row is one complete week (Sun – Sat), sorted newest first.
                   <strong className="text-foreground"> vs Avg</strong> compares that week against the average of all
                   completed weeks shown. The current week is marked "In Progress" since it isn't finished yet.
                 </p>
@@ -384,7 +397,7 @@ function WeeklyReportsModal({
                     <thead>
                       <tr className="bg-muted/40 border-b border-border">
                         <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Week</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Dates</th>
+                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Sun – Sat</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Orders</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Revenue</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">vs Avg</th>
@@ -403,9 +416,9 @@ function WeeklyReportsModal({
                           const [wPart, yPart] = (r.period as string).split(" ")
                           const wn = parseInt(wPart.replace("W", ""))
                           const yr = parseInt(yPart)
-                          const jan4 = new Date(yr, 0, 4)
-                          const wStart = startOfISOWeek(new Date(jan4.getTime() + (wn - 1) * 7 * 86400000))
-                          const wEnd   = endOfISOWeek(wStart)
+                          const jan1   = new Date(yr, 0, 1)
+                          const wStart = startOfWeek(new Date(jan1.getTime() + (wn - 1) * 7 * 86400000), WEEK_OPTS)
+                          const wEnd   = endOfWeek(wStart, WEEK_OPTS)
                           weekRangeLabel = `${format(wStart, "MMM d")} – ${format(wEnd, "MMM d")}`
                         } catch {}
 
@@ -623,12 +636,6 @@ const AdminOverview = () => {
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
     const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FIX: Use byDayByMethod from the backend so each day shows its own real
-    // breakdown. This means report submissions NEVER change historical bars —
-    // each day's cash/MM/card values are stored against that day's payments,
-    // not derived from period-wide ratios that shift as new payments come in.
-    // ─────────────────────────────────────────────────────────────────────────
     const byDayByMethod = (selectedStats as any)?.byDayByMethod ?? {}
 
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
@@ -645,7 +652,6 @@ const AdminOverview = () => {
       chartData.push({
         date:        key,
         displayDate: showLabel ? key : "",
-        // Each day gets its OWN actual figures — no ratio approximation
         mobileMoney: Math.round((dayMethods.mobile_money ?? 0) * 100) / 100,
         card:        Math.round((dayMethods.card ?? 0) * 100) / 100,
         cash:        Math.round((dayMethods.cash ?? 0) * 100) / 100,
@@ -758,14 +764,24 @@ const AdminOverview = () => {
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Target className="w-4 h-4" /> Weekly Order Target
                 </CardTitle>
-                <CardDescription className="text-xs">Ranked by completion % — highest to lowest</CardDescription>
+                <CardDescription className="text-xs">Ranked by completion % — Sun to Sat</CardDescription>
               </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Zap className="w-3 h-3 text-yellow-500" />
-                <span className="text-xs">
-                  {filteredWeeklyStats.length}{" "}
-                  {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
-                </span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <Zap className="w-3 h-3 text-yellow-500" />
+                  <span className="text-xs">
+                    {filteredWeeklyStats.length}{" "}
+                    {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowWeeklyReports(true)}
+                >
+                  <BarChart2 className="w-3 h-3 mr-1" /> Details
+                </Button>
               </div>
             </div>
           </CardHeader>
