@@ -27,7 +27,7 @@ import {
   Download,
   ArrowLeft,
 } from 'lucide-react'
-import { format, subDays, startOfDay, endOfDay } from 'date-fns'
+import { format, subDays } from 'date-fns'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,8 +107,6 @@ function StatusBadge({ status }: { status: string }) {
 
 function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
 function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
-function fmtTime(ts: number) { return format(new Date(ts), 'h:mm a') }
-function fmtDay(ts: number)  { return format(new Date(ts), 'd MMM yyyy') }
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
 
@@ -137,7 +135,7 @@ function exportBranchesExcel(
     <tr>
       <td style="font-weight:bold">Total Collected</td><td>₵${summary.totalCollectedAllTime.toFixed(2)}</td>
       <td style="font-weight:bold">Total Sent</td><td>₵${summary.totalSent.toFixed(2)}</td>
-      <td style="font-weight:bold">Total Deducted</td><td>₵${summary.totalDeducted.toFixed(2)}</td>
+      <td style="font-weight:bold">Cash Used</td><td>₵${summary.totalDeducted.toFixed(2)}</td>
       <td style="font-weight:bold">Outstanding</td><td>₵${summary.outstanding.toFixed(2)}</td>
     </tr>
     <tr></tr>
@@ -185,13 +183,12 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
   const [from, setFrom] = useState<Date>(initialFrom)
   const [to, setTo]     = useState<Date>(initialTo)
 
-  // Use UTC midnight boundaries to match how backend stores timestamps
   const fromTs = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
   const toTs   = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) + 24 * 60 * 60 * 1000 - 1
 
-  const historyRecons = allRecons
+  // ALL recons for this branch (not just completed) — so pending/processing show too
+  const branchRecons = allRecons
     .filter(r => String(r.branchId) === String(summary.branchId))
-    .filter(r => r.status === 'completed' || r.status === 'failed')
     .filter(r => r.createdAt >= fromTs && r.createdAt <= toTs)
     .sort((a, b) => b.createdAt - a.createdAt)
 
@@ -200,16 +197,20 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
     .filter(d => d.createdAt >= fromTs && d.createdAt <= toTs)
     .sort((a, b) => b.createdAt - a.createdAt)
 
-  const historySentTotal = historyRecons
+  // Sent total = only completed recons in the period
+  const historySentTotal = branchRecons
     .filter(r => r.status === 'completed')
     .reduce((s, r) => s + r.amountSent, 0)
+
+  // Cash used total in the period
+  const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
 
   type HistoryEvent =
     | { type: 'sent'; data: Reconciliation }
     | { type: 'deduction'; data: Deduction }
 
   const allEvents: HistoryEvent[] = [
-    ...historyRecons.map(r => ({ type: 'sent' as const, data: r })),
+    ...branchRecons.map(r => ({ type: 'sent' as const, data: r })),
     ...branchDeductions.map(d => ({ type: 'deduction' as const, data: d })),
   ].sort((a, b) => b.data.createdAt - a.data.createdAt)
 
@@ -255,10 +256,14 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
         {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Sent (period)</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Sent </p>
             <p className="text-2xl font-bold text-green-600">{fmt(historySentTotal)}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used </p>
+            <p className="text-2xl font-bold text-orange-600">{fmt(historyCashUsedTotal)}</p>
           </Card>
           <Card className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
@@ -269,7 +274,7 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
               ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
               : 'border-green-200 bg-green-50 dark:bg-green-950/20'
           }`}>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding (all time)</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding </p>
             <p className={`text-2xl font-bold ${summary.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
               {fmt(summary.outstanding)}
             </p>
@@ -417,20 +422,12 @@ export default function AdminCashReconciliationPage() {
         <p className="text-sm text-muted-foreground mt-0.5">All-time outstanding per branch</p>
       </div>
 
-      {/* Totals */}
+      {/* Totals — only the 2 key numbers: Collected and Outstanding */}
       {totals && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Collected</p>
             <p className="text-2xl font-bold">{fmt(totals.collected)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Total Sent</p>
-            <p className="text-2xl font-bold text-green-600">{fmt(totals.sent)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Total Deducted</p>
-            <p className="text-2xl font-bold text-orange-600">{fmt(totals.deducted)}</p>
           </Card>
           <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Outstanding</p>
@@ -491,7 +488,7 @@ export default function AdminCashReconciliationPage() {
             const isOpen = expanded === branch.branchId
             return (
               <Card key={branch.branchId} className="overflow-hidden">
-                {/* FIX: was <button> which caused nested button hydration error — now a <div> with cursor-pointer */}
+                {/* Branch row — only shows name + outstanding status + History button */}
                 <div
                   className="w-full text-left px-4 sm:px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer"
                   onClick={() => setExpanded(isOpen ? null : branch.branchId)}
@@ -519,13 +516,7 @@ export default function AdminCashReconciliationPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                      <span>Collected: <span className="font-medium text-foreground">{fmt(branch.totalCollectedAllTime)}</span></span>
-                      <span>Sent: <span className="font-medium text-green-600">{fmt(branch.totalSent)}</span></span>
-                      {branch.totalDeducted > 0 && (
-                        <span>Deducted: <span className="font-medium text-orange-600">{fmt(branch.totalDeducted)}</span></span>
-                      )}
-                    </div>
+                    {/* REMOVED: the Collected / Sent / Deducted line from the branch row */}
                   </div>
                   <Button
                     variant="ghost"
@@ -538,7 +529,7 @@ export default function AdminCashReconciliationPage() {
                   </Button>
                 </div>
 
-                {/* Expanded detail */}
+                {/* Expanded detail — only Unsettled Cash Orders + In Progress */}
                 {isOpen && (
                   <div className="border-t border-border px-4 sm:px-5 py-4 space-y-4 bg-muted/10">
 
@@ -585,28 +576,6 @@ export default function AdminCashReconciliationPage() {
                       </div>
                     )}
 
-                    {/* Cash used / deductions */}
-                    {branch.allDeductions.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cash Used</p>
-                        <div className="space-y-1.5">
-                          {branch.allDeductions.map(d => (
-                            <div key={d._id} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-orange-50/60 dark:bg-orange-950/10 border border-orange-200">
-                              <div>
-                                <p className="font-medium">{d.reason}</p>
-                                <p className="text-xs text-muted-foreground">{fmtDate(d.createdAt)}</p>
-                              </div>
-                              <span className="font-bold text-orange-600">{fmt(d.amount)}</span>
-                            </div>
-                          ))}
-                          <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border px-1">
-                            <span className="text-muted-foreground">Total deducted</span>
-                            <span className="text-orange-600">{fmt(branch.totalDeducted)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     {/* In-progress recons */}
                     {branch.inProgressRecons.length > 0 && (
                       <div>
@@ -629,7 +598,7 @@ export default function AdminCashReconciliationPage() {
                     )}
 
                     {/* Nothing to show */}
-                    {branch.unsettledOrders.length === 0 && branch.allDeductions.length === 0 && branch.inProgressRecons.length === 0 && (
+                    {branch.unsettledOrders.length === 0 && branch.inProgressRecons.length === 0 && (
                       <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 py-2">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
                         All cash has been reconciled for this branch.
