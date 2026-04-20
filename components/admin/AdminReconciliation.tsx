@@ -423,15 +423,31 @@ export default function AdminCashReconciliationPage() {
       </div>
 
       {/* Totals — only the 2 key numbers: Collected and Outstanding */}
+    {/* Date picker for period */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground font-medium">Period:</span>
+        <DateRangePicker
+          from={from}
+          to={to}
+          onChange={(f, t) => { setFrom(f); setTo(t) }}
+        />
+        <span className="text-xs text-muted-foreground">
+          {format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}
+        </span>
+      </div>
+
+      {/* Totals — only the 2 key numbers: Collected and Outstanding */}
       {totals && (
         <div className="grid grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Collected</p>
             <p className="text-2xl font-bold">{fmt(totals.collected)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}</p>
           </Card>
-          <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
+         <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Outstanding</p>
             <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(totals.outstanding)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}</p>
           </Card>
         </div>
       )}
