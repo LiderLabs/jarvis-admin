@@ -136,7 +136,7 @@ async function exportBranchesExcel(
 
     const rows: any[][] = [
       [`${summary.branchName} — Cash Reconciliation`],
-      ['Total Collected', `GHS ${summary.totalCollectedAllTime.toFixed(2)}`, 'Total Sent', `GHS ${summary.totalSent.toFixed(2)}`, 'Cash Used', `GHS ${summary.totalDeducted.toFixed(2)}`, 'Outstanding', `GHS ${summary.outstanding.toFixed(2)}`],
+      ['Total Collected', `GHS ${summary.totalCollected.toFixed(2)}`, 'Total Sent', `GHS ${summary.totalSent.toFixed(2)}`, 'Cash Used', `GHS ${summary.totalDeducted.toFixed(2)}`, 'Outstanding', `GHS ${summary.outstanding.toFixed(2)}`],
       [],
       ['Date', 'Type', 'Detail', 'MoMo Number', 'Amount (GHS)', 'Status'],
     ]
@@ -421,7 +421,7 @@ export default function AdminCashReconciliationPage() {
   const totals = useMemo(() => {
     if (!summaries) return null
     return {
-      collected: summaries.reduce((s, b) => s + b.totalCollectedAllTime, 0),
+      collected: summaries.reduce((s, b) => s + b.totalCollected, 0),
       outstanding: filteredSummaries.reduce((s, b) => s + b.outstanding, 0),
     }
   }, [summaries, filteredSummaries])
