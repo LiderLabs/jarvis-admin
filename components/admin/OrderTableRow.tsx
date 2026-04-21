@@ -62,7 +62,6 @@ export const OrderTableRow = ({
       {/* Order Number */}
       <TableCell className="font-medium whitespace-nowrap">
         <div className="flex items-center gap-2">
-          <Package className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="min-w-0">{order.orderNumber}</span>
           <button
             onClick={handleCopyOrderNumber}
@@ -81,7 +80,6 @@ export const OrderTableRow = ({
       {/* Customer */}
       <TableCell className="whitespace-nowrap">
         <div className="flex items-center gap-2 min-w-0">
-          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <div className="flex flex-col min-w-0">
             {customerName && (
               <span className="text-sm font-medium text-foreground truncate max-w-[160px]">
@@ -179,7 +177,6 @@ export const OrderTableRow = ({
       {/* Date */}
       <TableCell className="whitespace-nowrap">
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5 shrink-0" />
           <span>{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
         </div>
       </TableCell>
