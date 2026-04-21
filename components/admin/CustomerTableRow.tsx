@@ -23,7 +23,6 @@ import {
   Trash2,
   Phone,
   Mail,
-  ShoppingBag,
   Award,
 } from "lucide-react"
 import { format } from "date-fns"
@@ -179,7 +178,7 @@ export const CustomerTableRow = ({
       {/* Orders */}
       <TableCell>
         <div className="flex items-center gap-2">
-          <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+          
           <span className="text-sm">{customer.orderCount || 0}</span>
         </div>
       </TableCell>

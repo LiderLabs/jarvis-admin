@@ -541,8 +541,8 @@ const AdminStaff = () => {
                           <div>
                             <p className='font-semibold text-foreground'>{attendant.name}</p>
                             <div className='flex flex-col gap-0.5 text-sm text-muted-foreground mt-0.5'>
-                              <span className='flex items-center gap-1'><Mail className='w-3 h-3' />{attendant.email}</span>
-                              <span className='flex items-center gap-1'><Phone className='w-3 h-3' />{attendant.phoneNumber}</span>
+                              <span className='flex items-center gap-1'>{attendant.email}</span>
+                              <span className='flex items-center gap-1'>{attendant.phoneNumber}</span>
                             </div>
                           </div>
                         </div>
@@ -551,7 +551,6 @@ const AdminStaff = () => {
                       {/* Home branch */}
                       <td className='p-4 text-foreground text-nowrap'>
                         <div className='flex items-center gap-1.5'>
-                          <Building2 className='w-3.5 h-3.5 text-muted-foreground' />
                           {getBranchName(attendant.branchId)}
                         </div>
                       </td>

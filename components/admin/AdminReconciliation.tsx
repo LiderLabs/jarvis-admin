@@ -17,7 +17,6 @@ import { DateRangePicker } from '@/components/ui/DateRangePicker'
 import {
   ChevronDown,
   ChevronRight,
-  Banknote,
   CheckCircle2,
   Loader2,
   Building2,
@@ -108,63 +107,72 @@ function StatusBadge({ status }: { status: string }) {
 function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
 function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
 
-// ─── Excel export ─────────────────────────────────────────────────────────────
+// ─── Excel export (true multi-sheet .xlsx via xlsx npm package) ──────────────
 
-function exportBranchesExcel(
+async function exportBranchesExcel(
   summaries: BranchSummary[],
   allRecons: Reconciliation[],
+  allDeductions: Deduction[],
+  sinceTs: number,
+  untilTs: number,
   filename: string
 ) {
-  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-    xmlns:x="urn:schemas-microsoft-com:office:excel"
-    xmlns="http://www.w3.org/TR/REC-html40">
-  <head><meta charset="UTF-8">
-  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>`
-  for (const s of summaries) {
-    const safeName = s.branchName.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
-    html += `<x:ExcelWorksheet><x:Name>${safeName}</x:Name><x:WorksheetOptions><x:Selected/></x:WorksheetOptions></x:ExcelWorksheet>`
-  }
-  html += `</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>`
+  // Use the xlsx npm package (install with: npm install xlsx)
+  const XLSX = (await import('xlsx'))
+  const wb = XLSX.utils.book_new()
+
   for (const summary of summaries) {
-    const safeName = summary.branchName.replace(/[<>:"/\\|?*[\]]/g, '_').slice(0, 31)
+    const sheetName = summary.branchName.replace(/[\/:*?[\]]/g, '_').slice(0, 31)
+
     const recons = allRecons
       .filter(r => String(r.branchId) === String(summary.branchId))
+      .filter(r => r.createdAt >= sinceTs && r.createdAt <= untilTs)
       .sort((a, z) => z.createdAt - a.createdAt)
-    html += `<table x:Name="${safeName}">
-    <tr><td colspan="6" style="font-size:14px;font-weight:bold;background:#e8f0fe;padding:8px">${summary.branchName} — Cash Reconciliation</td></tr>
-    <tr>
-      <td style="font-weight:bold">Total Collected</td><td>₵${summary.totalCollectedAllTime.toFixed(2)}</td>
-      <td style="font-weight:bold">Total Sent</td><td>₵${summary.totalSent.toFixed(2)}</td>
-      <td style="font-weight:bold">Cash Used</td><td>₵${summary.totalDeducted.toFixed(2)}</td>
-      <td style="font-weight:bold">Outstanding</td><td>₵${summary.outstanding.toFixed(2)}</td>
-    </tr>
-    <tr></tr>
-    <tr style="background:#dbeafe;font-weight:bold">
-      <td>Date</td><td>Type</td><td>Detail</td><td>MoMo Number</td><td>Amount (₵)</td><td>Status</td>
-    </tr>`
+
+    const deductions = allDeductions
+      .filter(d => String((d as any).branchId) === String(summary.branchId))
+      .filter(d => d.createdAt >= sinceTs && d.createdAt <= untilTs)
+      .sort((a, z) => z.createdAt - a.createdAt)
+
+    const rows: any[][] = [
+      [`${summary.branchName} — Cash Reconciliation`],
+      ['Total Collected', `GHS ${summary.totalCollectedAllTime.toFixed(2)}`, 'Total Sent', `GHS ${summary.totalSent.toFixed(2)}`, 'Cash Used', `GHS ${summary.totalDeducted.toFixed(2)}`, 'Outstanding', `GHS ${summary.outstanding.toFixed(2)}`],
+      [],
+      ['Date', 'Type', 'Detail', 'MoMo Number', 'Amount (GHS)', 'Status'],
+    ]
+
     for (const r of recons) {
-      html += `<tr>
-        <td>${fmtDate(r.createdAt)}</td><td>Sent</td>
-        <td>${r.orderCount} cash order${r.orderCount !== 1 ? 's' : ''}</td>
-        <td>${r.senderMomoNumber}</td>
-        <td>${Math.abs(r.amountSent).toFixed(2)}</td>
-        <td>${r.status.charAt(0).toUpperCase() + r.status.slice(1)}</td>
-      </tr>`
+      rows.push([
+        fmtDate(r.createdAt),
+        'Sent',
+        `${r.orderCount} cash order${r.orderCount !== 1 ? 's' : ''}`,
+        r.senderMomoNumber,
+        Math.abs(r.amountSent),
+        r.status.charAt(0).toUpperCase() + r.status.slice(1),
+      ])
     }
-    for (const d of summary.allDeductions) {
-      html += `<tr>
-        <td>${fmtDate(d.createdAt)}</td><td>Cash Used</td>
-        <td>${d.reason}</td><td>—</td>
-        <td>${Math.abs(d.amount).toFixed(2)}</td><td>Applied</td>
-      </tr>`
+
+    for (const d of deductions) {
+      rows.push([fmtDate(d.createdAt), 'Cash Used', d.reason, '—', Math.abs(d.amount), 'Applied'])
     }
-    html += `</table>`
+
+    if (recons.length === 0 && deductions.length === 0) {
+      rows.push(['No transactions in this period.'])
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 12 }]
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
   }
-  html += `</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+
+  // Write and trigger download
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbout], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
+  a.href = url
+  a.download = filename.replace(/\.xls$/, '.xlsx')
+  a.click()
   URL.revokeObjectURL(url)
 }
 
@@ -183,10 +191,9 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
   const [from, setFrom] = useState<Date>(initialFrom)
   const [to, setTo]     = useState<Date>(initialTo)
 
-  const fromTs = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
-  const toTs   = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) + 24 * 60 * 60 * 1000 - 1
+  const fromTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
+  const toTs   = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
 
-  // ALL recons for this branch (not just completed) — so pending/processing show too
   const branchRecons = allRecons
     .filter(r => String(r.branchId) === String(summary.branchId))
     .filter(r => r.createdAt >= fromTs && r.createdAt <= toTs)
@@ -197,12 +204,10 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
     .filter(d => d.createdAt >= fromTs && d.createdAt <= toTs)
     .sort((a, b) => b.createdAt - a.createdAt)
 
-  // Sent total = only completed recons in the period
   const historySentTotal = branchRecons
     .filter(r => r.status === 'completed')
     .reduce((s, r) => s + r.amountSent, 0)
 
-  // Cash used total in the period
   const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
 
   type HistoryEvent =
@@ -214,10 +219,13 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
     ...branchDeductions.map(d => ({ type: 'deduction' as const, data: d })),
   ].sort((a, b) => b.data.createdAt - a.data.createdAt)
 
-  function handleExport() {
-    exportBranchesExcel(
+  async function handleExport() {
+    await exportBranchesExcel(
       [summary],
       allRecons,
+      allDeductions,
+      fromTs,
+      toTs,
       `reconciliation-${summary.branchName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.xls`
     )
   }
@@ -258,11 +266,11 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Sent </p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Sent</p>
             <p className="text-2xl font-bold text-green-600">{fmt(historySentTotal)}</p>
           </Card>
           <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used </p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used</p>
             <p className="text-2xl font-bold text-orange-600">{fmt(historyCashUsedTotal)}</p>
           </Card>
           <Card className="p-4">
@@ -274,7 +282,7 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
               ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
               : 'border-green-200 bg-green-50 dark:bg-green-950/20'
           }`}>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding </p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding</p>
             <p className={`text-2xl font-bold ${summary.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
               {fmt(summary.outstanding)}
             </p>
@@ -360,13 +368,14 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 export default function AdminCashReconciliationPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
-  const [from, setFrom] = useState<Date>(subDays(new Date(), 30))
+  const [from, setFrom] = useState<Date>(new Date())
   const [to, setTo]     = useState<Date>(new Date())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [historyBranch, setHistoryBranch] = useState<BranchSummary | null>(null)
 
-  const sinceTs = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
-  const untilTs = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) + 24 * 60 * 60 * 1000 - 1
+  // Use local midnight so the date filter matches the local timezone the orders were created in
+  const sinceTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
+  const untilTs = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
 
   const summaries: BranchSummary[] | undefined = useQuery(
     (api as any).cashReconciliation.getBranchCashSummariesForAdmin,
@@ -379,9 +388,27 @@ export default function AdminCashReconciliationPage() {
     (api as any).cashReconciliation.getAllDeductionsForAdmin
   )
 
-  const filtered = useMemo(() => {
+  // For each branch, filter unsettled orders to only those within the date period
+  const filteredSummaries = useMemo(() => {
     if (!summaries) return []
     return summaries
+      .map(s => {
+        const periodOrders = s.unsettledOrders.filter(
+          o => o.createdAt >= sinceTs && o.createdAt <= untilTs
+        )
+        const periodOutstanding = periodOrders.reduce((sum, o) => sum + o.finalPrice, 0)
+        return {
+          ...s,
+          unsettledOrders: periodOrders,
+          outstanding: periodOutstanding,
+        }
+      })
+      // Only show branches that actually have outstanding orders in this period
+      .filter(s => s.outstanding > 0)
+  }, [summaries, sinceTs, untilTs])
+
+  const filtered = useMemo(() => {
+    return filteredSummaries
       .filter(s => {
         if (search && !s.branchName.toLowerCase().includes(search.toLowerCase())) return false
         if (filter === 'outstanding') return s.outstanding > 0
@@ -389,17 +416,26 @@ export default function AdminCashReconciliationPage() {
         return true
       })
       .sort((a, b) => b.outstanding - a.outstanding)
-  }, [summaries, search, filter])
+  }, [filteredSummaries, search, filter])
 
   const totals = useMemo(() => {
     if (!summaries) return null
     return {
       collected: summaries.reduce((s, b) => s + b.totalCollectedAllTime, 0),
-      sent: summaries.reduce((s, b) => s + b.totalSent, 0),
-      deducted: summaries.reduce((s, b) => s + b.totalDeducted, 0),
-      outstanding: summaries.reduce((s, b) => s + b.outstanding, 0),
+      outstanding: filteredSummaries.reduce((s, b) => s + b.outstanding, 0),
     }
-  }, [summaries])
+  }, [summaries, filteredSummaries])
+
+  // Date range of outstanding orders within the chosen period
+  const outstandingDateRange = useMemo(() => {
+    const allUnsettled = filteredSummaries.flatMap(s => s.unsettledOrders)
+    if (allUnsettled.length === 0) return null
+    const timestamps = allUnsettled.map(o => o.createdAt)
+    return {
+      earliest: Math.min(...timestamps),
+      latest: Math.max(...timestamps),
+    }
+  }, [filteredSummaries])
 
   if (historyBranch) {
     return (
@@ -422,8 +458,7 @@ export default function AdminCashReconciliationPage() {
         <p className="text-sm text-muted-foreground mt-0.5">All-time outstanding per branch</p>
       </div>
 
-      {/* Totals — only the 2 key numbers: Collected and Outstanding */}
-    {/* Date picker for period */}
+      {/* Date picker for period */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground font-medium">Period:</span>
         <DateRangePicker
@@ -431,23 +466,25 @@ export default function AdminCashReconciliationPage() {
           to={to}
           onChange={(f, t) => { setFrom(f); setTo(t) }}
         />
-        <span className="text-xs text-muted-foreground">
-          {format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}
-        </span>
       </div>
 
-      {/* Totals — only the 2 key numbers: Collected and Outstanding */}
+      {/* Totals */}
       {totals && (
         <div className="grid grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Collected</p>
             <p className="text-2xl font-bold">{fmt(totals.collected)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}</p>
           </Card>
-         <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
+          <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Outstanding</p>
-            <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(totals.outstanding)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{format(from, 'd MMM yyyy')} – {format(to, 'd MMM yyyy')}</p>
+            <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {fmt(totals.outstanding)}
+            </p>
+            {outstandingDateRange && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {format(new Date(outstandingDateRange.earliest), 'd MMM yyyy')} – {format(new Date(outstandingDateRange.latest), 'd MMM yyyy')}
+              </p>
+            )}
           </Card>
         </div>
       )}
@@ -477,11 +514,16 @@ export default function AdminCashReconciliationPage() {
           variant="outline"
           size="sm"
           className="gap-1.5 h-9 shrink-0"
-          onClick={() => exportBranchesExcel(
-            filtered,
-            allRecons ?? [],
-            `cash-reconciliation-${format(new Date(), 'yyyy-MM-dd')}.xls`
-          )}
+          onClick={async () => {
+            await exportBranchesExcel(
+              filtered,
+              allRecons ?? [],
+              allDeductions ?? [],
+              sinceTs,
+              untilTs,
+              `cash-reconciliation-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+            )
+          }}
         >
           <Download className="w-3.5 h-3.5" />
           Export
@@ -504,7 +546,7 @@ export default function AdminCashReconciliationPage() {
             const isOpen = expanded === branch.branchId
             return (
               <Card key={branch.branchId} className="overflow-hidden">
-                {/* Branch row — only shows name + outstanding status + History button */}
+                {/* Branch row */}
                 <div
                   className="w-full text-left px-4 sm:px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer"
                   onClick={() => setExpanded(isOpen ? null : branch.branchId)}
@@ -532,7 +574,6 @@ export default function AdminCashReconciliationPage() {
                         </span>
                       )}
                     </div>
-                    {/* REMOVED: the Collected / Sent / Deducted line from the branch row */}
                   </div>
                   <Button
                     variant="ghost"
@@ -545,7 +586,7 @@ export default function AdminCashReconciliationPage() {
                   </Button>
                 </div>
 
-                {/* Expanded detail — only Unsettled Cash Orders + In Progress */}
+                {/* Expanded detail */}
                 {isOpen && (
                   <div className="border-t border-border px-4 sm:px-5 py-4 space-y-4 bg-muted/10">
 

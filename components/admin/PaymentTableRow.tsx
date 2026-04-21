@@ -10,10 +10,6 @@ import {
 } from "@/components/ui/table"
 import {
   Eye,
-  Calendar,
-  CreditCard,
-  User,
-  Package,
 } from "lucide-react"
 import { format } from "date-fns"
 
@@ -34,7 +30,7 @@ export const PaymentTableRow = ({
       {/* Transaction ID */}
       <TableCell className="font-medium whitespace-nowrap">
         <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+          
           <span className="font-mono text-sm">{payment._id.slice(-8).toUpperCase()}</span>
         </div>
       </TableCell>
@@ -43,7 +39,7 @@ export const PaymentTableRow = ({
       <TableCell className="whitespace-nowrap">
         {payment.order ? (
           <div className="flex items-center gap-2">
-            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+            
             <span className="text-sm">{payment.order.orderNumber}</span>
           </div>
         ) : (
@@ -55,7 +51,7 @@ export const PaymentTableRow = ({
       <TableCell className="whitespace-nowrap">
         {payment.customer ? (
           <div className="flex items-center gap-2">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
+            
             <span className="text-sm">{payment.customer.name}</span>
           </div>
         ) : (
@@ -102,7 +98,7 @@ export const PaymentTableRow = ({
       {/* Date */}
       <TableCell className="whitespace-nowrap">
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" />
+          
           <span>{format(new Date(payment.createdAt), "MMM d, yyyy")}</span>
         </div>
       </TableCell>
@@ -121,4 +117,5 @@ export const PaymentTableRow = ({
     </TableRow>
   )
 }
+
 
