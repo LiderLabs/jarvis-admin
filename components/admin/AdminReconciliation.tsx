@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@jordan6699/washlab-backend/api'
 import { Button } from '@/components/ui/button'
@@ -107,6 +107,18 @@ function StatusBadge({ status }: { status: string }) {
 function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
 function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
 
+// ─── Format the period label for the Outstanding card ─────────────────────────
+// If from and to are the same calendar day → show just that one date
+// Otherwise → show "d MMM yyyy – d MMM yyyy"
+function formatPeriodLabel(from: Date, to: Date): string {
+  const sameDay =
+    from.getFullYear() === to.getFullYear() &&
+    from.getMonth() === to.getMonth() &&
+    from.getDate() === to.getDate()
+  if (sameDay) return format(from, 'd MMM yyyy')
+  return `${format(from, 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`
+}
+
 // ─── Excel export (true multi-sheet .xlsx via xlsx npm package) ──────────────
 
 async function exportBranchesExcel(
@@ -117,7 +129,6 @@ async function exportBranchesExcel(
   untilTs: number,
   filename: string
 ) {
-  // Use the xlsx npm package (install with: npm install xlsx)
   const XLSX = (await import('xlsx'))
   const wb = XLSX.utils.book_new()
 
@@ -165,7 +176,6 @@ async function exportBranchesExcel(
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
   }
 
-  // Write and trigger download
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
   const blob = new Blob([wbout], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
@@ -191,6 +201,10 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
   const [from, setFrom] = useState<Date>(initialFrom)
   const [to, setTo]     = useState<Date>(initialTo)
 
+  // Sync when parent date range changes
+  useEffect(() => { setFrom(initialFrom) }, [initialFrom])
+  useEffect(() => { setTo(initialTo) }, [initialTo])
+
   const fromTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
   const toTs   = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
 
@@ -210,6 +224,11 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 
   const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
 
+  const periodUnsettledOrders = summary.unsettledOrders.filter(
+    o => o.createdAt >= fromTs && o.createdAt <= toTs
+  )
+  const periodOutstanding = periodUnsettledOrders.reduce((s, o) => s + o.finalPrice, 0)
+
   type HistoryEvent =
     | { type: 'sent'; data: Reconciliation }
     | { type: 'deduction'; data: Deduction }
@@ -226,7 +245,7 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
       allDeductions,
       fromTs,
       toTs,
-      `reconciliation-${summary.branchName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.xls`
+      `reconciliation-${summary.branchName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
     )
   }
 
@@ -278,14 +297,15 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
             <p className="text-2xl font-bold text-foreground">{allEvents.length}</p>
           </Card>
           <Card className={`p-4 ${
-            summary.outstanding > 0
+            periodOutstanding > 0
               ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
               : 'border-green-200 bg-green-50 dark:bg-green-950/20'
           }`}>
             <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding</p>
-            <p className={`text-2xl font-bold ${summary.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {fmt(summary.outstanding)}
+            <p className={`text-2xl font-bold ${periodOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {fmt(periodOutstanding)}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
           </Card>
         </div>
 
@@ -368,12 +388,13 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 export default function AdminCashReconciliationPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
+  // Date state lives here at the top level — persists when opening/closing the history drawer
   const [from, setFrom] = useState<Date>(new Date())
   const [to, setTo]     = useState<Date>(new Date())
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [historyBranch, setHistoryBranch] = useState<BranchSummary | null>(null)
+  // Store branchId only — we look up the branch from fresh data on render, so stale objects are never an issue
+  const [historyBranchId, setHistoryBranchId] = useState<string | null>(null)
 
-  // Use local midnight so the date filter matches the local timezone the orders were created in
   const sinceTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
   const untilTs = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
 
@@ -388,7 +409,6 @@ export default function AdminCashReconciliationPage() {
     (api as any).cashReconciliation.getAllDeductionsForAdmin
   )
 
-  // For each branch, filter unsettled orders to only those within the date period
   const filteredSummaries = useMemo(() => {
     if (!summaries) return []
     return summaries
@@ -403,7 +423,6 @@ export default function AdminCashReconciliationPage() {
           outstanding: periodOutstanding,
         }
       })
-      // Only show branches that actually have outstanding orders in this period
       .filter(s => s.outstanding > 0)
   }, [summaries, sinceTs, untilTs])
 
@@ -426,16 +445,16 @@ export default function AdminCashReconciliationPage() {
     }
   }, [summaries, filteredSummaries])
 
-  // Date range of outstanding orders within the chosen period
-  const outstandingDateRange = useMemo(() => {
-    const allUnsettled = filteredSummaries.flatMap(s => s.unsettledOrders)
-    if (allUnsettled.length === 0) return null
-    const timestamps = allUnsettled.map(o => o.createdAt)
-    return {
-      earliest: Math.min(...timestamps),
-      latest: Math.max(...timestamps),
-    }
-  }, [filteredSummaries])
+  // Resolve history branch from live data so it's always fresh
+  const historyBranch = useMemo(() => {
+    if (!historyBranchId || !filteredSummaries.length) return null
+    // Fall back to summaries so history works even for settled branches
+    return (
+      filteredSummaries.find(s => s.branchId === historyBranchId) ??
+      summaries?.find(s => s.branchId === historyBranchId) ??
+      null
+    )
+  }, [historyBranchId, filteredSummaries, summaries])
 
   if (historyBranch) {
     return (
@@ -445,7 +464,7 @@ export default function AdminCashReconciliationPage() {
         allDeductions={allDeductions ?? []}
         initialFrom={from}
         initialTo={to}
-        onClose={() => setHistoryBranch(null)}
+        onClose={() => setHistoryBranchId(null)}
       />
     )
   }
@@ -474,17 +493,15 @@ export default function AdminCashReconciliationPage() {
           <Card className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Collected</p>
             <p className="text-2xl font-bold">{fmt(totals.collected)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
           </Card>
           <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
             <p className="text-xs font-medium text-muted-foreground mb-1">Total Outstanding</p>
             <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
               {fmt(totals.outstanding)}
             </p>
-            {outstandingDateRange && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {format(new Date(outstandingDateRange.earliest), 'd MMM yyyy')} – {format(new Date(outstandingDateRange.latest), 'd MMM yyyy')}
-              </p>
-            )}
+            {/* Show the chosen filter period — same logic: single day or range */}
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
           </Card>
         </div>
       )}
@@ -579,7 +596,7 @@ export default function AdminCashReconciliationPage() {
                     variant="ghost"
                     size="sm"
                     className="shrink-0 gap-1.5 text-xs h-8"
-                    onClick={e => { e.stopPropagation(); setHistoryBranch(branch) }}
+                    onClick={e => { e.stopPropagation(); setHistoryBranchId(branch.branchId) }}
                   >
                     <History className="w-3.5 h-3.5" />
                     History
