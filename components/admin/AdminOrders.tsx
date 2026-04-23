@@ -81,14 +81,6 @@ function downloadCSV(rows: (string | number | null | undefined)[][], filename: s
   URL.revokeObjectURL(url)
 }
 
-/**
- * Returns local-timezone day boundaries as UTC ms timestamps.
- *
- * The date input gives us a yyyy-MM-dd string. Parsing it as
- * `new Date(str + 'T00:00:00')` (no trailing Z) gives us local midnight,
- * which is what we want — orders' `createdAt` is `Date.now()` (UTC ms) on
- * the server, so a local-midnight window correctly brackets the day.
- */
 function getLocalDayBounds(dateStr: string): { dayStart: number; dayEnd: number } {
   const start = new Date(dateStr + 'T00:00:00')
   const end = new Date(dateStr + 'T00:00:00')
@@ -102,7 +94,6 @@ const AdminOrders = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Keep date as a yyyy-MM-dd string — avoids all timezone/Date constructor issues
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const [selectedDateStr, setSelectedDateStr] = useState<string>(todayStr)
 
@@ -120,7 +111,6 @@ const AdminOrders = () => {
   )
   const branchesList = branchesPages?.flat() || []
 
-  // Compute local-timezone-aware day boundaries from the date string
   const { dayStart, dayEnd } = useMemo(
     () => getLocalDayBounds(selectedDateStr),
     [selectedDateStr]
@@ -160,8 +150,6 @@ const AdminOrders = () => {
   const isLoading =
     paginationStatus === 'LoadingFirstPage' || paginationStatus === 'LoadingMore'
 
-  // Client-side safety net: ensures only orders within the selected day are shown,
-  // even if the backend returns extras (e.g. due to cursor overlap).
   const dayOrders = useMemo(
     () => orders.filter((o) => o._creationTime >= dayStart && o._creationTime < dayEnd),
     [orders, dayStart, dayEnd]
@@ -200,7 +188,6 @@ const AdminOrders = () => {
     [dayOrders]
   )
 
-  // ── Export ──────────────────────────────────────────────────────────────────
   const handleExportCSV = async () => {
     if (filteredOrders.length === 0) {
       toast.error('No orders to export')
@@ -262,7 +249,7 @@ const AdminOrders = () => {
           )
         }
         toast.success(
-          `Exported ${filteredOrders.length} orders across ${ordersByBranch.size} branches (${ordersByBranch.size + 1} files)`
+          `Exported ${filteredOrders.length} orders across ${ordersByBranch.size} branches`
         )
       } else {
         toast.success(`Exported ${filteredOrders.length} orders`)
@@ -334,16 +321,15 @@ const AdminOrders = () => {
     setSelectedDateStr(format(addDays(d, 1), 'yyyy-MM-dd'))
   }
 
-  // Use noon to avoid any DST-related date shifts when formatting for display
   const selectedDateForDisplay = new Date(selectedDateStr + 'T12:00:00')
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Orders</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Orders</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Manage and track all orders
           </p>
         </div>
@@ -352,33 +338,34 @@ const AdminOrders = () => {
           size="sm"
           onClick={handleExportCSV}
           disabled={isExporting || filteredOrders.length === 0}
-          className="gap-2 self-start sm:self-auto"
+          className="gap-1.5 shrink-0 text-xs"
         >
-          <Download className="w-4 h-4" />
-          {isExporting
-            ? 'Exporting...'
-            : `Export CSV${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ''}`}
+          <Download className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">
+            {isExporting ? 'Exporting…' : `Export${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ''}`}
+          </span>
+          <span className="sm:hidden">
+            {isExporting ? '…' : 'CSV'}
+          </span>
         </Button>
       </div>
 
-      {/* Date Selector */}
-      <Card className="mb-6">
-        <CardContent className="py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground shrink-0 mr-1">
-              Viewing orders for:
-            </span>
+      {/* ── Date Selector ── */}
+      <Card className="mb-4">
+        <CardContent className="py-3 px-4">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
               onClick={goToPrevDay}
-              className="h-9 w-9 shrink-0"
+              className="h-8 w-8 shrink-0"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex items-center gap-2">
-              <div className="relative flex items-center">
-                <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
+
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <div className="relative flex items-center flex-1 min-w-0">
+                <CalendarIcon className="absolute left-2.5 h-3.5 w-3.5 text-primary pointer-events-none z-10" />
                 <input
                   type="date"
                   value={selectedDateStr}
@@ -386,25 +373,26 @@ const AdminOrders = () => {
                   onChange={(e) => {
                     if (e.target.value) setSelectedDateStr(e.target.value)
                   }}
-                  className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                  className="w-full h-8 pl-8 pr-2 rounded-md border border-input bg-background text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
                 />
               </div>
               {!isSelectedToday && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
+                  className="h-8 text-xs shrink-0 px-2.5"
                   onClick={() => setSelectedDateStr(todayStr)}
                 >
                   Today
                 </Button>
               )}
             </div>
+
             <Button
               variant="outline"
               size="icon"
               onClick={goToNextDay}
-              className="h-9 w-9 shrink-0"
+              className="h-8 w-8 shrink-0"
               disabled={isSelectedToday}
             >
               <ChevronRight className="h-4 w-4" />
@@ -413,53 +401,56 @@ const AdminOrders = () => {
         </CardContent>
       </Card>
 
-      {/* Stats */}
-      <div className="space-y-3 mb-6">
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
-            <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+      {/* ── Stats ── */}
+      <div className="space-y-3 mb-5">
+
+        {/* Top row: 2 cols on mobile, 3 on sm+ */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 col-span-2 sm:col-span-1">
+            <CardContent className="py-3 px-4">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                 Total Orders
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-primary">{stats.total}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold text-primary">{stats.total}</span>
                 <span className="text-xs text-muted-foreground">
                   {isSelectedToday ? 'today' : format(selectedDateForDisplay, 'MMM d')}
                 </span>
               </div>
             </CardContent>
           </Card>
+
           <Card className="border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
-            <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            <CardContent className="py-3 px-4">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                 Completed
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-green-600">{stats.completed}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold text-green-600">{stats.completed}</span>
                 <span className="text-xs text-muted-foreground">
-                  {stats.total > 0
-                    ? `${Math.round((stats.completed / stats.total) * 100)}%`
-                    : '—'}
+                  {stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : '—'}
                 </span>
               </div>
             </CardContent>
           </Card>
+
           <Card className="border-2 border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800">
-            <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            <CardContent className="py-3 px-4">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                 In Progress
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-yellow-600">{stats.in_progress}</span>
-                <span className="text-xs text-muted-foreground">active now</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold text-yellow-600">{stats.in_progress}</span>
+                <span className="text-xs text-muted-foreground">active</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Pipeline card */}
         <Card>
-          <CardContent className="py-3 px-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          <CardContent className="py-3 px-4">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               Wash Pipeline
             </p>
             <div className="grid grid-cols-4 divide-x divide-border">
@@ -469,12 +460,9 @@ const AdminOrders = () => {
                 { label: 'In\nProgress',     value: stats.in_progress,    color: 'text-indigo-600' },
                 { label: 'Ready',            value: stats.ready,           color: 'text-blue-600'   },
               ].map(({ label, value, color }) => (
-                <div
-                  key={label}
-                  className="flex flex-col items-center px-3 first:pl-0 last:pr-0"
-                >
-                  <span className={`text-3xl font-bold ${color}`}>{value}</span>
-                  <span className="text-xs text-muted-foreground text-center whitespace-pre-line leading-tight mt-1.5">
+                <div key={label} className="flex flex-col items-center px-2 first:pl-0 last:pr-0">
+                  <span className={`text-2xl sm:text-3xl font-bold ${color}`}>{value}</span>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground text-center whitespace-pre-line leading-tight mt-1">
                     {label}
                   </span>
                 </div>
@@ -484,67 +472,71 @@ const AdminOrders = () => {
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Filter className="h-5 w-5" />
+      {/* ── Filters ── */}
+      <Card className="mb-5">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            <Filter className="h-4 w-4" />
             Filters
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="sm:col-span-2 lg:col-span-1">
-              <Label htmlFor="search">Search Orders</Label>
-              <div className="relative mt-2">
+        <CardContent className="px-4 pb-4">
+          <div className="space-y-3">
+            {/* Search — full width */}
+            <div>
+              <Label htmlFor="search" className="text-xs">Search Orders</Label>
+              <div className="relative mt-1.5">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="search"
                   placeholder="Order number or phone..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="branch">Branch</Label>
-              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                <SelectTrigger id="branch" className="mt-2">
-                  <SelectValue placeholder="All branches" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branchesList.map((branch: Branch) => (
-                    <SelectItem key={branch._id} value={branch._id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Branch + Status side by side on mobile */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="branch" className="text-xs">Branch</Label>
+                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                  <SelectTrigger id="branch" className="mt-1.5 h-9 text-xs">
+                    <SelectValue placeholder="All branches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branchesList.map((branch: Branch) => (
+                      <SelectItem key={branch._id} value={branch._id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger id="status" className="mt-2">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending_dropoff">Pending Dropoff</SelectItem>
-                  <SelectItem value="checked_in">Checked In</SelectItem>
-                  <SelectItem value="ready">Ready for Pickup</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
+              <div>
+                <Label htmlFor="status" className="text-xs">Status</Label>
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger id="status" className="mt-1.5 h-9 text-xs">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="pending_dropoff">Pending Dropoff</SelectItem>
+                    <SelectItem value="checked_in">Checked In</SelectItem>
+                    <SelectItem value="ready">Ready</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Orders Table */}
+      {/* ── Orders Table / Cards ── */}
       <OrderTable
         orders={filteredOrders}
         isLoading={isLoading && orders.length === 0}
@@ -554,11 +546,12 @@ const AdminOrders = () => {
       />
 
       {hasMore && (
-        <div className="flex justify-center mt-6">
+        <div className="flex justify-center mt-5">
           <Button
             variant="outline"
             onClick={() => loadMore(ORDERS_LIMIT)}
             disabled={isLoading}
+            size="sm"
           >
             {isLoading ? (
               <>
@@ -566,7 +559,7 @@ const AdminOrders = () => {
                 Loading...
               </>
             ) : (
-              'Load More Orders'
+              'Load More'
             )}
           </Button>
         </div>
@@ -600,8 +593,7 @@ const AdminOrders = () => {
             <AlertDialogTitle>Delete Order</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete order{' '}
-              <strong>{orderToDelete?.orderNumber}</strong>? This action cannot be
-              undone.
+              <strong>{orderToDelete?.orderNumber}</strong>? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
