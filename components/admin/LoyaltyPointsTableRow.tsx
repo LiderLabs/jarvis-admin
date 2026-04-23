@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { LoyaltyPointsBadge } from "./LoyaltyPointsBadge"
-import { User, Mail, Phone, Edit } from "lucide-react"
+import { User, Edit } from "lucide-react"
 import { format } from "date-fns"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -54,7 +54,7 @@ export const LoyaltyPointsTableRow = ({
             <div className="font-medium">{customer?.name || "Unknown Customer"}</div>
             {customer?.email && (
               <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                <Mail className="h-3 w-3" />
+                
                 {customer.email}
               </div>
             )}
@@ -64,7 +64,7 @@ export const LoyaltyPointsTableRow = ({
       <TableCell className="whitespace-nowrap">
         {customer?.phoneNumber ? (
           <div className="flex items-center gap-1.5 text-sm">
-            <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+            
             {customer.phoneNumber}
           </div>
         ) : (
@@ -133,4 +133,5 @@ export const LoyaltyPointsTableRow = ({
     </TableRow>
   )
 }
+
 

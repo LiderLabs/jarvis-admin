@@ -10,11 +10,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { PaymentTable } from "./PaymentTable"
 import { PaymentDetailsDialog } from "./PaymentDetailsDialog"
+import { Download } from "lucide-react"
+import { format } from "date-fns"
+import { toast } from "sonner"
 
 const PAYMENTS_LIMIT = 20
 
 type PaymentStatus = "pending" | "processing" | "completed" | "failed" | "refunded"
 type PaymentMethod = "mobile_money" | "card" | "cash"
+
+function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
+  const csv = rows
+    .map(r => r.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n")
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.success("Exported successfully")
+}
 
 const AdminPayments = () => {
   const { isAuthenticated } = useConvexAuth()
@@ -23,13 +40,13 @@ const AdminPayments = () => {
   const [selectedMethod, setSelectedMethod] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState<Date>(new Date())
   const [dateTo, setDateTo] = useState<Date>(new Date())
-  const [selectedPayment, setSelectedPayment] = useState<
-    (Doc<"payments"> & {
-      order?: Doc<"orders"> | null
-      customer?: Doc<"users"> | null
-      branch?: Doc<"branches"> | null
-    }) | null
-  >(null)
+const [selectedPayment, setSelectedPayment] = useState<
+  (Doc<"payments"> & {
+    order?: Doc<"orders"> | null
+    customer?: Doc<"users"> | null
+    branch?: Doc<"branches"> | null
+  }) | null
+>(null)
 
   const { results: branchesPages } = usePaginatedQuery(
     api.admin.getBranches,
@@ -37,6 +54,7 @@ const AdminPayments = () => {
     { initialNumItems: 100 }
   )
   const branchesList = branchesPages?.flat() || []
+  const branchMap = Object.fromEntries(branchesList.map((b: any) => [b._id, b.name]))
 
   const startTimestamp = dateFrom ? new Date(dateFrom).setHours(0, 0, 0, 0) : undefined
   const endTimestamp = dateTo ? new Date(dateTo).setHours(23, 59, 59, 999) : undefined
@@ -95,22 +113,99 @@ const AdminPayments = () => {
     setDateTo(new Date())
   }
 
+  const handleExport = () => {
+    if (allPayments.length === 0) {
+      toast.error("No payments to export")
+      return
+    }
+
+    const rows: (string | number | null | undefined)[][] = [
+      [
+        "Date",
+        "Time",
+        "Transaction Ref",
+        "Order Number",
+        "Customer Name",
+        "Customer Phone",
+        "Branch",
+        "Payment Method",
+        "Amount (GHS)",
+        "Status",
+        "Voucher Applied",
+        "Voucher Code",
+        "Loyalty Discount (GHS)",
+        "Original Price (GHS)",
+        "Final Price (GHS)",
+      ],
+      ...allPayments.map((p: any) => {
+        const createdAt = new Date(p._creationTime)
+        const order = p.order
+        const voucherApplied = order?.voucherCode ? "Yes" : "No"
+        const loyaltyDiscount =
+          order && order.totalPrice && order.finalPrice
+            ? Math.max(0, order.totalPrice - order.finalPrice - (order.voucherDiscount || 0))
+            : 0
+
+        return [
+          format(createdAt, "yyyy-MM-dd"),
+          format(createdAt, "HH:mm:ss"),
+          p.reference || p._id,
+          order?.orderNumber || "",
+          p.customer?.name || order?.customerName || "",
+          p.customer?.phoneNumber || order?.customerPhoneNumber || "",
+          p.branch?.name || branchMap[p.branchId] || "",
+          p.paymentMethod === "mobile_money"
+            ? "Mobile Money"
+            : p.paymentMethod === "card"
+            ? "Card"
+            : p.paymentMethod === "cash"
+            ? "Cash"
+            : p.paymentMethod || "",
+          (p.amount || 0).toFixed(2),
+          p.status || "",
+          voucherApplied,
+          order?.voucherCode || "",
+          loyaltyDiscount > 0 ? loyaltyDiscount.toFixed(2) : "0.00",
+          order?.totalPrice != null ? order.totalPrice.toFixed(2) : "",
+          order?.finalPrice != null ? order.finalPrice.toFixed(2) : "",
+        ]
+      }),
+    ]
+
+    const filename = `payments-${format(dateFrom, "yyyy-MM-dd")}-to-${format(dateTo, "yyyy-MM-dd")}.csv`
+    downloadCSV(rows, filename)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
-        <p className="text-sm text-muted-foreground mt-1">View and manage all payment transactions</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and manage all payment transactions</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExport}
+          disabled={allPayments.length === 0}
+          className="h-9 gap-1.5 w-full sm:w-auto"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </Button>
       </div>
 
-      {/* Filters — full width row, wraps on mobile */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Date picker takes full width on mobile, auto on larger screens */}
         <div className="w-full sm:w-auto">
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
-            onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
+            onChange={(f, t) => {
+              setDateFrom(f)
+              setDateTo(t)
+            }}
           />
         </div>
 
@@ -120,8 +215,10 @@ const AdminPayments = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Branches</SelectItem>
-            {branchesList.map((branch) => (
-              <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
+            {branchesList.map((branch: any) => (
+              <SelectItem key={branch._id} value={branch._id}>
+                {branch.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -150,7 +247,12 @@ const AdminPayments = () => {
           </SelectContent>
         </Select>
 
-        <Button variant="outline" size="sm" onClick={handleClearFilters} className="h-9 w-full sm:w-auto">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClearFilters}
+          className="h-9 w-full sm:w-auto"
+        >
           Clear Filters
         </Button>
       </div>
@@ -218,7 +320,11 @@ const AdminPayments = () => {
       {/* Load More */}
       {hasMore && allPayments.length > 0 && (
         <div className="flex justify-center">
-          <Button variant="outline" onClick={() => loadMore(PAYMENTS_LIMIT)} disabled={isLoading}>
+          <Button
+            variant="outline"
+            onClick={() => loadMore(PAYMENTS_LIMIT)}
+            disabled={isLoading}
+          >
             {isLoading ? "Loading..." : "Load More Payments"}
           </Button>
         </div>

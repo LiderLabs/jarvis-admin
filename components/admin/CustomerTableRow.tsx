@@ -21,11 +21,9 @@ import {
   AlertTriangle,
   Shield,
   Trash2,
-  Eye,
   Phone,
   Mail,
-  ShoppingBag,
-  Calendar,
+  Award,
 } from "lucide-react"
 import { format } from "date-fns"
 import {
@@ -47,6 +45,7 @@ interface CustomerTableRowProps {
     statusNote?: string
     statusChangedAt?: number
   }
+  loyaltyPoints?: number
   onStatusChange: (
     customerId: string,
     customerName: string,
@@ -89,8 +88,38 @@ const getStatusBadge = (status: string) => {
   )
 }
 
+// How many points until next free wash
+function PointsBadge({ points }: { points: number }) {
+  const freewashes = Math.floor(points / 10)
+  const remainder = points % 10
+
+  if (points === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+        <span className="text-sm font-semibold text-foreground">{points}</span>
+        {freewashes > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            🎁 {freewashes} free
+          </span>
+        )}
+      </div>
+      {remainder > 0 && (
+        <span className="text-[10px] text-muted-foreground">
+          {10 - remainder} to next reward
+        </span>
+      )}
+    </div>
+  )
+}
+
 export const CustomerTableRow = ({
   customer,
+  loyaltyPoints = 0,
   onStatusChange,
   onDelete,
 }: CustomerTableRowProps) => {
@@ -103,9 +132,7 @@ export const CustomerTableRow = ({
     <TableRow className="hover:bg-muted/50">
       {/* Name */}
       <TableCell className="font-medium">
-        <div className="font-semibold text-foreground">
-          {customer.name}
-        </div>
+        <div className="font-semibold text-foreground">{customer.name}</div>
       </TableCell>
 
       {/* Contact */}
@@ -151,19 +178,21 @@ export const CustomerTableRow = ({
       {/* Orders */}
       <TableCell>
         <div className="flex items-center gap-2">
-          <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+          
           <span className="text-sm">{customer.orderCount || 0}</span>
         </div>
       </TableCell>
 
       {/* Total Spent */}
       <TableCell>
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-4 text-muted-foreground font-bold">₵</span>
-          <span className="text-sm font-medium">
-            ₵{(customer.totalSpent || 0).toFixed(2)}
-          </span>
-        </div>
+        <span className="text-sm font-medium">
+          ₵{(customer.totalSpent || 0).toFixed(2)}
+        </span>
+      </TableCell>
+
+      {/* Loyalty Points — NEW */}
+      <TableCell>
+        <PointsBadge points={loyaltyPoints} />
       </TableCell>
 
       {/* Actions */}
@@ -176,7 +205,6 @@ export const CustomerTableRow = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            {/* Status Actions */}
             {canActivate && (
               <DropdownMenuItem
                 onClick={() =>
@@ -222,7 +250,6 @@ export const CustomerTableRow = ({
               <DropdownMenuSeparator />
             )}
 
-            {/* Delete Action */}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <DropdownMenuItem
@@ -258,4 +285,3 @@ export const CustomerTableRow = ({
     </TableRow>
   )
 }
-

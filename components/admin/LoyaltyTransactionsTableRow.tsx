@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { TransactionTypeBadge } from "./TransactionTypeBadge"
-import { User, Package, Eye } from "lucide-react"
+import { User, Eye } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
@@ -43,7 +43,7 @@ export const LoyaltyTransactionsTableRow = ({
     <TableRow>
       <TableCell className="font-medium whitespace-nowrap">
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
+          
           <div>
             <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
             {transaction.customer?.phoneNumber && (
@@ -71,7 +71,7 @@ export const LoyaltyTransactionsTableRow = ({
       <TableCell className="whitespace-nowrap">
         {transaction.order ? (
           <div className="flex items-center gap-1.5 text-sm">
-            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+            
             <span className="font-medium">{transaction.order.orderNumber}</span>
           </div>
         ) : (
@@ -102,4 +102,5 @@ export const LoyaltyTransactionsTableRow = ({
     </TableRow>
   )
 }
+
 

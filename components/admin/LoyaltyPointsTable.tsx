@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import {
   Table,
@@ -10,8 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { LoyaltyPointsTableRow } from "./LoyaltyPointsTableRow"
-import { Loader2, Award } from "lucide-react"
+import { Loader2, Award, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+
+type SortDirection = "asc" | "desc" | null
 
 interface LoyaltyPointsTableProps {
   loyaltyPoints: (Doc<"loyaltyPoints"> & {
@@ -33,6 +36,29 @@ export const LoyaltyPointsTable = ({
   onAdjustPoints,
   onViewTransactions,
 }: LoyaltyPointsTableProps) => {
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null)
+
+  const handleSortToggle = () => {
+    setSortDirection((prev) =>
+      prev === null ? "desc" : prev === "desc" ? "asc" : null
+    )
+  }
+
+  const sortedPoints = sortDirection
+    ? [...loyaltyPoints].sort((a, b) =>
+        sortDirection === "asc"
+          ? a.totalEarned - b.totalEarned
+          : b.totalEarned - a.totalEarned
+      )
+    : loyaltyPoints
+
+  const SortIcon =
+    sortDirection === "asc"
+      ? ArrowUp
+      : sortDirection === "desc"
+      ? ArrowDown
+      : ArrowUpDown
+
   if (isLoading && loyaltyPoints.length === 0) {
     return (
       <Card>
@@ -66,7 +92,15 @@ export const LoyaltyPointsTable = ({
               <TableHead className="w-[200px] whitespace-nowrap">Customer</TableHead>
               <TableHead className="w-[140px] whitespace-nowrap">Phone</TableHead>
               <TableHead className="w-[130px] whitespace-nowrap">Current Points</TableHead>
-              <TableHead className="w-[120px] whitespace-nowrap">Total Earned</TableHead>
+              <TableHead className="w-[120px] whitespace-nowrap">
+                <button
+                  onClick={handleSortToggle}
+                  className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                >
+                  Total Earned
+                  <SortIcon className="h-3.5 w-3.5" />
+                </button>
+              </TableHead>
               <TableHead className="w-[120px] whitespace-nowrap">Total Redeemed</TableHead>
               <TableHead className="w-[150px] whitespace-nowrap">Rewards</TableHead>
               <TableHead className="w-[120px] whitespace-nowrap">Last Earned</TableHead>
@@ -74,7 +108,7 @@ export const LoyaltyPointsTable = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loyaltyPoints.map((lp) => (
+            {sortedPoints.map((lp) => (
               <LoyaltyPointsTableRow
                 key={lp._id}
                 loyaltyPoints={lp}
@@ -88,4 +122,3 @@ export const LoyaltyPointsTable = ({
     </div>
   )
 }
-

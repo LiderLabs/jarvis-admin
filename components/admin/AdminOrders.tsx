@@ -1,25 +1,25 @@
-"use client"
+'use client'
 
-import { useState, useMemo } from "react"
-import { usePaginatedQuery, useQuery, useMutation, useConvexAuth } from "convex/react"
-import { api } from "@jordan6699/washlab-backend/api"
-import { Id, Doc } from "@jordan6699/washlab-backend/dataModel"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState, useMemo } from 'react'
+import { usePaginatedQuery, useQuery, useMutation, useConvexAuth } from 'convex/react'
+import { api } from '@jordan6699/washlab-backend/api'
+import { Id, Doc } from '@jordan6699/washlab-backend/dataModel'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from '@/components/ui/card'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,10 +29,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { OrderTable } from "./OrderTable"
-import { OrderDetailsDialog } from "./OrderDetailsDialog"
-import { OrderStatusDialog } from "./OrderStatusDialog"
+} from '@/components/ui/alert-dialog'
+import { OrderTable } from './OrderTable'
+import { OrderDetailsDialog } from './OrderDetailsDialog'
+import { OrderStatusDialog } from './OrderStatusDialog'
 import {
   Search,
   Filter,
@@ -41,113 +41,131 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-} from "lucide-react"
-import { toast } from "sonner"
-import { format, addDays, subDays, isToday } from "date-fns"
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { format, addDays, subDays } from 'date-fns'
 
 const ORDERS_LIMIT = 100
 
 type OrderStatus =
-  | "pending_dropoff"
-  | "checked_in"
-  | "sorting"
-  | "washing"
-  | "drying"
-  | "folding"
-  | "ready"
-  | "completed"
-  | "cancelled"
-  | "pending"
-  | "in_progress"
-  | "ready_for_pickup"
-  | "delivered"
+  | 'pending_dropoff'
+  | 'checked_in'
+  | 'sorting'
+  | 'washing'
+  | 'drying'
+  | 'folding'
+  | 'ready'
+  | 'completed'
+  | 'cancelled'
+  | 'pending'
+  | 'in_progress'
+  | 'ready_for_pickup'
+  | 'delivered'
 
 interface Branch {
-  _id: Id<"branches">
+  _id: Id<'branches'>
   name: string
   code: string
 }
 
 function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
   const csv = rows
-    .map((r) => r.map((cell) => '"' + String(cell ?? "").replace(/"/g, '""') + '"').join(","))
-    .join("\n")
-  const blob = new Blob([csv], { type: "text/csv" })
+    .map((r) => r.map((cell) => '"' + String(cell ?? '').replace(/"/g, '""') + '"').join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
+  const a = document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
 
+/**
+ * Returns local-timezone day boundaries as UTC ms timestamps.
+ *
+ * The date input gives us a yyyy-MM-dd string. Parsing it as
+ * `new Date(str + 'T00:00:00')` (no trailing Z) gives us local midnight,
+ * which is what we want — orders' `createdAt` is `Date.now()` (UTC ms) on
+ * the server, so a local-midnight window correctly brackets the day.
+ */
+function getLocalDayBounds(dateStr: string): { dayStart: number; dayEnd: number } {
+  const start = new Date(dateStr + 'T00:00:00')
+  const end = new Date(dateStr + 'T00:00:00')
+  end.setDate(end.getDate() + 1)
+  return { dayStart: start.getTime(), dayEnd: end.getTime() }
+}
+
 const AdminOrders = () => {
   const { isAuthenticated } = useConvexAuth()
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
-  const [selectedStatus, setSelectedStatus] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [selectedOrder, setSelectedOrder] = useState<Doc<"orders"> | null>(null)
-  const [orderToUpdate, setOrderToUpdate] = useState<Doc<"orders"> | null>(null)
-  const [orderToDelete, setOrderToDelete] = useState<Doc<"orders"> | null>(null)
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
+  const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Keep date as a yyyy-MM-dd string — avoids all timezone/Date constructor issues
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(todayStr)
+
+  const [selectedOrder, setSelectedOrder] = useState<Doc<'orders'> | null>(null)
+  const [orderToUpdate, setOrderToUpdate] = useState<Doc<'orders'> | null>(null)
+  const [orderToDelete, setOrderToDelete] = useState<Doc<'orders'> | null>(null)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   const { results: branchesPages } = usePaginatedQuery(
     api.admin.getBranches,
-    isAuthenticated ? {} : "skip",
+    isAuthenticated ? {} : 'skip',
     { initialNumItems: 100 }
   )
   const branchesList = branchesPages?.flat() || []
+
+  // Compute local-timezone-aware day boundaries from the date string
+  const { dayStart, dayEnd } = useMemo(
+    () => getLocalDayBounds(selectedDateStr),
+    [selectedDateStr]
+  )
+
+  const queryArgs = isAuthenticated
+    ? {
+        ...(selectedBranchId && selectedBranchId !== 'all'
+          ? { branchId: selectedBranchId as Id<'branches'> }
+          : {}),
+        ...(selectedStatus && selectedStatus !== 'all'
+          ? { status: selectedStatus as OrderStatus }
+          : {}),
+        startDate: dayStart,
+        endDate: dayEnd,
+      }
+    : ('skip' as const)
 
   const {
     results: ordersPages,
     status: paginationStatus,
     loadMore,
-  } = usePaginatedQuery(
-    api.admin.getOrders,
-    isAuthenticated
-      ? {
-          branchId:
-            selectedBranchId && selectedBranchId !== "all"
-              ? (selectedBranchId as Id<"branches">)
-              : undefined,
-          status:
-            selectedStatus && selectedStatus !== "all"
-              ? (selectedStatus as OrderStatus)
-              : undefined,
-        }
-      : "skip",
-    { initialNumItems: ORDERS_LIMIT }
-  )
+  } = usePaginatedQuery(api.admin.getOrders, queryArgs, {
+    initialNumItems: ORDERS_LIMIT,
+  })
 
   const orderDetails = useQuery(
     api.admin.getOrderDetails,
-    selectedOrder && isAuthenticated ? { orderId: selectedOrder._id } : "skip"
+    selectedOrder && isAuthenticated ? { orderId: selectedOrder._id } : 'skip'
   )
 
   const updateOrderStatus = useMutation(api.admin.updateOrderStatus)
   const deleteOrder = useMutation(api.admin.deleteOrder)
 
   const orders = ordersPages?.flat() || []
-  const hasMore = paginationStatus === "CanLoadMore"
+  const hasMore = paginationStatus === 'CanLoadMore'
   const isLoading =
-    paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore"
+    paginationStatus === 'LoadingFirstPage' || paginationStatus === 'LoadingMore'
 
-  const { dayStart, dayEnd } = useMemo(() => {
-    const d = new Date(selectedDate)
-    d.setHours(0, 0, 0, 0)
-    const dayStart = d.getTime()
-    const dayEnd = dayStart + 24 * 60 * 60 * 1000
-    return { dayStart, dayEnd }
-  }, [selectedDate])
-
-  const dayOrders = useMemo(() => {
-    return orders.filter(
-      (o) => o._creationTime >= dayStart && o._creationTime < dayEnd
-    )
-  }, [orders, dayStart, dayEnd])
+  // Client-side safety net: ensures only orders within the selected day are shown,
+  // even if the backend returns extras (e.g. due to cursor overlap).
+  const dayOrders = useMemo(
+    () => orders.filter((o) => o._creationTime >= dayStart && o._creationTime < dayEnd),
+    [orders, dayStart, dayEnd]
+  )
 
   const filteredOrders = useMemo(() => {
     return dayOrders.filter((order) => {
@@ -163,67 +181,73 @@ const AdminOrders = () => {
     })
   }, [dayOrders, searchQuery])
 
-  const stats = useMemo(() => ({
-    total: dayOrders.length,
-    pending_dropoff: dayOrders.filter((o) => o.status === "pending_dropoff").length,
-    checked_in: dayOrders.filter((o) => o.status === "checked_in").length,
-    ready: dayOrders.filter((o) => o.status === "ready" || o.status === "ready_for_pickup").length,
-    completed: dayOrders.filter((o) => o.status === "completed" || o.status === "delivered").length,
-    cancelled: dayOrders.filter((o) => o.status === "cancelled").length,
-    in_progress: dayOrders.filter((o) => ["sorting", "washing", "drying", "folding"].includes(o.status)).length,
-  }), [dayOrders])
+  const stats = useMemo(
+    () => ({
+      total: dayOrders.length,
+      pending_dropoff: dayOrders.filter((o) => o.status === 'pending_dropoff').length,
+      checked_in: dayOrders.filter((o) => o.status === 'checked_in').length,
+      ready: dayOrders.filter(
+        (o) => o.status === 'ready' || o.status === 'ready_for_pickup'
+      ).length,
+      completed: dayOrders.filter(
+        (o) => o.status === 'completed' || o.status === 'delivered'
+      ).length,
+      cancelled: dayOrders.filter((o) => o.status === 'cancelled').length,
+      in_progress: dayOrders.filter((o) =>
+        ['sorting', 'washing', 'drying', 'folding'].includes(o.status)
+      ).length,
+    }),
+    [dayOrders]
+  )
 
-  // ── Export: all orders CSV + one CSV per branch ─────────────────────────
+  // ── Export ──────────────────────────────────────────────────────────────────
   const handleExportCSV = async () => {
-    if (filteredOrders.length === 0) { toast.error("No orders to export"); return }
+    if (filteredOrders.length === 0) {
+      toast.error('No orders to export')
+      return
+    }
     setIsExporting(true)
     try {
-      const branchMap = Object.fromEntries(branchesList.map((b: any) => [b._id, b.name]))
+      const branchMap = Object.fromEntries(
+        branchesList.map((b: any) => [b._id, b.name])
+      )
 
       const headers = [
-        "Order Number", "Date", "Time", "Branch", "Customer Name", "Customer Phone",
-        "Service Type", "Order Type", "Status", "Payment Status", "Payment Method",
-        "Base Price (GHS)", "Final Price (GHS)", "Estimated Loads", "Bag Card",
+        'Order Number', 'Date', 'Time', 'Branch', 'Customer Name', 'Customer Phone',
+        'Service Type', 'Order Type', 'Status', 'Payment Status', 'Payment Method',
+        'Base Price (GHS)', 'Final Price (GHS)', 'Estimated Loads', 'Bag Card',
       ]
 
       const buildRow = (o: any) => {
         const date = new Date(o.createdAt ?? o._creationTime)
-        // customerName may be stored directly on the order, or on an enriched field
-        // fall back gracefully so the phone number never appears in the Name column
-        const customerName =
-          o.customerName ||
-          o.name ||
-          o.customer?.name ||
-          "" // empty string — never fall back to phone
+        const customerName = o.customerName || o.name || o.customer?.name || ''
         return [
           o.orderNumber,
-          date.toLocaleDateString("en-GB"),
-          date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          date.toLocaleDateString('en-GB'),
+          date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
           branchMap[o.branchId] ?? o.branchId,
           customerName,
-          o.customerPhoneNumber ?? "",
-          o.serviceType ?? "",
-          o.orderType ?? "walk_in",
+          o.customerPhoneNumber ?? '',
+          o.serviceType ?? '',
+          o.orderType ?? 'walk_in',
           o.status,
-          o.paymentStatus ?? "",
-          o.paymentMethod ?? "",
+          o.paymentStatus ?? '',
+          o.paymentMethod ?? '',
           (o.basePrice ?? 0).toFixed(2),
           (o.finalPrice ?? 0).toFixed(2),
-          o.estimatedLoads ?? "",
-          o.bagCardNumber ?? "",
+          o.estimatedLoads ?? '',
+          o.bagCardNumber ?? '',
         ]
       }
 
-      // ── File 1: All orders combined ──────────────────────────────────────
       downloadCSV(
         [headers, ...filteredOrders.map(buildRow)],
-        `orders-all-${format(selectedDate, "yyyy-MM-dd")}.csv`
+        `orders-all-${selectedDateStr}.csv`
       )
 
-      // ── File per branch (only if multiple branches present) ───────────────
       const ordersByBranch = new Map<string, { name: string; orders: any[] }>()
       for (const o of filteredOrders as any[]) {
-        const branchName = branchMap[o.branchId] ?? "Unknown"
+        const branchName = branchMap[o.branchId] ?? 'Unknown'
         if (!ordersByBranch.has(o.branchId)) {
           ordersByBranch.set(o.branchId, { name: branchName, orders: [] })
         }
@@ -234,7 +258,7 @@ const AdminOrders = () => {
         for (const { name, orders: branchOrders } of ordersByBranch.values()) {
           downloadCSV(
             [headers, ...branchOrders.map(buildRow)],
-            `orders-${name.replace(/\s+/g, "-").toLowerCase()}-${format(selectedDate, "yyyy-MM-dd")}.csv`
+            `orders-${name.replace(/\s+/g, '-').toLowerCase()}-${selectedDateStr}.csv`
           )
         }
         toast.success(
@@ -244,23 +268,23 @@ const AdminOrders = () => {
         toast.success(`Exported ${filteredOrders.length} orders`)
       }
     } catch {
-      toast.error("Export failed")
+      toast.error('Export failed')
     } finally {
       setIsExporting(false)
     }
   }
 
-  const handleViewDetails = (order: Doc<"orders">) => {
+  const handleViewDetails = (order: Doc<'orders'>) => {
     setSelectedOrder(order)
     setShowDetailsDialog(true)
   }
 
-  const handleUpdateStatus = (order: Doc<"orders">) => {
+  const handleUpdateStatus = (order: Doc<'orders'>) => {
     setOrderToUpdate(order)
     setShowStatusDialog(true)
   }
 
-  const handleDelete = (order: Doc<"orders">) => {
+  const handleDelete = (order: Doc<'orders'>) => {
     setOrderToDelete(order)
   }
 
@@ -268,11 +292,11 @@ const AdminOrders = () => {
     if (!orderToDelete) return
     try {
       await deleteOrder({ orderId: orderToDelete._id })
-      toast.success("Order deleted successfully")
+      toast.success('Order deleted successfully')
       setOrderToDelete(null)
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to delete order"
+        error instanceof Error ? error.message : 'Failed to delete order'
       toast.error(errorMessage)
     }
   }
@@ -284,23 +308,34 @@ const AdminOrders = () => {
   ) => {
     try {
       await updateOrderStatus({
-        orderId: orderId as Id<"orders">,
+        orderId: orderId as Id<'orders'>,
         newStatus: newStatus as OrderStatus,
         notes,
       })
-      toast.success("Order status updated successfully")
+      toast.success('Order status updated successfully')
       setShowStatusDialog(false)
       setOrderToUpdate(null)
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to update order status"
+        error instanceof Error ? error.message : 'Failed to update order status'
       toast.error(errorMessage)
     }
   }
 
-  const goToPrevDay = () => setSelectedDate((d) => subDays(d, 1))
-  const goToNextDay = () => setSelectedDate((d) => addDays(d, 1))
-  const isSelectedToday = isToday(selectedDate)
+  const isSelectedToday = selectedDateStr === todayStr
+
+  const goToPrevDay = () => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    setSelectedDateStr(format(subDays(d, 1), 'yyyy-MM-dd'))
+  }
+
+  const goToNextDay = () => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    setSelectedDateStr(format(addDays(d, 1), 'yyyy-MM-dd'))
+  }
+
+  // Use noon to avoid any DST-related date shifts when formatting for display
+  const selectedDateForDisplay = new Date(selectedDateStr + 'T12:00:00')
 
   return (
     <div>
@@ -320,7 +355,9 @@ const AdminOrders = () => {
           className="gap-2 self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
-          {isExporting ? "Exporting..." : `Export CSV${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ""}`}
+          {isExporting
+            ? 'Exporting...'
+            : `Export CSV${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ''}`}
         </Button>
       </div>
 
@@ -344,10 +381,10 @@ const AdminOrders = () => {
                 <CalendarIcon className="absolute left-3 h-4 w-4 text-primary pointer-events-none z-10" />
                 <input
                   type="date"
-                  value={format(selectedDate, "yyyy-MM-dd")}
-                  max={format(new Date(), "yyyy-MM-dd")}
+                  value={selectedDateStr}
+                  max={todayStr}
                   onChange={(e) => {
-                    if (e.target.value) setSelectedDate(new Date(e.target.value + "T12:00:00"))
+                    if (e.target.value) setSelectedDateStr(e.target.value)
                   }}
                   className="h-9 pl-9 pr-3 rounded-md border-2 border-primary/30 hover:border-primary/60 bg-background text-sm font-medium focus:outline-none focus:border-primary transition-colors cursor-pointer"
                 />
@@ -357,7 +394,7 @@ const AdminOrders = () => {
                   variant="outline"
                   size="sm"
                   className="h-9 text-xs font-medium border-primary/30 text-primary hover:text-primary"
-                  onClick={() => setSelectedDate(new Date())}
+                  onClick={() => setSelectedDateStr(todayStr)}
                 >
                   Today
                 </Button>
@@ -381,29 +418,37 @@ const AdminOrders = () => {
         <div className="grid grid-cols-3 gap-3">
           <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
             <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total Orders</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Total Orders
+              </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-primary">{stats.total}</span>
                 <span className="text-xs text-muted-foreground">
-                  {isSelectedToday ? "today" : format(selectedDate, "MMM d")}
+                  {isSelectedToday ? 'today' : format(selectedDateForDisplay, 'MMM d')}
                 </span>
               </div>
             </CardContent>
           </Card>
           <Card className="border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
             <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Completed</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Completed
+              </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-green-600">{stats.completed}</span>
                 <span className="text-xs text-muted-foreground">
-                  {stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : "—"}
+                  {stats.total > 0
+                    ? `${Math.round((stats.completed / stats.total) * 100)}%`
+                    : '—'}
                 </span>
               </div>
             </CardContent>
           </Card>
           <Card className="border-2 border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800">
             <CardContent className="py-4 px-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">In Progress</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                In Progress
+              </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-yellow-600">{stats.in_progress}</span>
                 <span className="text-xs text-muted-foreground">active now</span>
@@ -414,17 +459,24 @@ const AdminOrders = () => {
 
         <Card>
           <CardContent className="py-3 px-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Wash Pipeline</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Wash Pipeline
+            </p>
             <div className="grid grid-cols-4 divide-x divide-border">
               {[
-                { label: "Pending\nDropoff", value: stats.pending_dropoff, color: "text-orange-500" },
-                { label: "Checked\nIn",      value: stats.checked_in,     color: "text-cyan-600"   },
-                { label: "In\nProgress",     value: stats.in_progress,    color: "text-indigo-600" },
-                { label: "Ready",            value: stats.ready,           color: "text-blue-600"   },
+                { label: 'Pending\nDropoff', value: stats.pending_dropoff, color: 'text-orange-500' },
+                { label: 'Checked\nIn',      value: stats.checked_in,     color: 'text-cyan-600'   },
+                { label: 'In\nProgress',     value: stats.in_progress,    color: 'text-indigo-600' },
+                { label: 'Ready',            value: stats.ready,           color: 'text-blue-600'   },
               ].map(({ label, value, color }) => (
-                <div key={label} className="flex flex-col items-center px-3 first:pl-0 last:pr-0">
+                <div
+                  key={label}
+                  className="flex flex-col items-center px-3 first:pl-0 last:pr-0"
+                >
                   <span className={`text-3xl font-bold ${color}`}>{value}</span>
-                  <span className="text-xs text-muted-foreground text-center whitespace-pre-line leading-tight mt-1.5">{label}</span>
+                  <span className="text-xs text-muted-foreground text-center whitespace-pre-line leading-tight mt-1.5">
+                    {label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -514,7 +566,7 @@ const AdminOrders = () => {
                 Loading...
               </>
             ) : (
-              "Load More Orders"
+              'Load More Orders'
             )}
           </Button>
         </div>
@@ -547,8 +599,9 @@ const AdminOrders = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Order</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete order{" "}
-              <strong>{orderToDelete?.orderNumber}</strong>? This action cannot be undone.
+              Are you sure you want to delete order{' '}
+              <strong>{orderToDelete?.orderNumber}</strong>? This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

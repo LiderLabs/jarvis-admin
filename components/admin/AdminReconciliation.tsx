@@ -1,260 +1,690 @@
-'use client';
+'use client'
 
-import { useState, useMemo } from 'react';
-import { useQuery } from 'convex/react';
-import { api } from '@jordan6699/washlab-backend/api';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, subDays } from 'date-fns';
-import { Banknote, Download, Phone, ChevronDown, ChevronUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react'
+import { useQuery } from 'convex/react'
+import { api } from '@jordan6699/washlab-backend/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { DateRangePicker } from '@/components/ui/DateRangePicker'
+import {
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  Loader2,
+  Building2,
+  History,
+  AlertCircle,
+  Search,
+  Download,
+  ArrowLeft,
+} from 'lucide-react'
+import { format, subDays } from 'date-fns'
 
-function downloadCSV(rows: (string | number)[][], filename: string) {
-  const csv = rows.map(r => r.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface UnsettledOrder {
+  _id: string
+  orderNumber: string
+  customerName: string | null
+  customerPhoneNumber: string | null
+  finalPrice: number
+  serviceType: string | null
+  createdAt: number
 }
 
-const fmt = (n: number) => 'GHS ' + n.toFixed(2);
-const DATE_PRESETS = [
-  { label: 'Today', days: 0 },
-  { label: 'Last 7 days', days: 7 },
-  { label: 'Last 30 days', days: 30 },
-  { label: 'All time', days: 999 },
-];
+interface BranchSummary {
+  branchId: string
+  branchName: string
+  totalCollected: number
+  totalCollectedAllTime: number
+  totalSent: number
+  totalDeducted: number
+  outstanding: number
+  unsettledOrders: UnsettledOrder[]
+  inProgressRecons: InProgressRecon[]
+  allDeductions: Deduction[]
+  lastActivityTs: number | null
+}
 
-// Self-contained branch row — fetches real collected totals from orders
-function BranchRow({ branchId, branchName, phone, totalSent, sentEntries }: {
-  branchId: string;
-  branchName: string;
-  phone: string | null;
-  totalSent: number;
-  sentEntries: any[];
-}) {
-  const [expanded, setExpanded] = useState(false);
+interface InProgressRecon {
+  _id: string
+  date: string
+  amountSent: number
+  senderMomoNumber: string
+  orderCount: number
+  status: 'pending' | 'processing'
+  createdAt: number
+  paystackReference?: string
+}
 
-  const dailyBreakdown = useQuery(
-    (api as any).cashReconciliation.getDailyBreakdownForAdmin,
-    { branchId }
-  ) as { date: string; total: number; orderCount: number }[] | undefined;
+interface Reconciliation {
+  _id: string
+  branchId: string
+  date: string
+  amountSent: number
+  senderMomoNumber: string
+  orderCount: number
+  totalCashOrders: number
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  createdAt: number
+  completedAt?: number
+  paystackReference?: string
+}
 
-  const totalCollected = (dailyBreakdown ?? []).reduce((s, d) => s + d.total, 0);
-  const outstanding = Math.max(0, totalCollected - totalSent);
-  const hasOutstanding = outstanding > 0;
-  const loading = dailyBreakdown === undefined;
+interface Deduction {
+  _id: string
+  branchId?: string
+  amount: number
+  reason: string
+  createdAt: number
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    completed: { label: 'Completed', cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+    processing: { label: 'Processing', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
+    pending:    { label: 'Pending',    cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
+    failed:     { label: 'Failed',     cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+  }
+  const s = map[status] ?? { label: status, cls: 'bg-muted text-muted-foreground' }
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${s.cls}`}>
+      {s.label}
+    </span>
+  )
+}
+
+function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
+function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
+
+// ─── Format the period label for the Outstanding card ─────────────────────────
+// If from and to are the same calendar day → show just that one date
+// Otherwise → show "d MMM yyyy – d MMM yyyy"
+function formatPeriodLabel(from: Date, to: Date): string {
+  const sameDay =
+    from.getFullYear() === to.getFullYear() &&
+    from.getMonth() === to.getMonth() &&
+    from.getDate() === to.getDate()
+  if (sameDay) return format(from, 'd MMM yyyy')
+  return `${format(from, 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`
+}
+
+// ─── Excel export (true multi-sheet .xlsx via xlsx npm package) ──────────────
+
+async function exportBranchesExcel(
+  summaries: BranchSummary[],
+  allRecons: Reconciliation[],
+  allDeductions: Deduction[],
+  sinceTs: number,
+  untilTs: number,
+  filename: string
+) {
+  const XLSX = (await import('xlsx'))
+  const wb = XLSX.utils.book_new()
+
+  for (const summary of summaries) {
+    const sheetName = summary.branchName.replace(/[\/:*?[\]]/g, '_').slice(0, 31)
+
+    const recons = allRecons
+      .filter(r => String(r.branchId) === String(summary.branchId))
+      .filter(r => r.createdAt >= sinceTs && r.createdAt <= untilTs)
+      .sort((a, z) => z.createdAt - a.createdAt)
+
+    const deductions = allDeductions
+      .filter(d => String((d as any).branchId) === String(summary.branchId))
+      .filter(d => d.createdAt >= sinceTs && d.createdAt <= untilTs)
+      .sort((a, z) => z.createdAt - a.createdAt)
+
+    const rows: any[][] = [
+      [`${summary.branchName} — Cash Reconciliation`],
+      ['Total Collected', `GHS ${summary.totalCollected.toFixed(2)}`, 'Total Sent', `GHS ${summary.totalSent.toFixed(2)}`, 'Cash Used', `GHS ${summary.totalDeducted.toFixed(2)}`, 'Outstanding', `GHS ${summary.outstanding.toFixed(2)}`],
+      [],
+      ['Date', 'Type', 'Detail', 'MoMo Number', 'Amount (GHS)', 'Status'],
+    ]
+
+    for (const r of recons) {
+      rows.push([
+        fmtDate(r.createdAt),
+        'Sent',
+        `${r.orderCount} cash order${r.orderCount !== 1 ? 's' : ''}`,
+        r.senderMomoNumber,
+        Math.abs(r.amountSent),
+        r.status.charAt(0).toUpperCase() + r.status.slice(1),
+      ])
+    }
+
+    for (const d of deductions) {
+      rows.push([fmtDate(d.createdAt), 'Cash Used', d.reason, '—', Math.abs(d.amount), 'Applied'])
+    }
+
+    if (recons.length === 0 && deductions.length === 0) {
+      rows.push(['No transactions in this period.'])
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 12 }]
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  }
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbout], { type: 'application/octet-stream' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename.replace(/\.xls$/, '.xlsx')
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ─── Branch History Drawer ────────────────────────────────────────────────────
+
+interface BranchHistoryDrawerProps {
+  summary: BranchSummary
+  allRecons: Reconciliation[]
+  allDeductions: Deduction[]
+  initialFrom: Date
+  initialTo: Date
+  onClose: () => void
+}
+
+function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, initialTo, onClose }: BranchHistoryDrawerProps) {
+  const [from, setFrom] = useState<Date>(initialFrom)
+  const [to, setTo]     = useState<Date>(initialTo)
+
+  // Sync when parent date range changes
+  useEffect(() => { setFrom(initialFrom) }, [initialFrom])
+  useEffect(() => { setTo(initialTo) }, [initialTo])
+
+  const fromTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
+  const toTs   = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
+
+  const branchRecons = allRecons
+    .filter(r => String(r.branchId) === String(summary.branchId))
+    .filter(r => r.createdAt >= fromTs && r.createdAt <= toTs)
+    .sort((a, b) => b.createdAt - a.createdAt)
+
+  const branchDeductions = allDeductions
+    .filter(d => String((d as any).branchId) === String(summary.branchId))
+    .filter(d => d.createdAt >= fromTs && d.createdAt <= toTs)
+    .sort((a, b) => b.createdAt - a.createdAt)
+
+  const historySentTotal = branchRecons
+    .filter(r => r.status === 'completed')
+    .reduce((s, r) => s + r.amountSent, 0)
+
+  const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
+
+  const periodUnsettledOrders = summary.unsettledOrders.filter(
+    o => o.createdAt >= fromTs && o.createdAt <= toTs
+  )
+  const periodOutstanding = periodUnsettledOrders.reduce((s, o) => s + o.finalPrice, 0)
+
+  type HistoryEvent =
+    | { type: 'sent'; data: Reconciliation }
+    | { type: 'deduction'; data: Deduction }
+
+  const allEvents: HistoryEvent[] = [
+    ...branchRecons.map(r => ({ type: 'sent' as const, data: r })),
+    ...branchDeductions.map(d => ({ type: 'deduction' as const, data: d })),
+  ].sort((a, b) => b.data.createdAt - a.data.createdAt)
+
+  async function handleExport() {
+    await exportBranchesExcel(
+      [summary],
+      allRecons,
+      allDeductions,
+      fromTs,
+      toTs,
+      `reconciliation-${summary.branchName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+    )
+  }
 
   return (
-    <div className={'rounded-xl border overflow-hidden ' + (hasOutstanding ? 'border-red-200 dark:border-red-800' : 'border-border')}>
-
-      {/* Header row */}
-      <div
-        className={'flex items-center gap-3 p-4 cursor-pointer transition-colors ' + (hasOutstanding ? 'bg-red-50/50 dark:bg-red-950/10 hover:bg-red-50' : 'bg-card hover:bg-muted/30')}
-        onClick={() => setExpanded(e => !e)}
-      >
-        <div className={'w-2.5 h-2.5 rounded-full flex-shrink-0 ' + (loading ? 'bg-muted animate-pulse' : hasOutstanding ? 'bg-red-500' : 'bg-green-500')} />
-        <div className='flex-1 min-w-0'>
-          <div className='flex items-center gap-2 flex-wrap'>
-            <span className='font-semibold text-sm text-foreground'>{branchName}</span>
-            {!loading && (
-              hasOutstanding
-                ? <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600'>{fmt(outstanding)} outstanding</span>
-                : <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-600'>All clear</span>
-            )}
+    <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border bg-background px-4 sm:px-6 pt-4 pb-4 space-y-3">
+        <button
+          onClick={onClose}
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+        <div className="flex flex-col gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-foreground">{summary.branchName}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Transaction history</p>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="flex-1">
+              <DateRangePicker
+                from={from}
+                to={to}
+                onChange={(f, t) => { setFrom(f); setTo(t) }}
+              />
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5 h-9 w-full sm:w-auto" onClick={handleExport}>
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
           </div>
         </div>
-
-        {/* Numbers from real order data */}
-        <div className='hidden sm:flex items-center gap-5 text-right flex-shrink-0'>
-          <div>
-            <p className='text-[10px] text-muted-foreground uppercase'>Collected</p>
-            <p className='text-sm font-bold text-foreground'>{loading ? '—' : fmt(totalCollected)}</p>
-          </div>
-          <div>
-            <p className='text-[10px] text-muted-foreground uppercase'>Sent</p>
-            <p className='text-sm font-bold text-green-600'>{fmt(totalSent)}</p>
-          </div>
-          <div>
-            <p className='text-[10px] text-muted-foreground uppercase'>Outstanding</p>
-            <p className={'text-sm font-bold ' + (hasOutstanding ? 'text-red-600' : 'text-green-600')}>
-              {loading ? '—' : hasOutstanding ? fmt(outstanding) : 'Clear'}
-            </p>
-          </div>
-        </div>
-
-        {phone && (
-          <a href={'tel:' + phone} onClick={e => e.stopPropagation()}
-            className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ' + (hasOutstanding ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-muted text-muted-foreground hover:bg-muted/80')}>
-            <Phone className='w-3 h-3' /> Call
-          </a>
-        )}
-        {expanded ? <ChevronUp className='w-4 h-4 text-muted-foreground flex-shrink-0' /> : <ChevronDown className='w-4 h-4 text-muted-foreground flex-shrink-0' />}
       </div>
 
-      {/* Expanded detail */}
-      {expanded && (
-        <div className='border-t border-border p-4 space-y-5'>
-          {loading ? (
-            <div className='flex justify-center py-6'><div className='w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin' /></div>
-          ) : (
-            <>
-              {/* Cash collected per day */}
-              <div>
-                <div className='flex items-center gap-2 mb-3'>
-                  <ArrowDownCircle className='w-4 h-4 text-blue-500' />
-                  <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide'>Cash Collected by Day</p>
-                </div>
-                {dailyBreakdown!.length === 0 ? (
-                  <p className='text-xs text-muted-foreground px-3'>No cash orders found</p>
-                ) : (
-                  <div className='space-y-2'>
-                    {dailyBreakdown!.map(d => (
-                      <div key={d.date} className='flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border text-sm'>
-                        <div>
-                          <p className='font-semibold text-foreground'>{d.date}</p>
-                          <p className='text-xs text-muted-foreground'>{d.orderCount} cash order{d.orderCount !== 1 ? 's' : ''}</p>
-                        </div>
-                        <p className='font-bold text-foreground'>{fmt(d.total)}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className='flex justify-between items-center mt-2 px-3 py-2 rounded-lg bg-muted/60 text-sm'>
-                  <span className='text-muted-foreground font-medium'>Total Collected</span>
-                  <span className='font-bold text-foreground'>{fmt(totalCollected)}</span>
-                </div>
-              </div>
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
+        {/* Summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Sent</p>
+            <p className="text-2xl font-bold text-green-600">{fmt(historySentTotal)}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used</p>
+            <p className="text-2xl font-bold text-orange-600">{fmt(historyCashUsedTotal)}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
+            <p className="text-2xl font-bold text-foreground">{allEvents.length}</p>
+          </Card>
+          <Card className={`p-4 ${
+            periodOutstanding > 0
+              ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
+              : 'border-green-200 bg-green-50 dark:bg-green-950/20'
+          }`}>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding</p>
+            <p className={`text-2xl font-bold ${periodOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {fmt(periodOutstanding)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
+          </Card>
+        </div>
 
-              {/* Sent submissions + outstanding */}
-              <div className='pt-3 border-t border-border space-y-2'>
-                {sentEntries.length > 0 && (
-                  <div className='space-y-2 mb-3'>
-                    <div className='flex items-center gap-2'>
-                      <ArrowUpCircle className='w-4 h-4 text-green-500' />
-                      <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide'>Sent to Admin</p>
-                    </div>
-                    {sentEntries.map((r: any) => (
-                      <div key={r._id} className='flex items-center justify-between p-3 rounded-lg bg-green-50/50 dark:bg-green-950/10 border border-green-200 dark:border-green-800 text-sm'>
-                        <div>
-                          <p className='font-semibold text-foreground'>{r.date}</p>
-                          {r.senderMomoNumber && <p className='text-xs text-muted-foreground'>via {r.senderMomoNumber}</p>}
-                        </div>
-                        <p className='font-bold text-green-600'>{fmt(r.amountSent || 0)}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className='flex justify-between text-sm pt-2 border-t border-border'>
-                  <span className='font-semibold text-foreground'>Outstanding</span>
-                  <span className={'font-bold text-lg ' + (outstanding > 0 ? 'text-red-600' : 'text-green-600')}>
-                    {outstanding > 0 ? fmt(outstanding) : '✓ Fully settled'}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+        {allEvents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <History className="w-10 h-10 mb-3 opacity-20" />
+            <p className="text-sm">No transactions in this period.</p>
+          </div>
+        ) : (
+          <Card className="overflow-hidden w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[500px]">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="text-left px-3 py-3 font-semibold text-muted-foreground text-xs whitespace-nowrap">Date</th>
+                    <th className="text-left px-3 py-3 font-semibold text-muted-foreground text-xs">Type</th>
+                    <th className="text-left px-3 py-3 font-semibold text-muted-foreground text-xs">Detail</th>
+                    <th className="text-right px-3 py-3 font-semibold text-muted-foreground text-xs">Amount</th>
+                    <th className="text-left px-3 py-3 font-semibold text-muted-foreground text-xs">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEvents.map((event, i) => (
+                    <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
+                      <td className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {fmtDate(event.data.createdAt)}
+                      </td>
+                      {event.type === 'sent' ? (
+                        <>
+                          <td className="px-3 py-3">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-full">
+                              Sent
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-muted-foreground">
+                            {(event.data as Reconciliation).orderCount} order{(event.data as Reconciliation).orderCount !== 1 ? 's' : ''}&nbsp;
+                            <span className="font-mono">{(event.data as Reconciliation).senderMomoNumber}</span>
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-green-600 text-sm">
+                            {fmt((event.data as Reconciliation).amountSent)}
+                          </td>
+                          <td className="px-3 py-3">
+                            <StatusBadge status={(event.data as Reconciliation).status} />
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-3 py-3">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-700 bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300 px-2 py-0.5 rounded-full">
+                              Cash Used
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-muted-foreground">
+                            {(event.data as Deduction).reason}
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-orange-600 text-sm">
+                            {fmt((event.data as Deduction).amount)}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+                              Applied
+                            </span>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function AdminCashReconciliationPage() {
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
+  // Date state lives here at the top level — persists when opening/closing the history drawer
+  const [from, setFrom] = useState<Date>(new Date())
+  const [to, setTo]     = useState<Date>(new Date())
+  const [expanded, setExpanded] = useState<string | null>(null)
+  // Store branchId only — we look up the branch from fresh data on render, so stale objects are never an issue
+  const [historyBranchId, setHistoryBranchId] = useState<string | null>(null)
+
+  const sinceTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
+  const untilTs = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
+
+  const summaries: BranchSummary[] | undefined = useQuery(
+    (api as any).cashReconciliation.getBranchCashSummariesForAdmin,
+    { sinceTs, untilTs }
+  )
+  const allRecons: Reconciliation[] | undefined = useQuery(
+    (api as any).cashReconciliation.getAllReconciliationsForAdmin
+  )
+  const allDeductions: Deduction[] | undefined = useQuery(
+    (api as any).cashReconciliation.getAllDeductionsForAdmin
+  )
+
+  const filteredSummaries = useMemo(() => {
+    if (!summaries) return []
+    return summaries
+      .map(s => {
+        const periodOrders = s.unsettledOrders.filter(
+          o => o.createdAt >= sinceTs && o.createdAt <= untilTs
+        )
+        const periodOutstanding = periodOrders.reduce((sum, o) => sum + o.finalPrice, 0)
+        return {
+          ...s,
+          unsettledOrders: periodOrders,
+          outstanding: periodOutstanding,
+        }
+      })
+      .filter(s => s.outstanding > 0)
+  }, [summaries, sinceTs, untilTs])
+
+  const filtered = useMemo(() => {
+    return filteredSummaries
+      .filter(s => {
+        if (search && !s.branchName.toLowerCase().includes(search.toLowerCase())) return false
+        if (filter === 'outstanding') return s.outstanding > 0
+        if (filter === 'settled') return s.outstanding === 0
+        return true
+      })
+      .sort((a, b) => b.outstanding - a.outstanding)
+  }, [filteredSummaries, search, filter])
+
+  const totals = useMemo(() => {
+    if (!summaries) return null
+    return {
+      collected: summaries.reduce((s, b) => s + b.totalCollected, 0),
+      outstanding: filteredSummaries.reduce((s, b) => s + b.outstanding, 0),
+    }
+  }, [summaries, filteredSummaries])
+
+  // Resolve history branch from live data so it's always fresh
+  const historyBranch = useMemo(() => {
+    if (!historyBranchId || !filteredSummaries.length) return null
+    // Fall back to summaries so history works even for settled branches
+    return (
+      filteredSummaries.find(s => s.branchId === historyBranchId) ??
+      summaries?.find(s => s.branchId === historyBranchId) ??
+      null
+    )
+  }, [historyBranchId, filteredSummaries, summaries])
+
+  if (historyBranch) {
+    return (
+      <BranchHistoryDrawer
+        summary={historyBranch}
+        allRecons={allRecons ?? []}
+        allDeductions={allDeductions ?? []}
+        initialFrom={from}
+        initialTo={to}
+        onClose={() => setHistoryBranchId(null)}
+      />
+    )
+  }
+
+  return (
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Cash Reconciliation</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">All-time outstanding per branch</p>
+      </div>
+
+      {/* Date picker for period */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground font-medium">Period:</span>
+        <DateRangePicker
+          from={from}
+          to={to}
+          onChange={(f, t) => { setFrom(f); setTo(t) }}
+        />
+      </div>
+
+      {/* Totals */}
+      {totals && (
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Total Collected</p>
+            <p className="text-2xl font-bold">{fmt(totals.collected)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
+          </Card>
+          <Card className={`p-4 ${totals.outstanding > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-green-200 bg-green-50 dark:bg-green-950/20'}`}>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Total Outstanding</p>
+            <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {fmt(totals.outstanding)}
+            </p>
+            {/* Show the chosen filter period — same logic: single day or range */}
+            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
+          </Card>
         </div>
       )}
-    </div>
-  );
-}
 
-const AdminReconciliation = () => {
-  const [datePreset, setDatePreset] = useState(7);
-  const [selectedBranch, setSelectedBranch] = useState('all');
-
-  const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any) ?? [];
-  const branches = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? [];
-  const branchMap = Object.fromEntries(branches.map((b: any) => [b._id, b]));
-
-
-  const cutoff = useMemo(() => { if (datePreset === 999) return null; const d = new Date(); d.setHours(0, 0, 0, 0); if (datePreset === 0) return d.getTime(); d.setDate(d.getDate() - datePreset); return d.getTime(); }, [datePreset]);
-
-  const reconciliations = useQuery((api as any).cashReconciliation.getAllForAdmin, { limit: 500 }) as any[] | undefined;
-  const branchesWithCash = useQuery((api as any).cashReconciliation.getBranchesWithCashForAdmin, { since: cutoff ?? undefined }) as any[] | undefined;
-  const isLoading = reconciliations === undefined || branchesWithCash === undefined;
-
-  const branchSummaries = (() => {
-    if (!branchesWithCash) return [];
-    const map: Record<string, any> = {};
-    branchesWithCash.forEach((b: any) => {
-      if (selectedBranch !== 'all' && b.branchId !== selectedBranch) return;
-      map[b.branchId] = { branchId: b.branchId, branchName: b.branchName, phone: b.phone, totalSent: 0, sentEntries: [] };
-    });
-    (reconciliations || []).forEach((r: any) => {
-      if (!map[r.branchId]) return;
-      if (r.status === 'completed') {
-        map[r.branchId].totalSent += r.amountSent || 0;
-        map[r.branchId].sentEntries.push(r);
-      }
-    });
-    return Object.values(map);
-  })();
-
-  const exportCSV = () => {
-    const rows: (string | number)[][] = [
-      ['Branch', 'Total Sent (GHS)'],
-      ...branchSummaries.map(b => [b.branchName, b.totalSent.toFixed(2)]),
-    ];
-    downloadCSV(rows, 'reconciliations-' + format(new Date(), 'yyyy-MM-dd') + '.csv');
-  };
-
-  return (
-    <div className='space-y-5'>
-      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
-        <div>
-          <h1 className='text-2xl font-bold text-foreground'>Cash Reconciliation</h1>
-          <p className='text-sm text-muted-foreground mt-0.5'>Daily cash collected per branch vs total sent to admin</p>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search branches…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
         </div>
-        <div className='flex items-center gap-2 flex-wrap'>
-          <div className='flex bg-muted rounded-lg p-0.5 gap-0.5'>
-            {DATE_PRESETS.map(p => (
-              <button key={p.days} onClick={() => setDatePreset(p.days)}
-                className={'px-3 py-1.5 text-xs font-medium rounded-md transition-all ' + (datePreset === p.days ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <Button variant='outline' size='sm' onClick={exportCSV} className='gap-1.5'>
-            <Download className='w-3.5 h-3.5' /> Export
-          </Button>
-        </div>
-      </div>
-
-      <div className='flex items-center gap-3'>
-        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger className='w-52'><SelectValue placeholder='All Branches' /></SelectTrigger>
+        <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
+          <SelectTrigger className="w-full sm:w-44 h-9">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value='all'>All Branches</SelectItem>
-            {branches.map((b: any) => <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>)}
+            <SelectItem value="all">All branches</SelectItem>
+            <SelectItem value="outstanding">Outstanding only</SelectItem>
+            <SelectItem value="settled">Settled only</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 h-9 shrink-0"
+          onClick={async () => {
+            await exportBranchesExcel(
+              filtered,
+              allRecons ?? [],
+              allDeductions ?? [],
+              sinceTs,
+              untilTs,
+              `cash-reconciliation-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+            )
+          }}
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export
+        </Button>
       </div>
 
-      {isLoading ? (
-        <div className='flex justify-center py-16'><div className='w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin' /></div>
-      ) : branchSummaries.length === 0 ? (
-        <div className='flex flex-col items-center justify-center py-16 text-muted-foreground bg-card border border-border rounded-xl'>
-          <Banknote className='w-10 h-10 mb-3 opacity-20' />
-          <p className='text-sm'>No reconciliations in this period</p>
+      {/* Branch list */}
+      {!summaries ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          <Building2 className="w-10 h-10 mb-3 opacity-20" />
+          <p className="text-sm">No branches found.</p>
         </div>
       ) : (
-        <div className='space-y-3'>
-          {branchSummaries.map(b => (
-            <BranchRow
-              key={b.branchId}
-              branchId={b.branchId}
-              branchName={b.branchName}
-              phone={b.phone}
-              totalSent={b.totalSent}
-              sentEntries={b.sentEntries}
-            />
-          ))}
+        <div className="space-y-3">
+          {filtered.map(branch => {
+            const isOpen = expanded === branch.branchId
+            return (
+              <Card key={branch.branchId} className="overflow-hidden">
+                {/* Branch row */}
+                <div
+                  className="w-full text-left px-4 sm:px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => setExpanded(isOpen ? null : branch.branchId)}
+                >
+                  <div className="shrink-0 text-muted-foreground">
+                    {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-foreground">{branch.branchName}</span>
+                      {branch.outstanding > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5 rounded-full">
+                          <AlertCircle className="w-3 h-3" />
+                          {fmt(branch.outstanding)} outstanding
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Settled
+                        </span>
+                      )}
+                      {branch.inProgressRecons.length > 0 && (
+                        <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                          {branch.inProgressRecons.length} in progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1.5 text-xs h-8"
+                    onClick={e => { e.stopPropagation(); setHistoryBranchId(branch.branchId) }}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    History
+                  </Button>
+                </div>
+
+                {/* Expanded detail */}
+                {isOpen && (
+                  <div className="border-t border-border px-4 sm:px-5 py-4 space-y-4 bg-muted/10">
+
+                    {/* Unsettled orders */}
+                    {branch.unsettledOrders.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Unsettled Cash Orders
+                        </p>
+                        <div className="overflow-x-auto rounded-lg border border-border">
+                          <table className="w-full text-sm min-w-[480px]">
+                            <thead>
+                              <tr className="bg-muted/50 border-b border-border">
+                                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Order</th>
+                                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Customer</th>
+                                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Service</th>
+                                <th className="text-right px-3 py-2 text-xs font-semibold text-muted-foreground">Amount</th>
+                                <th className="text-right px-3 py-2 text-xs font-semibold text-muted-foreground">Time</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {branch.unsettledOrders.map(o => (
+                                <tr key={o._id} className="border-b border-border last:border-0">
+                                  <td className="px-3 py-2 font-mono text-xs font-semibold text-primary">{o.orderNumber}</td>
+                                  <td className="px-3 py-2">
+                                    <p className="text-xs font-medium">{o.customerName || '—'}</p>
+                                    <p className="text-xs text-muted-foreground">{o.customerPhoneNumber || ''}</p>
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground">{o.serviceType || '—'}</td>
+                                  <td className="px-3 py-2 text-right text-xs font-bold">{fmt(o.finalPrice)}</td>
+                                  <td className="px-3 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">{fmtDate(o.createdAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-muted/40 border-t border-border">
+                                <td colSpan={3} className="px-3 py-2 text-xs font-semibold">Total ({branch.unsettledOrders.length} orders)</td>
+                                <td className="px-3 py-2 text-right text-xs font-bold text-red-600">{fmt(branch.outstanding)}</td>
+                                <td />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* In-progress recons */}
+                    {branch.inProgressRecons.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">In Progress</p>
+                        <div className="space-y-1.5">
+                          {branch.inProgressRecons.map(r => (
+                            <div key={r._id} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/10 border border-blue-200">
+                              <div>
+                                <p className="font-mono text-xs text-muted-foreground">{r.senderMomoNumber}</p>
+                                <p className="text-xs text-muted-foreground">{fmtDate(r.createdAt)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-blue-600">{fmt(r.amountSent)}</p>
+                                <StatusBadge status={r.status} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nothing to show */}
+                    {branch.unsettledOrders.length === 0 && branch.inProgressRecons.length === 0 && (
+                      <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 py-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        All cash has been reconciled for this branch.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>
-  );
-};
-
-export default AdminReconciliation;
+  )
+}

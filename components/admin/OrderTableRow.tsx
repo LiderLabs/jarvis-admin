@@ -55,12 +55,13 @@ export const OrderTableRow = ({
     }
   }
 
+  const customerName = (order as any).customerName || (order as any).customer?.name || null
+
   return (
     <TableRow className="hover:bg-muted/50">
       {/* Order Number */}
       <TableCell className="font-medium whitespace-nowrap">
         <div className="flex items-center gap-2">
-          <Package className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="min-w-0">{order.orderNumber}</span>
           <button
             onClick={handleCopyOrderNumber}
@@ -78,9 +79,17 @@ export const OrderTableRow = ({
 
       {/* Customer */}
       <TableCell className="whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <User className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm">{order.customerPhoneNumber}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-col min-w-0">
+            {customerName && (
+              <span className="text-sm font-medium text-foreground truncate max-w-[160px]">
+                {customerName}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {order.customerPhoneNumber}
+            </span>
+          </div>
         </div>
       </TableCell>
 
@@ -133,22 +142,34 @@ export const OrderTableRow = ({
 
       {/* Amount */}
       <TableCell className="whitespace-nowrap">
-        <span className="text-sm text-muted-foreground">₵{(order.totalPrice ?? 0).toFixed(2)}</span>
+        <span className="text-sm text-muted-foreground">
+          ₵{(order.totalPrice ?? 0).toFixed(2)}
+        </span>
       </TableCell>
 
       {/* Final Paid */}
       <TableCell className="whitespace-nowrap">
         <div className="flex flex-col gap-0.5">
           {order.finalPrice === 0 ? (
-            <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 w-fit">FREE</span>
+            <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 w-fit">
+              FREE
+            </span>
           ) : (
-            <span className="font-semibold text-green-600">₵{(order.finalPrice ?? order.totalPrice ?? 0).toFixed(2)}</span>
+            <span className="font-semibold text-green-600">
+              ₵{(order.finalPrice ?? order.totalPrice ?? 0).toFixed(2)}
+            </span>
           )}
-          {order.finalPrice != null && order.totalPrice != null && order.finalPrice < order.totalPrice && (
-            <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 rounded px-1 w-fit">-₵{(order.totalPrice - order.finalPrice).toFixed(2)} off</span>
-          )}
+          {order.finalPrice != null &&
+            order.totalPrice != null &&
+            order.finalPrice < order.totalPrice && (
+              <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 rounded px-1 w-fit">
+                -₵{(order.totalPrice - order.finalPrice).toFixed(2)} off
+              </span>
+            )}
           {(order as any).voucherCode && (
-            <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-1 w-fit">{(order as any).voucherCode}</span>
+            <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-1 w-fit">
+              {(order as any).voucherCode}
+            </span>
           )}
         </div>
       </TableCell>
@@ -156,13 +177,12 @@ export const OrderTableRow = ({
       {/* Date */}
       <TableCell className="whitespace-nowrap">
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" />
           <span>{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
         </div>
       </TableCell>
 
       {/* Actions */}
-      <TableCell className="whitespace-nowrap">
+      <TableCell className="whitespace-nowrap text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -191,4 +211,3 @@ export const OrderTableRow = ({
     </TableRow>
   )
 }
-

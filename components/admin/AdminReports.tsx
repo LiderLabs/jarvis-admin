@@ -9,13 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  format, subDays, getISOWeek, getYear,
-  startOfISOWeek, endOfISOWeek, addWeeks, subWeeks, isSameWeek,
+  format, subDays, getYear,
+  startOfWeek, endOfWeek, addWeeks, subWeeks, isSameWeek,
 } from 'date-fns';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import {
   Download, TrendingUp, TrendingDown, Eye, BarChart2,
-  ArrowLeft, Target, Calendar, CheckCircle2, XCircle,
+  ArrowLeft, Target, CheckCircle2, XCircle,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,21 +25,35 @@ import {
 } from 'recharts';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Week Picker — navigate ISO weeks with arrows, no calendar popup needed
+// Helpers — Sunday-start week
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEK_OPTS = { weekStartsOn: 0 } as const; // 0 = Sunday
+
+/** Get the "W-number" for a Sunday-start week (week 1 = first week containing Jan 1) */
+function getSundayWeekNumber(date: Date): number {
+  const jan1 = new Date(date.getFullYear(), 0, 1);
+  const startOfJan1Week = startOfWeek(jan1, WEEK_OPTS);
+  const diff = startOfWeek(date, WEEK_OPTS).getTime() - startOfJan1Week.getTime();
+  return Math.round(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week Picker — Sunday-start
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeekPicker({
   value,
   onChange,
 }: {
-  value: Date
-  onChange: (weekStart: Date) => void
+  value: Date;
+  onChange: (weekStart: Date) => void;
 }) {
   const weeks = Array.from({ length: 17 }, (_, i) => {
-    const ws = startOfISOWeek(subWeeks(new Date(), i));
-    const we = endOfISOWeek(ws);
-    const wn = getISOWeek(ws);
-    const wy = getYear(ws);
+    const ws = startOfWeek(subWeeks(new Date(), i), WEEK_OPTS);
+    const we = endOfWeek(ws, WEEK_OPTS);
+    const wn = getSundayWeekNumber(ws);
+    const wy = ws.getFullYear();
     return {
       ws, we, wn, wy,
       label: `W${wn} ${wy}  ·  ${format(ws, 'MMM d')} – ${format(we, 'MMM d')}`,
@@ -47,7 +61,8 @@ function WeekPicker({
     };
   });
 
-  const selectedKey = `${getISOWeek(value)}-${getYear(value)}`;
+  const selectedWs  = startOfWeek(value, WEEK_OPTS);
+  const selectedKey = `${getSundayWeekNumber(selectedWs)}-${selectedWs.getFullYear()}`;
 
   return (
     <select
@@ -74,46 +89,79 @@ function WeekPicker({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
-  const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
+  const [activeTab, setActiveTab]     = useState<'current' | 'history'>('current');
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
 
-  const weekNum   = getISOWeek(selectedWeek);
-  const weekYear  = getYear(selectedWeek);
-  const weekStart = startOfISOWeek(selectedWeek);
-  const weekEnd   = endOfISOWeek(selectedWeek);
+  const weekStart = startOfWeek(selectedWeek, WEEK_OPTS);
+  const weekEnd   = endOfWeek(selectedWeek, WEEK_OPTS);
+  const weekNum   = getSundayWeekNumber(weekStart);
+  const weekYear  = weekStart.getFullYear();
 
-  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats, {
-    weekStart: weekStart.getTime(),
-    weekEnd: weekEnd.getTime(),
-  }) ?? [];
+  const isCurrentWeek = isSameWeek(selectedWeek, new Date(), WEEK_OPTS);
+
+  // UTC-aligned timestamps to match the backend's Sunday-start window
+  const weekStartUtcMs = Date.UTC(
+    weekStart.getFullYear(),
+    weekStart.getMonth(),
+    weekStart.getDate(),
+    0, 0, 0, 0,
+  );
+  const weekEndUtcMs = Date.UTC(
+    weekEnd.getFullYear(),
+    weekEnd.getMonth(),
+    weekEnd.getDate(),
+    23, 59, 59, 999,
+  );
+
+  const weeklyStats = useQuery(
+    (api as any).admin.getWeeklyOrderStats,
+    isCurrentWeek ? {} : { weekStart: weekStartUtcMs, weekEnd: weekEndUtcMs },
+  ) ?? [];
+
   const trends = useQuery((api as any).analytics.getRevenueTrends, { period: 'weekly', days: 84 }) ?? [];
 
-  const branchRows = useMemo(() => (weeklyStats as any[]).map((s: any) => {
-    const target = s.weeklyTarget ?? 0;
-    const orders = s.weeklyOrders ?? 0;
-    const pct = target > 0 ? (orders / target) * 100 : null;
-    const hit = pct !== null && pct >= 100;
-    const exceeded = hit && orders > target;
-    return { ...s, target, orders, pct, hit, exceeded };
-  }), [weeklyStats]);
+  // Sort by completion % descending; no-target branches last
+  const branchRows = useMemo(() => {
+    const rows = (weeklyStats as any[]).map((s: any) => {
+      const target = s.weeklyTarget ?? 0;
+      const orders = s.weeklyOrders ?? 0;
+      const pct    = target > 0 ? (orders / target) * 100 : null;
+      const hit    = pct !== null && pct >= 100;
+      const exceeded = hit && orders > target;
+      return { ...s, target, orders, pct, hit, exceeded };
+    });
 
-  const historyRows = useMemo(() => [...(trends as any[])].reverse().slice(0, 12), [trends]);
+    return rows.sort((a, b) => {
+      const pa = a.target > 0 ? (a.orders / a.target) * 100 : -1;
+      const pb = b.target > 0 ? (b.orders / b.target) * 100 : -1;
+      return pb - pa;
+    });
+  }, [weeklyStats]);
+
+  const historyRows   = useMemo(() => [...(trends as any[])].reverse().slice(0, 12), [trends]);
   const completedWeeks = historyRows.slice(1);
-  const avgOrders = completedWeeks.length > 0
+  const avgOrders     = completedWeeks.length > 0
     ? Math.round(completedWeeks.reduce((s: number, r: any) => s + r.orders, 0) / completedWeeks.length) : 0;
-  const avgRevenue = completedWeeks.length > 0
+  const avgRevenue    = completedWeeks.length > 0
     ? completedWeeks.reduce((s: number, r: any) => s + r.revenue, 0) / completedWeeks.length : 0;
+
+  const MEDALS = ['🥇', '🥈', '🥉'];
 
   const exportCurrentWeek = () => {
     const rows = [
-      ['Week', 'Dates', 'Branch', 'Target', 'Total Orders', 'Status', 'Gap / Surplus'],
-      ...branchRows.map(r => {
+      ['Week', 'Dates', 'Rank', 'Branch', 'Target', 'Total Orders', 'Status', 'Gap / Surplus'],
+      ...branchRows.map((r, i) => {
         let status = 'In Progress', gap = '';
         if (!r.target)       { status = 'No Target'; }
         else if (r.exceeded) { status = 'Exceeded'; gap = `+${r.orders - r.target}`; }
         else if (r.hit)      { status = 'Target Hit'; gap = '0'; }
         else                 { status = 'Unachieved'; gap = `-${r.target - r.orders}`; }
-        return [`W${weekNum} ${weekYear}`, `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`, r.branchName, r.target || '—', r.orders, status, gap];
+        return [
+          `W${weekNum} ${weekYear}`,
+          `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`,
+          r.target > 0 ? i + 1 : '—',
+          r.branchName, r.target || '—', r.orders, status, gap,
+        ];
       }),
     ];
     downloadCSV(rows, `weekly-report-W${weekNum}-${weekYear}.csv`);
@@ -121,15 +169,17 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
 
   const exportHistory = () => {
     const rows = [
-      ['Week', 'Mon – Sun', 'Total Orders', 'Revenue (GHS)', 'vs Weekly Average'],
+      ['Week', 'Sun – Sat', 'Total Orders', 'Revenue (GHS)', 'vs Weekly Average'],
       ...historyRows.map((r: any, i: number) => {
         const vsAvg = avgOrders > 0 && i > 0 ? ((r.orders - avgOrders) / avgOrders * 100).toFixed(1) + '%' : i === 0 ? 'In Progress' : '—';
         let weekRangeLabel = '';
         try {
           const [wPart, yPart] = (r.period as string).split(' ');
           const wn = parseInt(wPart.replace('W', '')), yr = parseInt(yPart);
-          const ws = startOfISOWeek(new Date(new Date(yr, 0, 4).getTime() + (wn - 1) * 7 * 86400000));
-          weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfISOWeek(ws), 'MMM d')}`;
+          // Reconstruct Sunday-start week from stored period label
+          const jan1  = new Date(yr, 0, 1);
+          const ws    = startOfWeek(new Date(jan1.getTime() + (wn - 1) * 7 * 86400000), WEEK_OPTS);
+          weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfWeek(ws, WEEK_OPTS), 'MMM d')}`;
         } catch {}
         return [r.period, weekRangeLabel, r.orders, r.revenue.toFixed(2), vsAvg];
       }),
@@ -181,6 +231,11 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
             <span className="font-medium text-foreground">W{weekNum} {weekYear}</span>
             <span>·</span>
             <span>{format(weekStart, 'EEEE, MMM d')} – {format(weekEnd, 'EEEE, MMM d')}</span>
+            {isCurrentWeek && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                Live
+              </span>
+            )}
           </div>
           {branchRows.length === 0 ? (
             <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -189,6 +244,7 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
           ) : (
             <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full">
               <thead><tr className="border-b border-border bg-muted/30">
+                <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-3 py-3 w-10">Rank</th>
                 <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Branch</th>
                 <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Target</th>
                 <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Orders</th>
@@ -196,16 +252,22 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
                 <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Result</th>
               </tr></thead>
               <tbody>
-                {branchRows.map(r => {
-                  const pct = r.pct !== null ? Math.min(r.pct, 100) : 0;
+                {branchRows.map((r, idx) => {
+                  const pct      = r.pct !== null ? Math.min(r.pct, 100) : 0;
                   const barColor = r.exceeded ? 'bg-purple-500' : r.hit ? 'bg-green-500' : r.pct !== null && r.pct >= 75 ? 'bg-yellow-400' : 'bg-blue-500';
+                  const medal    = r.target > 0 && idx < 3 ? MEDALS[idx] : null;
                   let resultNode: React.ReactNode;
                   if (!r.target) resultNode = <span className="text-xs text-muted-foreground italic">No target set</span>;
                   else if (r.exceeded) resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600"><CheckCircle2 className="w-3.5 h-3.5" />Exceeded by {r.orders - r.target}</span>;
-                  else if (r.hit) resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />Target hit</span>;
+                  else if (r.hit)      resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />Target hit</span>;
                   else { const gap = r.target - r.orders; resultNode = <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500"><XCircle className="w-3.5 h-3.5" />{gap} order{gap !== 1 ? 's' : ''} to go</span>; }
                   return (
-                    <tr key={r.branchId} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                    <tr key={r.branchId} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${r.hit ? 'bg-green-50/30 dark:bg-green-950/10' : ''}`}>
+                      <td className="px-3 py-3 text-center">
+                        {medal
+                          ? <span className="text-base">{medal}</span>
+                          : <span className="text-xs text-muted-foreground">{r.target > 0 ? idx + 1 : '—'}</span>}
+                      </td>
                       <td className="px-5 py-3"><p className="text-sm font-semibold text-foreground">{r.branchName}</p></td>
                       <td className="px-5 py-3 text-right text-sm text-muted-foreground">{r.target > 0 ? r.target : <span className="italic">—</span>}</td>
                       <td className="px-5 py-3 text-right text-sm font-bold text-foreground">{r.orders}</td>
@@ -224,6 +286,7 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
               </tbody>
             </table></div></CardContent></Card>
           )}
+          <p className="text-xs text-muted-foreground">Ranked by completion % — highest to lowest. Week runs Sunday – Saturday.</p>
         </div>
       )}
 
@@ -231,7 +294,7 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
         <div className="space-y-4">
           <div className="bg-muted/40 border border-border rounded-xl px-4 py-3 space-y-1">
             <p className="text-sm font-semibold text-foreground">Week-by-week breakdown</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">Each row is one ISO week (Monday – Sunday), newest at the top.</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">Each row is one week (Sunday – Saturday), newest at the top.</p>
           </div>
           {avgOrders > 0 && (
             <div className="grid grid-cols-2 gap-3">
@@ -253,7 +316,7 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
             <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full">
               <thead><tr className="border-b border-border bg-muted/30">
                 <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Week</th>
-                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Mon – Sun</th>
+                <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Sun – Sat</th>
                 <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Total Orders</th>
                 <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">Revenue</th>
                 <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-5 py-3">vs Average</th>
@@ -267,8 +330,9 @@ function WeeklyReportsPage({ onBack }: { onBack: () => void }) {
                   try {
                     const [wPart, yPart] = (r.period as string).split(' ');
                     const wn = parseInt(wPart.replace('W', '')), yr = parseInt(yPart);
-                    const ws = startOfISOWeek(new Date(new Date(yr, 0, 4).getTime() + (wn - 1) * 7 * 86400000));
-                    weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfISOWeek(ws), 'MMM d')}`;
+                    const jan1 = new Date(yr, 0, 1);
+                    const ws   = startOfWeek(new Date(jan1.getTime() + (wn - 1) * 7 * 86400000), WEEK_OPTS);
+                    weekRangeLabel = `${format(ws, 'MMM d')} – ${format(endOfWeek(ws, WEEK_OPTS), 'MMM d')}`;
                   } catch {}
                   return (
                     <tr key={r.period} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${isCurrent ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''}`}>
@@ -454,7 +518,6 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
         const card         = (r.cardAmount || 0) + (r.paystackAmount || 0);
         const totalRevenue = cash + mobile + card;
 
-        // Token value = report tokens + unpaid orders' tokens (unpaid orders are excluded from report totals)
         const washerPrice  = r.washerPrice || 25;
         const dryerPrice   = r.dryerPrice  || 25;
         const reportDateStart = new Date(r.date + 'T00:00:00.000Z').getTime();
@@ -471,13 +534,10 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
                            + ((r.dryerTokensUsed  || 0) * dryerPrice)
                            + unpaidTokenValue;
 
-        // Unpaid: orders from this day not fully paid
         const unpaidAmt = dayOrders
           .filter((o: any) => o.paymentStatus !== 'paid')
           .reduce((s: number, o: any) => s + Math.max(0, (o.finalPrice || 0) - (o.amountPaid || 0)), 0);
 
-        // Outstanding Payment Received = payments received on this report date
-        // for orders created on PREVIOUS days (recovered outstanding)
         const outstandingReceived = r.outstandingRecovered || orders
           .filter((o: any) =>
             o.branchId === r.branchId &&

@@ -15,8 +15,8 @@ import {
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
 import {
-  format, subDays, getISOWeek, getYear,
-  startOfISOWeek, endOfISOWeek, addWeeks, subWeeks, isSameWeek,
+  format, subDays, getYear,
+  startOfWeek, endOfWeek, addWeeks, subWeeks, isSameWeek,
 } from "date-fns"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -24,28 +24,40 @@ import {
 } from "recharts"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Week Picker — replaces DateRangePicker inside the weekly modal
-// Lets user navigate backward/forward one ISO week at a time
+// Sunday-start week helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEK_OPTS = { weekStartsOn: 0 } as const // 0 = Sunday
+
+function getSundayWeekNumber(date: Date): number {
+  const jan1 = new Date(date.getFullYear(), 0, 1)
+  const startOfJan1Week = startOfWeek(jan1, WEEK_OPTS)
+  const diff = startOfWeek(date, WEEK_OPTS).getTime() - startOfJan1Week.getTime()
+  return Math.round(diff / (7 * 24 * 60 * 60 * 1000)) + 1
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week Picker — Sunday-start
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeekPicker({
   value,
   onChange,
 }: {
-  value: Date          // any date inside the selected ISO week
+  value: Date
   onChange: (weekStart: Date) => void
 }) {
-  const now       = new Date()
-  const isThisWeek = isSameWeek(value, now, { weekStartsOn: 1 })
-  const weekNum   = getISOWeek(value)
-  const weekYear  = getYear(value)
-  const weekStart = startOfISOWeek(value)
-  const weekEnd   = endOfISOWeek(value)
+  const now        = new Date()
+  const isThisWeek = isSameWeek(value, now, WEEK_OPTS)
+  const weekNum    = getSundayWeekNumber(value)
+  const weekYear   = startOfWeek(value, WEEK_OPTS).getFullYear()
+  const weekStart  = startOfWeek(value, WEEK_OPTS)
+  const weekEnd    = endOfWeek(value, WEEK_OPTS)
 
-  const prev = () => onChange(startOfISOWeek(subWeeks(value, 1)))
+  const prev = () => onChange(startOfWeek(subWeeks(value, 1), WEEK_OPTS))
   const next = () => {
-    if (isThisWeek) return // can't go into the future
-    onChange(startOfISOWeek(addWeeks(value, 1)))
+    if (isThisWeek) return
+    onChange(startOfWeek(addWeeks(value, 1), WEEK_OPTS))
   }
 
   return (
@@ -133,6 +145,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helper: sort branches by completion % descending, no-target branches last
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sortByLeaderboard(branches: any[]) {
+  return [...branches].sort((a, b) => {
+    const pctA = a.weeklyTarget > 0 ? (a.weeklyOrders / a.weeklyTarget) * 100 : -1
+    const pctB = b.weeklyTarget > 0 ? (b.weeklyOrders / b.weeklyTarget) * 100 : -1
+    return pctB - pctA
+  })
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"]
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Weekly Reports Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -144,8 +170,6 @@ function WeeklyReportsModal({
   onClose: () => void
 }) {
   const [activeTab, setActiveTab] = useState<"current" | "history">("current")
-
-  // Week picker state — defaults to current ISO week
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
 
   const trends = useQuery((api as any).analytics.getRevenueTrends, {
@@ -153,21 +177,23 @@ function WeeklyReportsModal({
     days: 84,
   }) ?? []
 
-  const weekNum  = getISOWeek(selectedWeek)
-  const weekYear = getYear(selectedWeek)
+  const weekNum  = getSundayWeekNumber(selectedWeek)
+  const weekYear = startOfWeek(selectedWeek, WEEK_OPTS).getFullYear()
 
-  const branchRows = weeklyStats.map((s: any) => {
+  const sortedStats = useMemo(() => sortByLeaderboard(weeklyStats), [weeklyStats])
+
+  const branchRows = sortedStats.map((s: any, idx: number) => {
     const pct   = s.weeklyTarget > 0 ? (s.weeklyOrders / s.weeklyTarget) * 100 : null
     const hit   = pct !== null && pct >= 100
     const close = pct !== null && pct >= 75 && !hit
-    return { ...s, pct, hit, close }
+    const medal = s.weeklyTarget > 0 && idx < 3 ? MEDALS[idx] : null
+    return { ...s, pct, hit, close, medal }
   })
 
   const hitCount      = branchRows.filter(r => r.hit).length
   const progressCount = branchRows.filter(r => !r.hit && (r.weeklyTarget ?? 0) > 0).length
   const noTargetCount = branchRows.filter(r => !r.weeklyTarget || r.weeklyTarget === 0).length
 
-  // History: most-recent 12 weeks, newest first
   const historyRows = useMemo(() =>
     [...(trends as any[])].reverse().slice(0, 12),
     [trends]
@@ -192,7 +218,7 @@ function WeeklyReportsModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-foreground">Weekly Reports</h2>
-              <p className="text-xs text-muted-foreground">Order targets &amp; performance history</p>
+              <p className="text-xs text-muted-foreground">Order targets &amp; performance history · Sun – Sat</p>
             </div>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
@@ -222,8 +248,6 @@ function WeeklyReportsModal({
           {/* ── This Week ── */}
           {activeTab === "current" && (
             <div className="p-6 space-y-5">
-
-              {/* Week picker */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <WeekPicker value={selectedWeek} onChange={setSelectedWeek} />
                 <div className="flex flex-wrap gap-2">
@@ -256,6 +280,7 @@ function WeeklyReportsModal({
                   <table className="w-full">
                     <thead>
                       <tr className="bg-muted/40 border-b border-border">
+                        <th className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3 text-left w-8">#</th>
                         {["Branch", "Orders", "Target", "Progress", "Status"].map(h => (
                           <th
                             key={h}
@@ -268,12 +293,18 @@ function WeeklyReportsModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {branchRows.map(r => (
+                      {branchRows.map((r, idx) => (
                         <tr
                           key={r.branchId}
                           className={`border-b border-border last:border-0 transition-colors hover:bg-muted/20
-                            ${r.hit ? "bg-green-50/40 dark:bg-green-950/10" : ""}`}
+                            ${r.hit ? "bg-green-50/40 dark:bg-green-950/10" : ""}
+                            ${idx === 0 && r.weeklyTarget > 0 ? "bg-yellow-50/30 dark:bg-yellow-950/10" : ""}`}
                         >
+                          <td className="px-4 py-3 text-sm text-center">
+                            {r.medal ?? (
+                              <span className="text-xs text-muted-foreground">{r.weeklyTarget > 0 ? idx + 1 : "—"}</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">
                             <p className="text-sm font-semibold text-foreground">{r.branchName}</p>
                           </td>
@@ -323,7 +354,7 @@ function WeeklyReportsModal({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Targets reflect current branch settings. Navigate weeks using the arrows above.
+                Ranked by completion % — highest to lowest. Week runs Sunday – Saturday.
               </p>
             </div>
           )}
@@ -331,12 +362,10 @@ function WeeklyReportsModal({
           {/* ── Week History ── */}
           {activeTab === "history" && (
             <div className="p-6 space-y-5">
-
-              {/* Context banner */}
               <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
                 <p className="text-sm font-semibold text-foreground mb-0.5">How to read this</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Each row is one complete ISO week (Mon – Sun), sorted newest first.
+                  Each row is one complete week (Sun – Sat), sorted newest first.
                   <strong className="text-foreground"> vs Avg</strong> compares that week against the average of all
                   completed weeks shown. The current week is marked "In Progress" since it isn't finished yet.
                 </p>
@@ -368,7 +397,7 @@ function WeeklyReportsModal({
                     <thead>
                       <tr className="bg-muted/40 border-b border-border">
                         <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Week</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Dates</th>
+                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Sun – Sat</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Orders</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Revenue</th>
                         <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">vs Avg</th>
@@ -382,17 +411,14 @@ function WeeklyReportsModal({
                           : null
                         const above  = vsAvg !== null && vsAvg >= 0
 
-                        // Parse the period label to get a date for the week range display
-                        // r.period is something like "W12 2025" — derive Mon–Sun dates
                         let weekRangeLabel = ""
                         try {
                           const [wPart, yPart] = (r.period as string).split(" ")
                           const wn = parseInt(wPart.replace("W", ""))
                           const yr = parseInt(yPart)
-                          // Get ISO week start: Jan 4 is always in week 1
-                          const jan4 = new Date(yr, 0, 4)
-                          const wStart = startOfISOWeek(new Date(jan4.getTime() + (wn - 1) * 7 * 86400000))
-                          const wEnd   = endOfISOWeek(wStart)
+                          const jan1   = new Date(yr, 0, 1)
+                          const wStart = startOfWeek(new Date(jan1.getTime() + (wn - 1) * 7 * 86400000), WEEK_OPTS)
+                          const wEnd   = endOfWeek(wStart, WEEK_OPTS)
                           weekRangeLabel = `${format(wStart, "MMM d")} – ${format(wEnd, "MMM d")}`
                         } catch {}
 
@@ -464,17 +490,19 @@ function WeeklyReportsModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Weekly Target Card — display only
+// Weekly Target Card — leaderboard display with rank
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeeklyTargetCard({
   branchName,
   weeklyOrders,
   weeklyTarget,
+  rank,
 }: {
   branchName: string
   weeklyOrders: number
   weeklyTarget: number
+  rank: number
 }) {
   const pct        = weeklyTarget > 0 ? Math.min((weeklyOrders / weeklyTarget) * 100, 100) : 0
   const isComplete = pct >= 100
@@ -488,9 +516,21 @@ function WeeklyTargetCard({
     ? "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
     : "bg-card border-border"
 
+  const medal = weeklyTarget > 0 && rank <= 3 ? MEDALS[rank - 1] : null
+
   return (
     <div className={`border rounded-xl px-4 py-3 ${wrapColor} w-full`}>
       <div className="flex items-center gap-3">
+        <div className="shrink-0 w-7 text-center">
+          {medal ? (
+            <span className="text-base leading-none">{medal}</span>
+          ) : weeklyTarget > 0 ? (
+            <span className="text-xs font-semibold text-muted-foreground">{rank}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
           <p className="text-xs text-muted-foreground">
@@ -564,9 +604,9 @@ const AdminOverview = () => {
 
   const selectedStats = useQuery(api.admin.getPaymentStats, {
     startDate: startDateStr,
-    endDate: endDateStr,
+    endDate:   endDateStr,
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
-  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {} }
+  }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {}, byDayByMethod: {} }
 
   const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
@@ -574,16 +614,7 @@ const AdminOverview = () => {
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
   }) ?? { totalRevenue: 0 }
 
-  const weeklyStats  = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
-  const dailyReports = useQuery(
-    (api as any).dailyReports.getAll,
-    {
-      startDate: startDateStr,
-      endDate:   endDateStr,
-      ...(selectedBranch !== "all" ? { branchId: selectedBranch } : {}),
-      limit: 100,
-    }
-  ) ?? []
+  const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
   const stats = useMemo(() => {
     const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
@@ -600,96 +631,32 @@ const AdminOverview = () => {
 
     const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FIX: Build a per-date accumulator from daily reports.
-    //
-    // The old code did dayMap[key] = r.xxx which OVERWROTE on each report,
-    // meaning when multiple branches submit for the same date only the last
-    // branch's numbers survived. We now ACCUMULATE (+=) so all branches
-    // for a given date are summed correctly.
-    // ─────────────────────────────────────────────────────────────────────────
-    const reportAccumulator: Record<string, {
-      mobileMoney: number
-      cash: number
-      card: number
-      hasData: boolean
-    }> = {}
-
-    ;(dailyReports as any[]).forEach((r: any) => {
-      const dateStr = r.date // already "yyyy-MM-dd"
-      if (!reportAccumulator[dateStr]) {
-        reportAccumulator[dateStr] = { mobileMoney: 0, cash: 0, card: 0, hasData: false }
-      }
-      reportAccumulator[dateStr].mobileMoney += r.mobileMoneylAmount ?? 0
-      reportAccumulator[dateStr].cash        += r.cashAmount ?? 0
-      reportAccumulator[dateStr].card        += (r.cardAmount ?? 0) + (r.paystackAmount ?? 0)
-      reportAccumulator[dateStr].hasData      = true
-    })
-
-    // Proportional ratios from payment stats — used only as fallback for days
-    // where no daily report was submitted yet
     const totalMobileMoney = (selectedStats as any)?.mobileMoneylAmount ?? 0
     const totalCard        = (selectedStats as any)?.cardAmount ?? 0
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
-    const liveTotalForProportion = totalMobileMoney + totalCard + totalCash
-    const mmRatio   = liveTotalForProportion > 0 ? totalMobileMoney / liveTotalForProportion : 0
-    const cardRatio = liveTotalForProportion > 0 ? totalCard        / liveTotalForProportion : 0
-    const cashRatio = liveTotalForProportion > 0 ? totalCash        / liveTotalForProportion : 1
+    const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
+
+    const byDayByMethod = (selectedStats as any)?.byDayByMethod ?? {}
 
     const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
 
-    // Summary accumulators — built from the same source as chartData so
-    // the numbers shown in stat cards match the chart bars exactly
-    let summaryMM      = 0
-    let summaryCard    = 0
-    let summaryCash    = 0
-    let summaryRevenue = 0
-
     const chartData = []
-
     for (let i = dDiff - 1; i >= 0; i--) {
-      const date    = subDays(dateTo, i)
-      const dateStr = format(date, "yyyy-MM-dd")
-      const key     = format(date, "MMM d")
+      const date      = subDays(dateTo, i)
+      const dateStr   = format(date, "yyyy-MM-dd")
+      const key       = format(date, "MMM d")
       const showLabel = (dDiff - 1 - i) % step === 0
 
-      const report = reportAccumulator[dateStr]
-
-      let mm: number, card: number, cash: number
-
-      if (report?.hasData) {
-        // ✅ Use accumulated daily report data — most accurate, covers all branches
-        mm   = report.mobileMoney
-        card = report.card
-        cash = report.cash
-      } else {
-        // Fallback: proportional split of payment stats for this day
-        const dayTotal = typeof (selectedStats as any)?.byDay?.[dateStr] === "number"
-          ? (selectedStats as any).byDay[dateStr]
-          : 0
-        mm   = Math.round(dayTotal * mmRatio   * 100) / 100
-        card = Math.round(dayTotal * cardRatio * 100) / 100
-        cash = Math.round(dayTotal * cashRatio * 100) / 100
-      }
-
-      summaryMM      += mm
-      summaryCard    += card
-      summaryCash    += cash
-      summaryRevenue += mm + card + cash
+      const dayMethods = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
 
       chartData.push({
         date:        key,
         displayDate: showLabel ? key : "",
-        mobileMoney: mm,
-        card,
-        cash,
+        mobileMoney: Math.round((dayMethods.mobile_money ?? 0) * 100) / 100,
+        card:        Math.round((dayMethods.card ?? 0) * 100) / 100,
+        cash:        Math.round((dayMethods.cash ?? 0) * 100) / 100,
       })
     }
-
-    // Use report-derived revenue when available, fall back to payment stats total
-    const selectedRevenue = summaryRevenue > 0
-      ? summaryRevenue
-      : ((selectedStats as any)?.totalRevenue ?? 0)
 
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
@@ -702,22 +669,24 @@ const AdminOverview = () => {
     return {
       selectedOrders:  selectedOrders.length,
       selectedRevenue,
-      totalMobileMoney: summaryMM,
-      totalCard:        summaryCard,
-      totalCash:        summaryCash,
+      totalMobileMoney,
+      totalCard,
+      totalCash,
       pendingOrders,
       completedInRange,
       revenueChange,
       ordersChange,
       chartData,
     }
-  }, [orders, last30Stats, selectedStats, dailyReports, dateFrom, dateTo])
+  }, [orders, last30Stats, selectedStats, dateFrom, dateTo])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
   const filteredWeeklyStats = useMemo(() => {
-    if (selectedBranch === "all") return weeklyStats as any[]
-    return (weeklyStats as any[]).filter((s: any) => s.branchId === selectedBranch)
+    const base = selectedBranch === "all"
+      ? (weeklyStats as any[])
+      : (weeklyStats as any[]).filter((s: any) => s.branchId === selectedBranch)
+    return sortByLeaderboard(base)
   }, [weeklyStats, selectedBranch])
 
   const statusColors: Record<string, string> = {
@@ -787,7 +756,7 @@ const AdminOverview = () => {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Weekly Target card */}
+        {/* Weekly Target Leaderboard */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -795,18 +764,9 @@ const AdminOverview = () => {
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Target className="w-4 h-4" /> Weekly Order Target
                 </CardTitle>
-                <CardDescription className="text-xs">Orders this week vs target</CardDescription>
+                <CardDescription className="text-xs">Ranked by completion % — Sun to Sat</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs px-2.5 gap-1.5"
-                  onClick={() => setShowWeeklyReports(true)}
-                >
-                  <BarChart2 className="w-3 h-3" />
-                  Weekly Reports
-                </Button>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Zap className="w-3 h-3 text-yellow-500" />
                   <span className="text-xs">
@@ -814,6 +774,14 @@ const AdminOverview = () => {
                     {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
                   </span>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowWeeklyReports(true)}
+                >
+                  <BarChart2 className="w-3 h-3 mr-1" /> Details
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -829,12 +797,13 @@ const AdminOverview = () => {
                 className="flex flex-col gap-2 overflow-y-auto pr-1"
                 style={{ maxHeight: "260px", scrollbarWidth: "thin" }}
               >
-                {filteredWeeklyStats.map((b: any) => (
+                {filteredWeeklyStats.map((b: any, idx: number) => (
                   <WeeklyTargetCard
                     key={b.branchId}
                     branchName={b.branchName}
                     weeklyOrders={b.weeklyOrders}
                     weeklyTarget={b.weeklyTarget}
+                    rank={idx + 1}
                   />
                 ))}
               </div>
