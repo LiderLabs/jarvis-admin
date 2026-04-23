@@ -82,7 +82,8 @@ const AdminCustomers = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [branchFilter, setBranchFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<SortOption>("default")
+  // Default to most orders
+  const [sortBy, setSortBy] = useState<SortOption>("orders_desc")
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{
     id: Id<"users">
@@ -92,6 +93,8 @@ const AdminCustomers = () => {
   } | null>(null)
   const [statusNote, setStatusNote] = useState("")
   const [isExporting, setIsExporting] = useState(false)
+  // Profile dialog state
+  const [profileCustomer, setProfileCustomer] = useState<any | null>(null)
 
   const customerStats = useQuery(api.admin.getCustomerStats, {
     branchId: branchFilter === "all" ? undefined : branchFilter as any,
@@ -99,7 +102,7 @@ const AdminCustomers = () => {
 
   const branches = useQuery(api.branches.getActive, {}) ?? []
 
-  // ── Fetch ALL loyalty points, auto-paginate until complete ────────────────
+  // Fetch ALL loyalty points
   const {
     results: loyaltyPages,
     status: loyaltyStatus,
@@ -109,13 +112,10 @@ const AdminCustomers = () => {
     { searchQuery: undefined },
     { initialNumItems: 500 }
   )
-
-  // Keep fetching until the entire loyalty table is in memory
   useEffect(() => {
     if (loyaltyStatus === "CanLoadMore") loadMoreLoyalty(500)
   }, [loyaltyStatus, loadMoreLoyalty])
 
-  // Build map: customerId → current points balance
   const loyaltyMap = useMemo(() => {
     const map = new Map<string, number>()
     for (const lp of loyaltyPages ?? []) {
@@ -124,26 +124,18 @@ const AdminCustomers = () => {
     return map
   }, [loyaltyPages])
 
-  // ── Export query (unpaginated) ─────────────────────────────────────────────
+  // Export query
   const allCustomersForExport = useQuery(
     (api.admin as any).getAllCustomersForExport,
     {
       search: debouncedSearchQuery || undefined,
-      status:
-        statusFilter === "all"
-          ? undefined
-          : (statusFilter as "active" | "blocked" | "suspended" | "restricted"),
-      isRegistered:
-        typeFilter === "registered"
-          ? true
-          : typeFilter === "walkin"
-            ? false
-            : undefined,
+      status: statusFilter === "all" ? undefined : (statusFilter as any),
+      isRegistered: typeFilter === "registered" ? true : typeFilter === "walkin" ? false : undefined,
       branchId: branchFilter === "all" ? undefined : branchFilter as any,
     }
   )
 
-  // ── Paginated customers table ──────────────────────────────────────────────
+  // Paginated table — load 100 at a time to reduce reload flicker
   const {
     results: customersPages,
     status: paginationStatus,
@@ -152,42 +144,28 @@ const AdminCustomers = () => {
     (api.admin.getCustomers as any),
     {
       search: debouncedSearchQuery || undefined,
-      status:
-        statusFilter === "all"
-          ? undefined
-          : (statusFilter as "active" | "blocked" | "suspended" | "restricted"),
-      isRegistered:
-        typeFilter === "registered"
-          ? true
-          : typeFilter === "walkin"
-            ? false
-            : undefined,
+      status: statusFilter === "all" ? undefined : (statusFilter as any),
+      isRegistered: typeFilter === "registered" ? true : typeFilter === "walkin" ? false : undefined,
       branchId: branchFilter === "all" ? undefined : branchFilter as any,
     },
-    { initialNumItems: 20 }
+    { initialNumItems: 100 }  // increased from 20 to reduce re-load frequency
   )
 
   const rawCustomers = customersPages?.flat() || []
   const hasMore = paginationStatus === "CanLoadMore"
   const isLoadingMore = paginationStatus === "LoadingMore"
 
-  // ── Sort customers client-side using loyalty map ───────────────────────────
   const customers = useMemo(() => {
-    if (sortBy === "default") return rawCustomers
-    return [...rawCustomers].sort((a, b) => {
-      if (sortBy === "points_desc")
-        return (loyaltyMap.get(b._id as string) ?? 0) - (loyaltyMap.get(a._id as string) ?? 0)
-      if (sortBy === "points_asc")
-        return (loyaltyMap.get(a._id as string) ?? 0) - (loyaltyMap.get(b._id as string) ?? 0)
-      if (sortBy === "orders_desc")
-        return (b.orderCount ?? 0) - (a.orderCount ?? 0)
-      if (sortBy === "spent_desc")
-        return (b.totalSpent ?? 0) - (a.totalSpent ?? 0)
+    const list = sortBy === "default" ? rawCustomers : [...rawCustomers].sort((a, b) => {
+      if (sortBy === "points_desc") return (loyaltyMap.get(b._id as string) ?? 0) - (loyaltyMap.get(a._id as string) ?? 0)
+      if (sortBy === "points_asc") return (loyaltyMap.get(a._id as string) ?? 0) - (loyaltyMap.get(b._id as string) ?? 0)
+      if (sortBy === "orders_desc") return (b.orderCount ?? 0) - (a.orderCount ?? 0)
+      if (sortBy === "spent_desc") return (b.totalSpent ?? 0) - (a.totalSpent ?? 0)
       return 0
     })
+    return list
   }, [rawCustomers, sortBy, loyaltyMap])
 
-  // ── Top 3 loyalty holders from loaded customers ────────────────────────────
   const topLoyaltyCustomers = useMemo(() => {
     return [...rawCustomers]
       .map((c) => ({ ...c, pts: loyaltyMap.get(c._id as string) ?? 0 }))
@@ -199,112 +177,43 @@ const AdminCustomers = () => {
   const changeCustomerStatus = useMutation(api.admin.changeCustomerStatus)
   const deleteCustomer = useMutation(api.admin.deleteCustomer)
 
-  // ── Export ─────────────────────────────────────────────────────────────────
   const handleExportCSV = async () => {
     const data: any[] = allCustomersForExport ?? []
-    if (data.length === 0) {
-      toast.error("No customers to export — data may still be loading")
-      return
-    }
-
+    if (data.length === 0) { toast.error("No customers to export — data may still be loading"); return }
     setIsExporting(true)
     try {
-      const customerHeaders = [
-        "Name", "Phone", "Email", "Type", "Status",
-        "Branch", "Orders", "Total Spent (GHS)", "Loyalty Points", "Joined",
-      ]
+      const customerHeaders = ["Name", "Phone", "Email", "Type", "Status", "Branch", "Orders", "Total Spent (GHS)", "Loyalty Points", "Joined"]
       const customerRows = data.map((c: any) => [
-        c.name ?? "",
-        c.phoneNumber ?? "",
-        c.email ?? "",
-        c.isRegistered ? "Online" : "Walk-in",
-        c.status ?? "active",
-        c.branchName ?? "",
-        c.orderCount ?? 0,
+        c.name ?? "", c.phoneNumber ?? "", c.email ?? "",
+        c.isRegistered ? "Online" : "Walk-in", c.status ?? "active",
+        c.branchName ?? "", c.orderCount ?? 0,
         (c.totalSpent ?? 0).toFixed(2),
         loyaltyMap.get(c._id as string) ?? 0,
         c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
       ])
-      downloadCSV(
-        [customerHeaders, ...customerRows],
-        `customers-${new Date().toISOString().split("T")[0]}.csv`
-      )
-
-      const branchSummaryMap = new Map<string, {
-        name: string; customers: number; orders: number; revenue: number
-      }>()
-      for (const c of data) {
-        const key = (c.branchName as string) || "Unknown / No Branch"
-        if (!branchSummaryMap.has(key))
-          branchSummaryMap.set(key, { name: key, customers: 0, orders: 0, revenue: 0 })
-        const b = branchSummaryMap.get(key)!
-        b.customers += 1
-        b.orders += (c.orderCount as number) ?? 0
-        b.revenue += (c.totalSpent as number) ?? 0
-      }
-
-      const branchCounts: any[] = (customerStats as any)?.branchCustomerCounts ?? []
-      for (const bc of branchCounts) {
-        if (!branchSummaryMap.has(bc.branchName))
-          branchSummaryMap.set(bc.branchName, { name: bc.branchName, customers: 0, orders: 0, revenue: 0 })
-      }
-
-      const branchHeaders = [
-        "Branch", "Customers", "Total Orders", "Total Revenue (GHS)",
-        "Avg Spend per Customer (GHS)", "Avg Orders per Customer",
-      ]
-      const branchRows = Array.from(branchSummaryMap.values())
-        .sort((a, b) => b.orders - a.orders)
-        .map((b) => [
-          b.name, b.customers, b.orders, b.revenue.toFixed(2),
-          b.customers > 0 ? (b.revenue / b.customers).toFixed(2) : "0.00",
-          b.customers > 0 ? (b.orders / b.customers).toFixed(1) : "0",
-        ])
-
-      downloadCSV(
-        [branchHeaders, ...branchRows],
-        `branch-orders-summary-${new Date().toISOString().split("T")[0]}.csv`
-      )
-
-      toast.success(`Exported ${data.length} customers + branch summary (2 files)`)
-    } catch {
-      toast.error("Export failed")
-    } finally {
-      setIsExporting(false)
-    }
+      downloadCSV([customerHeaders, ...customerRows], `customers-${new Date().toISOString().split("T")[0]}.csv`)
+      toast.success(`Exported ${data.length} customers`)
+    } catch { toast.error("Export failed") } finally { setIsExporting(false) }
   }
 
   const handleStatusChange = async () => {
     if (!selectedCustomer || !selectedCustomer.newStatus) return
-    if (!statusNote.trim() || statusNote.trim().length < 3) {
-      toast.error("Please provide a note (at least 3 characters)")
-      return
-    }
+    if (!statusNote.trim() || statusNote.trim().length < 3) { toast.error("Please provide a note (at least 3 characters)"); return }
     try {
-      await changeCustomerStatus({
-        customerId: selectedCustomer.id,
-        status: selectedCustomer.newStatus,
-        note: statusNote.trim(),
-      })
+      await changeCustomerStatus({ customerId: selectedCustomer.id, status: selectedCustomer.newStatus, note: statusNote.trim() })
       toast.success(`${selectedCustomer.name} status changed to ${selectedCustomer.newStatus}`)
-      setStatusChangeDialogOpen(false)
-      setSelectedCustomer(null)
-      setStatusNote("")
+      setStatusChangeDialogOpen(false); setSelectedCustomer(null); setStatusNote("")
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
-      toast.error(errorMessage || "Failed to change customer status")
+      toast.error(error instanceof Error ? error.message : "Failed to change customer status")
     }
   }
 
   const openStatusDialog = (
-    customerId: Id<"users"> | string,
-    customerName: string,
-    currentStatus: string,
-    newStatus: "active" | "blocked" | "suspended" | "restricted"
+    customerId: Id<"users"> | string, customerName: string,
+    currentStatus: string, newStatus: "active" | "blocked" | "suspended" | "restricted"
   ) => {
     setSelectedCustomer({ id: customerId as Id<"users">, name: customerName, currentStatus, newStatus })
-    setStatusNote("")
-    setStatusChangeDialogOpen(true)
+    setStatusNote(""); setStatusChangeDialogOpen(true)
   }
 
   const handleDelete = async (customerId: Id<"users"> | string, customerName: string) => {
@@ -313,18 +222,17 @@ const AdminCustomers = () => {
       toast.success(`${customerName} has been deleted`)
       setSelectedCustomer(null)
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
-      toast.error(errorMessage || "Failed to delete customer")
+      toast.error(error instanceof Error ? error.message : "Failed to delete customer")
     }
   }
+
+  const handleViewProfile = (customer: any) => setProfileCustomer(customer)
 
   const isStatsLoading = customerStats === undefined
   const isTableLoading = paginationStatus === "LoadingFirstPage"
   const isExportDataLoading = allCustomersForExport === undefined
 
-  if (isStatsLoading && isTableLoading) {
-    return <CustomersSkeleton />
-  }
+  if (isStatsLoading && isTableLoading) return <CustomersSkeleton />
 
   const branchCounts = (customerStats as any)?.branchCustomerCounts ?? []
   const exportCount = allCustomersForExport?.length ?? 0
@@ -335,67 +243,43 @@ const AdminCustomers = () => {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Customers</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Manage and view all customer accounts
-          </p>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">Manage and view all customer accounts</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportCSV}
+        <Button variant="outline" size="sm" onClick={handleExportCSV}
           disabled={isExporting || isExportDataLoading || exportCount === 0}
-          className="gap-2 self-start sm:self-auto"
-        >
+          className="gap-2 self-start sm:self-auto">
           <Download className="w-4 h-4" />
-          {isExporting
-            ? "Exporting..."
-            : isExportDataLoading
-              ? "Loading..."
-              : `Export CSV${exportCount > 0 ? ` (${exportCount})` : ""}`}
+          {isExporting ? "Exporting..." : isExportDataLoading ? "Loading..." : `Export CSV${exportCount > 0 ? ` (${exportCount})` : ""}`}
         </Button>
       </div>
 
       {/* Stats Grid */}
-      {isStatsLoading ? (
-        <CustomersStatsSkeleton />
-      ) : customerStats ? (
+      {isStatsLoading ? <CustomersStatsSkeleton /> : customerStats ? (
         <div className="mb-8 space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div
-              onClick={() => setBranchFilter("all")}
-              className={`col-span-2 sm:col-span-1 bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-105 ${branchFilter === "all" ? "ring-2 ring-primary ring-offset-2" : ""}`}
-            >
+            <div onClick={() => setBranchFilter("all")}
+              className={`col-span-2 sm:col-span-1 bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 border shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-105 ${branchFilter === "all" ? "ring-2 ring-primary ring-offset-2" : ""}`}>
               <div className="flex items-center gap-4">
-                <div className="bg-white/20 p-3 rounded-lg">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
+                <div className="bg-white/20 p-3 rounded-lg"><Users className="w-6 h-6 text-white" /></div>
                 <div>
                   <p className="text-sm text-primary-foreground/80">Total Customers</p>
                   <p className="text-2xl font-bold text-primary-foreground">{customerStats.totalCustomers}</p>
-                  {branchFilter === "all" && (
-                    <p className="text-xs text-primary-foreground/70 font-medium mt-0.5">All branches</p>
-                  )}
+                  {branchFilter === "all" && <p className="text-xs text-primary-foreground/70 font-medium mt-0.5">All branches</p>}
                 </div>
               </div>
             </div>
-
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="bg-green-500 p-3 rounded-lg">
-                  <UserCheck className="w-6 h-6 text-white" />
-                </div>
+                <div className="bg-green-500 p-3 rounded-lg"><UserCheck className="w-6 h-6 text-white" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Online Users</p>
                   <p className="text-2xl font-bold text-foreground">{customerStats.registeredCustomers}</p>
                 </div>
               </div>
             </div>
-
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="bg-purple-500 p-3 rounded-lg">
-                  <UserX className="w-6 h-6 text-white" />
-                </div>
+                <div className="bg-purple-500 p-3 rounded-lg"><UserX className="w-6 h-6 text-white" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Walk-in Users</p>
                   <p className="text-2xl font-bold text-foreground">{customerStats.walkInCustomers}</p>
@@ -409,11 +293,8 @@ const AdminCustomers = () => {
               {branchCounts.map((b: any, i: number) => {
                 const isActive = branchFilter === b.branchId
                 return (
-                  <div
-                    key={b.branchId}
-                    onClick={() => setBranchFilter(isActive ? "all" : b.branchId)}
-                    className={`bg-card rounded-xl p-4 border shadow-sm cursor-pointer transition-all hover:shadow-md ${isActive ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary"}`}
-                  >
+                  <div key={b.branchId} onClick={() => setBranchFilter(isActive ? "all" : b.branchId)}
+                    className={`bg-card rounded-xl p-4 border shadow-sm cursor-pointer transition-all hover:shadow-md ${isActive ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary"}`}>
                     <div className="flex items-center gap-3">
                       <div className={`${BRANCH_COLORS[i % BRANCH_COLORS.length]} p-2.5 rounded-lg shrink-0`}>
                         <MapPin className="w-5 h-5 text-white" />
@@ -430,25 +311,17 @@ const AdminCustomers = () => {
             </div>
           )}
 
-          {/* Top Loyalty Customers callout */}
+          {/* Top Loyalty — no "Sort by points" button */}
           {topLoyaltyCustomers.length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <Award className="w-4 h-4 text-amber-600 shrink-0" />
                 <p className="text-sm font-semibold text-foreground">Top Loyalty Customers</p>
-                <button
-                  onClick={() => setSortBy("points_desc")}
-                  className="ml-auto text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
-                >
-                  Sort by points ↓
-                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {topLoyaltyCustomers.map((c, i) => (
-                  <div
-                    key={c._id as string}
-                    className="flex items-center gap-1.5 bg-white dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-1.5"
-                  >
+                  <div key={c._id as string}
+                    className="flex items-center gap-1.5 bg-white dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-1.5">
                     <span className="text-base">{["🥇", "🥈", "🥉"][i]}</span>
                     <span className="text-sm font-semibold text-foreground">{c.name}</span>
                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400">{c.pts} pts</span>
@@ -460,21 +333,16 @@ const AdminCustomers = () => {
         </div>
       ) : null}
 
-      {/* Filters, Search, Sort */}
+      {/* Filters */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input
-            placeholder="Search by name or phone number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+          <Input placeholder="Search by name or phone number..." value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[160px]">
-            <Filter className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Status" />
+            <Filter className="w-4 h-4 mr-2" /><SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -485,9 +353,7 @@ const AdminCustomers = () => {
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-full sm:w-[160px]">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="registered">Online Users</SelectItem>
@@ -496,31 +362,25 @@ const AdminCustomers = () => {
         </Select>
         <Select value={branchFilter} onValueChange={setBranchFilter}>
           <SelectTrigger className="w-full sm:w-[180px]">
-            <MapPin className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Branch" />
+            <MapPin className="w-4 h-4 mr-2" /><SelectValue placeholder="Branch" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Branches</SelectItem>
             {branches.map((branch: any) => (
-              <SelectItem key={branch._id} value={branch._id}>
-                {branch.name}
-              </SelectItem>
+              <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-
-        {/* Sort */}
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
           <SelectTrigger className="w-full sm:w-[200px]">
-            <ArrowUpDown className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
+            <ArrowUpDown className="w-4 h-4 mr-2" /><SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="default">Default order</SelectItem>
-            <SelectItem value="points_desc">🏆 Most loyalty points</SelectItem>
-            <SelectItem value="points_asc">Fewest loyalty points</SelectItem>
             <SelectItem value="orders_desc">Most orders</SelectItem>
             <SelectItem value="spent_desc">Highest spend</SelectItem>
+            <SelectItem value="points_desc">🏆 Most loyalty points</SelectItem>
+            <SelectItem value="points_asc">Fewest loyalty points</SelectItem>
+            <SelectItem value="default">Default order</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -533,12 +393,7 @@ const AdminCustomers = () => {
               ?? branchCounts.find((b: any) => b.branchId === branchFilter)?.branchName
               ?? "Branch"}
           </Badge>
-          <button
-            onClick={() => setBranchFilter("all")}
-            className="text-xs text-muted-foreground hover:text-foreground underline"
-          >
-            Clear
-          </button>
+          <button onClick={() => setBranchFilter("all")} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
         </div>
       )}
 
@@ -547,9 +402,7 @@ const AdminCustomers = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change Customer Status</DialogTitle>
-            <DialogDescription>
-              Change status for {selectedCustomer?.name}. A note is required.
-            </DialogDescription>
+            <DialogDescription>Change status for {selectedCustomer?.name}. A note is required.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
@@ -557,8 +410,7 @@ const AdminCustomers = () => {
               <div className="mt-1">
                 {selectedCustomer && (
                   <Badge variant="outline" className="text-lg px-3 py-1">
-                    {selectedCustomer.currentStatus.charAt(0).toUpperCase() +
-                      selectedCustomer.currentStatus.slice(1)}
+                    {selectedCustomer.currentStatus.charAt(0).toUpperCase() + selectedCustomer.currentStatus.slice(1)}
                   </Badge>
                 )}
               </div>
@@ -568,54 +420,121 @@ const AdminCustomers = () => {
               <div className="mt-1">
                 {selectedCustomer?.newStatus && (
                   <Badge variant="outline" className="text-lg px-3 py-1">
-                    {selectedCustomer.newStatus.charAt(0).toUpperCase() +
-                      selectedCustomer.newStatus.slice(1)}
+                    {selectedCustomer.newStatus.charAt(0).toUpperCase() + selectedCustomer.newStatus.slice(1)}
                   </Badge>
                 )}
               </div>
             </div>
             <div>
-              <Label htmlFor="statusNote">
-                Note <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="statusNote"
-                placeholder="Enter a note explaining why you're changing this customer's status (minimum 3 characters)..."
-                value={statusNote}
-                onChange={(e) => setStatusNote(e.target.value)}
-                className="mt-1 min-h-[100px]"
-                required
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                This note will be recorded in the audit log and visible to other admins.
-              </p>
+              <Label htmlFor="statusNote">Note <span className="text-destructive">*</span></Label>
+              <Textarea id="statusNote" placeholder="Explain why you're changing this status (minimum 3 characters)..."
+                value={statusNote} onChange={(e) => setStatusNote(e.target.value)} className="mt-1 min-h-[100px]" required />
+              <p className="text-xs text-muted-foreground mt-1">Recorded in the audit log and visible to other admins.</p>
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setStatusChangeDialogOpen(false)
-                setSelectedCustomer(null)
-                setStatusNote("")
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleStatusChange}
-              disabled={!statusNote.trim() || statusNote.trim().length < 3}
-            >
-              Change Status
-            </Button>
+            <Button variant="outline" onClick={() => { setStatusChangeDialogOpen(false); setSelectedCustomer(null); setStatusNote("") }}>Cancel</Button>
+            <Button onClick={handleStatusChange} disabled={!statusNote.trim() || statusNote.trim().length < 3}>Change Status</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Customers Table */}
-      {isTableLoading ? (
-        <CustomersTableSkeleton />
-      ) : (
+      {/* Customer Profile Dialog */}
+      <Dialog open={!!profileCustomer} onOpenChange={(open) => !open && setProfileCustomer(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Customer Profile</DialogTitle>
+            <DialogDescription>{profileCustomer?.name}</DialogDescription>
+          </DialogHeader>
+          {profileCustomer && (
+            <div className="space-y-4 py-2">
+              {/* Identity */}
+              <div className="rounded-xl border border-border p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Identity</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Name</span><span className="font-medium">{profileCustomer.name}</span>
+                  <span className="text-muted-foreground">Phone</span><span className="font-medium">{profileCustomer.phoneNumber}</span>
+                  {profileCustomer.email && <><span className="text-muted-foreground">Email</span><span className="font-medium break-all">{profileCustomer.email}</span></>}
+                  <span className="text-muted-foreground">Type</span>
+                  <span><Badge variant={profileCustomer.isRegistered ? "default" : "secondary"}>{profileCustomer.isRegistered ? "Online" : "Walk-in"}</Badge></span>
+                  <span className="text-muted-foreground">Status</span>
+                  <span><Badge variant="outline">{profileCustomer.status || "active"}</Badge></span>
+                  <span className="text-muted-foreground">Joined</span>
+                  <span className="font-medium">{profileCustomer.createdAt ? new Date(profileCustomer.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                </div>
+              </div>
+
+              {/* Branch */}
+              <div className="rounded-xl border border-border p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Branch</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Primary branch</span>
+                  <span className="font-medium">{(profileCustomer as any).branchName || "—"}</span>
+                  {(profileCustomer as any).allBranches && (profileCustomer as any).allBranches !== (profileCustomer as any).branchName && (
+                    <><span className="text-muted-foreground">All branches</span><span className="font-medium">{(profileCustomer as any).allBranches}</span></>
+                  )}
+                </div>
+              </div>
+
+              {/* Order analytics */}
+              <div className="rounded-xl border border-border p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Order Analytics</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Total orders</span>
+                  <span className="font-medium">{profileCustomer.orderCount ?? 0}</span>
+                  <span className="text-muted-foreground">Completed</span>
+                  <span className="font-medium">{profileCustomer.completedOrderCount ?? 0}</span>
+                  <span className="text-muted-foreground">Total spent</span>
+                  <span className="font-medium text-primary">₵{(profileCustomer.totalSpent ?? 0).toFixed(2)}</span>
+                  <span className="text-muted-foreground">Avg per order</span>
+                  <span className="font-medium">
+                    {profileCustomer.orderCount > 0
+                      ? `₵${((profileCustomer.totalSpent ?? 0) / profileCustomer.orderCount).toFixed(2)}`
+                      : "—"}
+                  </span>
+                  <span className="text-muted-foreground">Last order</span>
+                  <span className="font-medium">
+                    {profileCustomer.lastOrderDate
+                      ? new Date(profileCustomer.lastOrderDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                      : "—"}
+                  </span>
+                  {profileCustomer.lastOrderNumber && (
+                    <><span className="text-muted-foreground">Last order #</span><span className="font-mono text-xs">{profileCustomer.lastOrderNumber}</span></>
+                  )}
+                </div>
+              </div>
+
+              {/* Loyalty */}
+              <div className="rounded-xl border border-border p-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Loyalty</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Points balance</span>
+                  <span className="font-bold text-amber-600">{loyaltyMap.get(profileCustomer._id as string) ?? 0} pts</span>
+                  <span className="text-muted-foreground">Free washes earned</span>
+                  <span className="font-medium">{Math.floor((loyaltyMap.get(profileCustomer._id as string) ?? 0) / 10)}</span>
+                </div>
+              </div>
+
+              {/* Status note */}
+              {profileCustomer.statusNote && (
+                <div className="rounded-xl border border-warning/30 bg-warning/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Status Note</p>
+                  <p className="text-sm">{profileCustomer.statusNote}</p>
+                  {profileCustomer.statusChangedAt && (
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(profileCustomer.statusChangedAt).toLocaleDateString("en-GB")}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileCustomer(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Table */}
+      {isTableLoading ? <CustomersTableSkeleton /> : (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
@@ -624,13 +543,12 @@ const AdminCustomers = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Branch</TableHead>
                   <TableHead>Orders</TableHead>
                   <TableHead>Total Spent</TableHead>
                   <TableHead>
                     <div className="flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5 text-amber-500" />
-                      Points
+                      <Award className="w-3.5 h-3.5 text-amber-500" />Points
                     </div>
                   </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -645,15 +563,14 @@ const AdminCustomers = () => {
                       loyaltyPoints={loyaltyMap.get(customer._id as string) ?? 0}
                       onStatusChange={openStatusDialog}
                       onDelete={handleDelete}
+                      onViewProfile={handleViewProfile}
                     />
                   ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
                       <p className="text-muted-foreground">
-                        {branchFilter !== "all"
-                          ? "No customers found for this branch"
-                          : "No customers found"}
+                        {branchFilter !== "all" ? "No customers found for this branch" : "No customers found"}
                       </p>
                     </TableCell>
                   </TableRow>
@@ -666,22 +583,11 @@ const AdminCustomers = () => {
 
       {!isTableLoading && hasMore && (
         <div className="mt-6 flex justify-center">
-          <Button
-            onClick={() => loadMore(20)}
-            disabled={isLoadingMore}
-            variant="outline"
-            className="min-w-[150px]"
-          >
+          <Button onClick={() => loadMore(100)} disabled={isLoadingMore} variant="outline" className="min-w-[150px]">
             {isLoadingMore ? (
-              <>
-                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Loading...
-              </>
+              <><div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />Loading...</>
             ) : (
-              <>
-                Load More
-                <Users className="ml-2 h-4 w-4" />
-              </>
+              <>Load More <Users className="ml-2 h-4 w-4" /></>
             )}
           </Button>
         </div>
@@ -689,9 +595,7 @@ const AdminCustomers = () => {
 
       {!isTableLoading && !hasMore && customers.length > 0 && (
         <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Showing {customers.length} of {exportCount} total customers
-          </p>
+          <p className="text-sm text-muted-foreground">Showing all {customers.length} customers</p>
         </div>
       )}
     </div>

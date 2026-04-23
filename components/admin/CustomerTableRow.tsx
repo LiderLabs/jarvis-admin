@@ -3,10 +3,7 @@
 import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  TableRow,
-  TableCell,
-} from "@/components/ui/table"
+import { TableRow, TableCell } from "@/components/ui/table"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,18 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  MoreVertical,
-  UserCheck,
-  Ban,
-  AlertTriangle,
-  Shield,
-  Trash2,
-  Phone,
-  Mail,
-  Award,
-} from "lucide-react"
-import { format } from "date-fns"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,13 +22,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  MoreVertical,
+  UserCheck,
+  AlertTriangle,
+  Trash2,
+  Award,
+  Eye,
+} from "lucide-react"
+import { format } from "date-fns"
 
 interface CustomerTableRowProps {
   customer: Doc<"users"> & {
     orderCount?: number
+    completedOrderCount?: number
     totalSpent?: number
     statusNote?: string
     statusChangedAt?: number
+    branchName?: string
+    allBranches?: string
+    lastOrderDate?: number
+    lastOrderNumber?: string
   }
   loyaltyPoints?: number
   onStatusChange: (
@@ -53,50 +52,12 @@ interface CustomerTableRowProps {
     newStatus: "active" | "blocked" | "suspended" | "restricted"
   ) => void
   onDelete: (customerId: string, customerName: string) => void
+  onViewProfile: (customer: any) => void
 }
 
-const getStatusBadge = (status: string) => {
-  const statusConfig = {
-    active: {
-      label: "Active",
-      variant: "default" as const,
-      className: "bg-green-50 text-green-700 border-green-200",
-    },
-    blocked: {
-      label: "Blocked",
-      variant: "destructive" as const,
-      className: "bg-red-50 text-red-700 border-red-200",
-    },
-    suspended: {
-      label: "Suspended",
-      variant: "outline" as const,
-      className: "bg-orange-50 text-orange-700 border-orange-200",
-    },
-    restricted: {
-      label: "Restricted",
-      variant: "outline" as const,
-      className: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    },
-  }
-
-  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.active
-
-  return (
-    <Badge variant={config.variant} className={config.className}>
-      {config.label}
-    </Badge>
-  )
-}
-
-// How many points until next free wash
 function PointsBadge({ points }: { points: number }) {
   const freewashes = Math.floor(points / 10)
-  const remainder = points % 10
-
-  if (points === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
-  }
-
+  if (points === 0) return <span className="text-xs text-muted-foreground">—</span>
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center gap-1.5">
@@ -104,15 +65,10 @@ function PointsBadge({ points }: { points: number }) {
         <span className="text-sm font-semibold text-foreground">{points}</span>
         {freewashes > 0 && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-            🎁 {freewashes} free
+            🎁 {freewashes}
           </span>
         )}
       </div>
-      {remainder > 0 && (
-        <span className="text-[10px] text-muted-foreground">
-          {10 - remainder} to next reward
-        </span>
-      )}
     </div>
   )
 }
@@ -122,11 +78,13 @@ export const CustomerTableRow = ({
   loyaltyPoints = 0,
   onStatusChange,
   onDelete,
+  onViewProfile,
 }: CustomerTableRowProps) => {
   const canActivate = customer.status !== "active"
-  const canBlock = customer.status !== "blocked"
   const canSuspend = customer.status !== "suspended"
-  const canRestrict = customer.status !== "restricted"
+
+  // Show branch code if available from branchName, else show name truncated
+  const branchDisplay = (customer as any).branchName || "—"
 
   return (
     <TableRow className="hover:bg-muted/50">
@@ -137,65 +95,42 @@ export const CustomerTableRow = ({
 
       {/* Contact */}
       <TableCell>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Phone className="w-3 h-3" />
-            {customer.phoneNumber}
-          </div>
+        <div className="space-y-0.5">
+          <p className="text-sm text-foreground">{customer.phoneNumber}</p>
           {customer.email && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Mail className="w-3 h-3" />
-              {customer.email}
-            </div>
+            <p className="text-xs text-muted-foreground truncate max-w-[160px]">{customer.email}</p>
           )}
         </div>
       </TableCell>
 
       {/* Type */}
       <TableCell>
-        <Badge variant={customer.isRegistered ? "default" : "secondary"}>
+        <Badge variant={customer.isRegistered ? "default" : "secondary"} className="text-xs">
           {customer.isRegistered ? "Online" : "Walk-in"}
         </Badge>
       </TableCell>
 
-      {/* Status */}
+      {/* Branch — replaces Status column */}
       <TableCell>
-        <div className="space-y-1">
-          {getStatusBadge(customer.status || "active")}
-          {customer.statusNote && customer.statusChangedAt && (
-            <div className="text-xs text-muted-foreground mt-1">
-              <div className="truncate max-w-[200px]" title={customer.statusNote}>
-                {customer.statusNote}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {format(new Date(customer.statusChangedAt), "MMM d, yyyy")}
-              </div>
-            </div>
-          )}
-        </div>
+        <span className="text-sm font-medium text-foreground">{branchDisplay}</span>
       </TableCell>
 
       {/* Orders */}
       <TableCell>
-        <div className="flex items-center gap-2">
-          
-          <span className="text-sm">{customer.orderCount || 0}</span>
-        </div>
+        <span className="text-sm font-semibold">{customer.orderCount || 0}</span>
       </TableCell>
 
       {/* Total Spent */}
       <TableCell>
-        <span className="text-sm font-medium">
-          ₵{(customer.totalSpent || 0).toFixed(2)}
-        </span>
+        <span className="text-sm font-medium">₵{(customer.totalSpent || 0).toFixed(2)}</span>
       </TableCell>
 
-      {/* Loyalty Points — NEW */}
+      {/* Loyalty Points */}
       <TableCell>
         <PointsBadge points={loyaltyPoints} />
       </TableCell>
 
-      {/* Actions */}
+      {/* Actions — View Profile, Activate, Suspend, Delete */}
       <TableCell className="text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -204,58 +139,41 @@ export const CustomerTableRow = ({
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-44">
+            {/* View Profile */}
+            <DropdownMenuItem onClick={() => onViewProfile(customer)}>
+              <Eye className="mr-2 h-4 w-4" />
+              <span>View Profile</span>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            {/* Activate — only show if not already active */}
             {canActivate && (
               <DropdownMenuItem
-                onClick={() =>
-                  onStatusChange(customer._id, customer.name, customer.status || "active", "active")
-                }
+                onClick={() => onStatusChange(customer._id, customer.name, customer.status || "active", "active")}
               >
                 <UserCheck className="mr-2 h-4 w-4" />
                 <span>Activate</span>
               </DropdownMenuItem>
             )}
-            {canBlock && (
-              <DropdownMenuItem
-                onClick={() =>
-                  onStatusChange(customer._id, customer.name, customer.status || "active", "blocked")
-                }
-              >
-                <Ban className="mr-2 h-4 w-4" />
-                <span>Block</span>
-              </DropdownMenuItem>
-            )}
+
+            {/* Suspend — only show if not already suspended */}
             {canSuspend && (
               <DropdownMenuItem
-                onClick={() =>
-                  onStatusChange(customer._id, customer.name, customer.status || "active", "suspended")
-                }
+                onClick={() => onStatusChange(customer._id, customer.name, customer.status || "active", "suspended")}
               >
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 <span>Suspend</span>
               </DropdownMenuItem>
             )}
-            {canRestrict && (
-              <DropdownMenuItem
-                onClick={() =>
-                  onStatusChange(customer._id, customer.name, customer.status || "active", "restricted")
-                }
-              >
-                <Shield className="mr-2 h-4 w-4" />
-                <span>Restrict</span>
-              </DropdownMenuItem>
-            )}
 
-            {(canActivate || canBlock || canSuspend || canRestrict) && (
-              <DropdownMenuSeparator />
-            )}
+            <DropdownMenuSeparator />
 
+            {/* Delete */}
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-destructive focus:text-destructive"
-                >
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
                   <span>Delete</span>
                 </DropdownMenuItem>
@@ -264,16 +182,13 @@ export const CustomerTableRow = ({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Customer</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete {customer.name}? This action cannot be
-                    undone. The customer will be soft-deleted and cannot place new orders.
+                    Are you sure you want to delete {customer.name}? This cannot be undone.
+                    The customer will be soft-deleted and cannot place new orders.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => onDelete(customer._id, customer.name)}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
+                  <AlertDialogAction onClick={() => onDelete(customer._id, customer.name)} className="bg-red-600 hover:bg-red-700">
                     Delete
                   </AlertDialogAction>
                 </AlertDialogFooter>
