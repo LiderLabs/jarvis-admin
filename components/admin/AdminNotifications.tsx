@@ -309,14 +309,14 @@ const AdminNotifications = () => {
               <span className='hidden sm:inline'>({unreadCount})</span>
             </Button>
           )}
-          <Button
+         {/*  <Button
             onClick={() => setCreateDialogOpen(true)}
             className='gap-2 w-full sm:w-auto'
           >
             <Plus className='h-4 w-4' />
             <span className='hidden sm:inline'>Create Notification</span>
             <span className='sm:hidden'>Create</span>
-          </Button>
+          </Button> */}
         </div>
       </div>
 
