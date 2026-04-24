@@ -3,31 +3,25 @@
 import { useMemo, useState } from "react"
 import { usePaginatedQuery, useQuery } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import {
-  ShoppingBag, ArrowUpRight, ArrowDownRight, Zap, Target,
-  BarChart2, X, CheckCircle2, Minus, TrendingUp, Calendar,
-  ChevronLeft, ChevronRight,
+  ShoppingBag, ArrowUpRight, ArrowDownRight, Zap, Target, BarChart2,
+  Calendar, ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/loaders/DashboardSkeleton"
-import {
-  format, subDays, getYear,
-  startOfWeek, endOfWeek, addWeeks, subWeeks, isSameWeek,
-} from "date-fns"
-import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Legend,
-} from "recharts"
+import { format, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameWeek } from "date-fns"
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sunday-start week helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WEEK_OPTS = { weekStartsOn: 0 } as const // 0 = Sunday
+const WEEK_OPTS = { weekStartsOn: 0 } as const
 
 function getSundayWeekNumber(date: Date): number {
   const jan1 = new Date(date.getFullYear(), 0, 1)
@@ -37,16 +31,10 @@ function getSundayWeekNumber(date: Date): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Week Picker — Sunday-start
+// Week Picker
 // ─────────────────────────────────────────────────────────────────────────────
 
-function WeekPicker({
-  value,
-  onChange,
-}: {
-  value: Date
-  onChange: (weekStart: Date) => void
-}) {
+function WeekPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
   const now        = new Date()
   const isThisWeek = isSameWeek(value, now, WEEK_OPTS)
   const weekNum    = getSundayWeekNumber(value)
@@ -54,38 +42,24 @@ function WeekPicker({
   const weekStart  = startOfWeek(value, WEEK_OPTS)
   const weekEnd    = endOfWeek(value, WEEK_OPTS)
 
-  const prev = () => onChange(startOfWeek(subWeeks(value, 1), WEEK_OPTS))
-  const next = () => {
-    if (isThisWeek) return
-    onChange(startOfWeek(addWeeks(value, 1), WEEK_OPTS))
-  }
-
   return (
     <div className="flex items-center gap-1 bg-muted/50 border border-border rounded-lg px-1 py-1">
       <button
-        onClick={prev}
+        onClick={() => onChange(startOfWeek(subWeeks(value, 1), WEEK_OPTS))}
         className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-
       <div className="flex items-center gap-1.5 px-2 min-w-[180px] justify-center">
         <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-          W{weekNum} {weekYear}
-        </span>
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          · {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d")}
-        </span>
+        <span className="text-xs font-semibold text-foreground whitespace-nowrap">W{weekNum} {weekYear}</span>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">· {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d")}</span>
         {isThisWeek && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-            Now
-          </span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">Now</span>
         )}
       </div>
-
       <button
-        onClick={next}
+        onClick={() => { if (!isThisWeek) onChange(startOfWeek(addWeeks(value, 1), WEEK_OPTS)) }}
         disabled={isThisWeek}
         className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
       >
@@ -96,31 +70,33 @@ function WeekPicker({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stat Card
+// Stat Card — exactly one sub-line, no duplicates
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatCard({
-  title, value, change, sub, color,
+  title, value, change, sub, color, isAllTime,
 }: {
   title: string
   value: string | number
   change?: number
   sub?: string
   color: string
+  isAllTime?: boolean
 }) {
   const isPos = (change ?? 0) >= 0
   return (
     <div className={`bg-card border-l-4 ${color} border border-border rounded-xl p-4`}>
       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">{title}</p>
       <p className="text-2xl font-bold text-foreground">{value}</p>
-      {change !== undefined && (
+      {change !== undefined && !isAllTime ? (
         <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${isPos ? "text-green-600" : "text-red-500"}`}>
           {isPos ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           {isPos ? "+" : ""}{change.toFixed(1)}% vs avg
         </div>
-      )}
-      {sub && change === undefined && (
-        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground mt-1">
+          {isAllTime ? "All time" : sub}
+        </p>
       )}
     </div>
   )
@@ -145,7 +121,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: sort branches by completion % descending, no-target branches last
+// Leaderboard helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sortByLeaderboard(branches: any[]) {
@@ -159,350 +135,13 @@ function sortByLeaderboard(branches: any[]) {
 const MEDALS = ["🥇", "🥈", "🥉"]
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Weekly Reports Modal
-// ─────────────────────────────────────────────────────────────────────────────
-
-function WeeklyReportsModal({
-  weeklyStats,
-  onClose,
-}: {
-  weeklyStats: any[]
-  onClose: () => void
-}) {
-  const [activeTab, setActiveTab] = useState<"current" | "history">("current")
-  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
-
-  const trends = useQuery((api as any).analytics.getRevenueTrends, {
-    period: "weekly",
-    days: 84,
-  }) ?? []
-
-  const weekNum  = getSundayWeekNumber(selectedWeek)
-  const weekYear = startOfWeek(selectedWeek, WEEK_OPTS).getFullYear()
-
-  const sortedStats = useMemo(() => sortByLeaderboard(weeklyStats), [weeklyStats])
-
-  const branchRows = sortedStats.map((s: any, idx: number) => {
-    const pct   = s.weeklyTarget > 0 ? (s.weeklyOrders / s.weeklyTarget) * 100 : null
-    const hit   = pct !== null && pct >= 100
-    const close = pct !== null && pct >= 75 && !hit
-    const medal = s.weeklyTarget > 0 && idx < 3 ? MEDALS[idx] : null
-    return { ...s, pct, hit, close, medal }
-  })
-
-  const hitCount      = branchRows.filter(r => r.hit).length
-  const progressCount = branchRows.filter(r => !r.hit && (r.weeklyTarget ?? 0) > 0).length
-  const noTargetCount = branchRows.filter(r => !r.weeklyTarget || r.weeklyTarget === 0).length
-
-  const historyRows = useMemo(() =>
-    [...(trends as any[])].reverse().slice(0, 12),
-    [trends]
-  )
-
-  const completedWeeks = historyRows.slice(1)
-  const avgOrders = completedWeeks.length > 0
-    ? Math.round(completedWeeks.reduce((s: number, r: any) => s + r.orders, 0) / completedWeeks.length)
-    : 0
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl z-10 flex flex-col max-h-[88vh]">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950/40 flex items-center justify-center">
-              <BarChart2 className="w-4 h-4 text-purple-600" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-foreground">Weekly Reports</h2>
-              <p className="text-xs text-muted-foreground">Order targets &amp; performance history · Sun – Sat</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-border shrink-0 px-6 gap-1 pt-1">
-          {(["current", "history"] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px
-                ${activeTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            >
-              {tab === "current" ? "This Week" : "Week History"}
-            </button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 min-h-0">
-
-          {/* ── This Week ── */}
-          {activeTab === "current" && (
-            <div className="p-6 space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <WeekPicker value={selectedWeek} onChange={setSelectedWeek} />
-                <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
-                    <CheckCircle2 className="w-3 h-3" />
-                    {hitCount} {hitCount === 1 ? "branch" : "branches"} hit target
-                  </span>
-                  {progressCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
-                      <TrendingUp className="w-3 h-3" />
-                      {progressCount} in progress
-                    </span>
-                  )}
-                  {noTargetCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-muted text-muted-foreground">
-                      <Minus className="w-3 h-3" />
-                      {noTargetCount} no target set
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {branchRows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Target className="w-8 h-8 mb-2 opacity-30" />
-                  <p className="text-sm">No branch data available</p>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted/40 border-b border-border">
-                        <th className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3 text-left w-8">#</th>
-                        {["Branch", "Orders", "Target", "Progress", "Status"].map(h => (
-                          <th
-                            key={h}
-                            className={`text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3
-                              ${h === "Branch" ? "text-left" : h === "Progress" ? "text-left w-36" : "text-right"}`}
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {branchRows.map((r, idx) => (
-                        <tr
-                          key={r.branchId}
-                          className={`border-b border-border last:border-0 transition-colors hover:bg-muted/20
-                            ${r.hit ? "bg-green-50/40 dark:bg-green-950/10" : ""}
-                            ${idx === 0 && r.weeklyTarget > 0 ? "bg-yellow-50/30 dark:bg-yellow-950/10" : ""}`}
-                        >
-                          <td className="px-4 py-3 text-sm text-center">
-                            {r.medal ?? (
-                              <span className="text-xs text-muted-foreground">{r.weeklyTarget > 0 ? idx + 1 : "—"}</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-sm font-semibold text-foreground">{r.branchName}</p>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="text-sm font-bold text-foreground">{r.weeklyOrders}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {r.weeklyTarget > 0
-                              ? <span className="text-sm text-muted-foreground">{r.weeklyTarget}</span>
-                              : <span className="text-xs italic text-muted-foreground">None</span>
-                            }
-                          </td>
-                          <td className="px-4 py-3">
-                            {r.weeklyTarget > 0 && r.pct !== null ? (
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-700
-                                      ${r.hit ? "bg-green-500" : r.close ? "bg-yellow-400" : "bg-blue-500"}`}
-                                    style={{ width: `${Math.min(r.pct, 100)}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs font-medium text-muted-foreground w-8 text-right shrink-0">
-                                  {r.pct.toFixed(0)}%
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {!r.weeklyTarget || r.weeklyTarget === 0 ? (
-                              <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">No Target</Badge>
-                            ) : r.hit ? (
-                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">🎯 Hit</Badge>
-                            ) : r.close ? (
-                              <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400">Almost</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">In Progress</Badge>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Ranked by completion % — highest to lowest. Week runs Sunday – Saturday.
-              </p>
-            </div>
-          )}
-
-          {/* ── Week History ── */}
-          {activeTab === "history" && (
-            <div className="p-6 space-y-5">
-              <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
-                <p className="text-sm font-semibold text-foreground mb-0.5">How to read this</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Each row is one complete week (Sun – Sat), sorted newest first.
-                  <strong className="text-foreground"> vs Avg</strong> compares that week against the average of all
-                  completed weeks shown. The current week is marked "In Progress" since it isn't finished yet.
-                </p>
-              </div>
-
-              {avgOrders > 0 && (
-                <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl px-4 py-3">
-                  <TrendingUp className="w-4 h-4 text-purple-600 shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {avgOrders.toLocaleString()} orders{" "}
-                      <span className="font-normal text-muted-foreground">per week on average</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Based on {completedWeeks.length} completed weeks · all branches combined
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {historyRows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <BarChart2 className="w-8 h-8 mb-2 opacity-30" />
-                  <p className="text-sm">No history data available yet</p>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted/40 border-b border-border">
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Week</th>
-                        <th className="text-left  text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Sun – Sat</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Orders</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">Revenue</th>
-                        <th className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">vs Avg</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyRows.map((r: any, i: number) => {
-                        const isCurrentWeek = i === 0
-                        const vsAvg  = avgOrders > 0 && !isCurrentWeek
-                          ? ((r.orders - avgOrders) / avgOrders) * 100
-                          : null
-                        const above  = vsAvg !== null && vsAvg >= 0
-
-                        let weekRangeLabel = ""
-                        try {
-                          const [wPart, yPart] = (r.period as string).split(" ")
-                          const wn = parseInt(wPart.replace("W", ""))
-                          const yr = parseInt(yPart)
-                          const jan1   = new Date(yr, 0, 1)
-                          const wStart = startOfWeek(new Date(jan1.getTime() + (wn - 1) * 7 * 86400000), WEEK_OPTS)
-                          const wEnd   = endOfWeek(wStart, WEEK_OPTS)
-                          weekRangeLabel = `${format(wStart, "MMM d")} – ${format(wEnd, "MMM d")}`
-                        } catch {}
-
-                        return (
-                          <tr
-                            key={r.period}
-                            className={`border-b border-border last:border-0 transition-colors hover:bg-muted/20
-                              ${isCurrentWeek ? "bg-blue-50/40 dark:bg-blue-950/10" : ""}`}
-                          >
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-foreground">{r.period}</span>
-                                {isCurrentWeek && (
-                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-                                    This week
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-xs text-muted-foreground">{weekRangeLabel}</span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <span className="text-sm font-bold text-foreground">{r.orders.toLocaleString()}</span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <span className="text-sm font-semibold text-foreground">
-                                ₵{r.revenue.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {vsAvg !== null ? (
-                                <span className={`inline-flex items-center gap-0.5 text-xs font-semibold
-                                  ${above ? "text-green-600" : "text-red-500"}`}>
-                                  {above ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                  {above ? "+" : ""}{vsAvg.toFixed(1)}%
-                                </span>
-                              ) : isCurrentWeek ? (
-                                <span className="text-xs italic text-muted-foreground">In progress</span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Showing up to 12 weeks of history across all branches combined.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-border shrink-0 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">W{weekNum} · {weekYear}</p>
-          <Button variant="outline" size="sm" className="h-7 text-xs px-3" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Weekly Target Card — leaderboard display with rank
+// Weekly Target Card
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WeeklyTargetCard({
-  branchName,
-  weeklyOrders,
-  weeklyTarget,
-  rank,
+  branchName, weeklyOrders, weeklyTarget, rank,
 }: {
-  branchName: string
-  weeklyOrders: number
-  weeklyTarget: number
-  rank: number
+  branchName: string; weeklyOrders: number; weeklyTarget: number; rank: number
 }) {
   const pct        = weeklyTarget > 0 ? Math.min((weeklyOrders / weeklyTarget) * 100, 100) : 0
   const isComplete = pct >= 100
@@ -522,24 +161,18 @@ function WeeklyTargetCard({
     <div className={`border rounded-xl px-4 py-3 ${wrapColor} w-full`}>
       <div className="flex items-center gap-3">
         <div className="shrink-0 w-7 text-center">
-          {medal ? (
-            <span className="text-base leading-none">{medal}</span>
-          ) : weeklyTarget > 0 ? (
-            <span className="text-xs font-semibold text-muted-foreground">{rank}</span>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
+          {medal
+            ? <span className="text-base leading-none">{medal}</span>
+            : weeklyTarget > 0
+            ? <span className="text-xs font-semibold text-muted-foreground">{rank}</span>
+            : <span className="text-xs text-muted-foreground">—</span>}
         </div>
-
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{branchName}</p>
           <p className="text-xs text-muted-foreground">
-            {weeklyTarget > 0
-              ? `${weeklyOrders} / ${weeklyTarget} orders`
-              : "No target set"}
+            {weeklyTarget > 0 ? `${weeklyOrders} / ${weeklyTarget} orders` : "No target set"}
           </p>
         </div>
-
         {weeklyTarget > 0 ? (
           <div className="flex-1 hidden sm:block">
             <div className="h-3 bg-muted rounded-full overflow-hidden border border-border relative">
@@ -557,20 +190,15 @@ function WeeklyTargetCard({
         ) : (
           <div className="flex-1 hidden sm:block h-3 bg-muted rounded-full opacity-40" />
         )}
-
         <div className={`text-right shrink-0 flex items-center gap-1 ${textColor}`}>
           <p className="text-sm font-bold">{pct.toFixed(0)}%</p>
           {isComplete && <span className="text-xs">🎯</span>}
         </div>
       </div>
-
       {weeklyTarget > 0 && (
         <div className="mt-2 sm:hidden">
           <div className="h-2 bg-muted rounded-full overflow-hidden border border-border">
-            <div
-              className={`h-full ${barColor} rounded-full transition-all duration-700`}
-              style={{ width: `${pct}%` }}
-            />
+            <div className={`h-full ${barColor} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
           </div>
         </div>
       )}
@@ -583,31 +211,45 @@ function WeeklyTargetCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AdminOverview = () => {
-  const [selectedBranch, setSelectedBranch]       = useState("all")
-  const [dateFrom, setDateFrom]                   = useState<Date>(new Date())
-  const [dateTo, setDateTo]                       = useState<Date>(new Date())
-  const [showWeeklyReports, setShowWeeklyReports] = useState(false)
+  const router = useRouter()
+
+  const [selectedBranch, setSelectedBranch] = useState("all")
+  const [dateFrom, setDateFrom]             = useState<Date>(new Date())
+  const [dateTo, setDateTo]                 = useState<Date>(new Date())
 
   const startDateStr = format(dateFrom, "yyyy-MM-dd")
   const endDateStr   = format(dateTo,   "yyyy-MM-dd")
 
+  const dDiff     = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
+  const isAllTime = dDiff > 365
+
+  // Only 8 rows for the recent orders table — stats come from server queries
   const { results: ordersPages, status } = usePaginatedQuery(
     api.admin.getOrders,
     selectedBranch === "all" ? {} : { branchId: selectedBranch as any },
-    { initialNumItems: 200 }
+    { initialNumItems: 8 }
   )
-  const orders    = ordersPages?.flat() || []
-  const isLoading = status === "LoadingFirstPage"
+  const recentOrders = ordersPages?.flat().slice(0, 8) || []
+  const isLoading    = status === "LoadingFirstPage"
 
   const branchesRaw = useQuery(api.admin.getBranches, { paginationOpts: { numItems: 100, cursor: null } } as any)
   const branches: any[] = Array.isArray(branchesRaw) ? branchesRaw : (branchesRaw as any)?.page ?? []
 
+  // Server-side payment stats — accurate for any date range
   const selectedStats = useQuery(api.admin.getPaymentStats, {
     startDate: startDateStr,
     endDate:   endDateStr,
     ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
   }) ?? { totalRevenue: 0, cashAmount: 0, mobileMoneylAmount: 0, cardAmount: 0, byDay: {}, byDayByMethod: {} }
 
+  // Server-side analytics for order counts
+  const analyticsStats = useQuery(api.admin.getAnalytics, {
+    ...(selectedBranch !== "all" ? { branchId: selectedBranch as any } : {}),
+    startDate: new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate(), 0, 0, 0).getTime(),
+    endDate:   new Date(dateTo.getFullYear(),   dateTo.getMonth(),   dateTo.getDate(),   23, 59, 59).getTime(),
+  })
+
+  // Last 30 days for vs-avg comparison (only used when not all-time)
   const last30Stats = useQuery(api.admin.getPaymentStats, {
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     endDate:   format(new Date(), "yyyy-MM-dd"),
@@ -617,70 +259,60 @@ const AdminOverview = () => {
   const weeklyStats = useQuery((api as any).admin.getWeeklyOrderStats) ?? []
 
   const stats = useMemo(() => {
-    const startTs = new Date(dateFrom).setHours(0, 0, 0, 0)
-    const endTs   = new Date(dateTo).setHours(23, 59, 59, 999)
-
-    const selectedOrders   = orders.filter((o: any) => o._creationTime >= startTs && o._creationTime <= endTs)
-    const totalRevenue30   = (last30Stats as any)?.totalRevenue ?? 0
-    const pendingOrders    = orders.filter((o: any) =>
-      ["pending","pending_dropoff","in_progress","washing","drying","folding","sorting","checked_in"].includes(o.status)
-    ).length
-    const completedInRange = selectedOrders.filter((o: any) =>
-      o.status === "completed" || o.status === "delivered"
-    ).length
-
-    const dDiff = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
-
     const totalMobileMoney = (selectedStats as any)?.mobileMoneylAmount ?? 0
     const totalCard        = (selectedStats as any)?.cardAmount ?? 0
     const totalCash        = (selectedStats as any)?.cashAmount ?? 0
     const selectedRevenue  = (selectedStats as any)?.totalRevenue ?? 0
+    const byDayByMethod    = (selectedStats as any)?.byDayByMethod ?? {}
 
-    const byDayByMethod = (selectedStats as any)?.byDayByMethod ?? {}
+    const selectedOrders   = analyticsStats?.totalOrders ?? 0
+    const completedInRange = (analyticsStats?.ordersByStatus as any)?.completed ?? 0
+    const pendingStatuses  = ["pending","pending_dropoff","in_progress","washing","drying","folding","sorting","checked_in"]
+    const pendingOrders    = pendingStatuses.reduce(
+      (sum, s) => sum + ((analyticsStats?.ordersByStatus as any)?.[s] ?? 0), 0
+    )
 
-    const step = dDiff <= 7 ? 1 : dDiff <= 30 ? 5 : 10
+    // Cap at 60 data points so the chart renders cleanly at any range
+    const MAX_POINTS = 60
+    const bucketDays = dDiff <= MAX_POINTS ? 1 : Math.ceil(dDiff / MAX_POINTS)
+    const chartData: any[] = []
 
-    const chartData = []
-    for (let i = dDiff - 1; i >= 0; i--) {
-      const date      = subDays(dateTo, i)
-      const dateStr   = format(date, "yyyy-MM-dd")
-      const key       = format(date, "MMM d")
-      const showLabel = (dDiff - 1 - i) % step === 0
-
-      const dayMethods = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
+    let i = dDiff - 1
+    while (i >= 0) {
+      let mm = 0, card = 0, cash = 0
+      const bucketStart = subDays(dateTo, i)
+      for (let j = 0; j < bucketDays && i - j >= 0; j++) {
+        const dateStr = format(subDays(dateTo, i - j), "yyyy-MM-dd")
+        const d = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
+        mm   += d.mobile_money ?? 0
+        card += d.card         ?? 0
+        cash += d.cash         ?? 0
+      }
+      const label = bucketDays === 1
+        ? format(bucketStart, "MMM d")
+        : `${format(bucketStart, "MMM d")}–${format(subDays(dateTo, Math.max(0, i - bucketDays + 1)), "MMM d")}`
 
       chartData.push({
-        date:        key,
-        displayDate: showLabel ? key : "",
-        mobileMoney: Math.round((dayMethods.mobile_money ?? 0) * 100) / 100,
-        card:        Math.round((dayMethods.card ?? 0) * 100) / 100,
-        cash:        Math.round((dayMethods.cash ?? 0) * 100) / 100,
+        date: label, displayDate: label,
+        mobileMoney: Math.round(mm   * 100) / 100,
+        card:        Math.round(card * 100) / 100,
+        cash:        Math.round(cash * 100) / 100,
       })
+      i -= bucketDays
     }
 
+    const totalRevenue30  = (last30Stats as any)?.totalRevenue ?? 0
     const avgDailyRevenue = totalRevenue30 / 30
     const expectedRevenue = avgDailyRevenue * dDiff
-    const revenueChange   = expectedRevenue > 0 ? ((selectedRevenue - expectedRevenue) / expectedRevenue) * 100 : 0
-
-    const avgDailyOrders = orders.length / 30
-    const expectedOrders = avgDailyOrders * dDiff
-    const ordersChange   = expectedOrders > 0 ? ((selectedOrders.length - expectedOrders) / expectedOrders) * 100 : 0
+    const revenueChange   = !isAllTime && expectedRevenue > 0
+      ? ((selectedRevenue - expectedRevenue) / expectedRevenue) * 100
+      : undefined
 
     return {
-      selectedOrders:  selectedOrders.length,
-      selectedRevenue,
-      totalMobileMoney,
-      totalCard,
-      totalCash,
-      pendingOrders,
-      completedInRange,
-      revenueChange,
-      ordersChange,
-      chartData,
+      selectedOrders, selectedRevenue, totalMobileMoney, totalCard, totalCash,
+      pendingOrders, completedInRange, revenueChange, chartData,
     }
-  }, [orders, last30Stats, selectedStats, dateFrom, dateTo])
-
-  const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
+  }, [analyticsStats, last30Stats, selectedStats, dateFrom, dateTo, dDiff, isAllTime])
 
   const filteredWeeklyStats = useMemo(() => {
     const base = selectedBranch === "all"
@@ -690,18 +322,12 @@ const AdminOverview = () => {
   }, [weeklyStats, selectedBranch])
 
   const statusColors: Record<string, string> = {
-    completed:       "bg-green-100 text-green-700",
-    delivered:       "bg-green-100 text-green-700",
-    ready:           "bg-blue-100 text-blue-700",
-    in_progress:     "bg-yellow-100 text-yellow-700",
-    pending:         "bg-yellow-100 text-yellow-700",
-    pending_dropoff: "bg-yellow-100 text-yellow-700",
-    checked_in:      "bg-cyan-100 text-cyan-700",
-    sorting:         "bg-purple-100 text-purple-700",
-    washing:         "bg-indigo-100 text-indigo-700",
-    drying:          "bg-sky-100 text-sky-700",
-    folding:         "bg-violet-100 text-violet-700",
-    cancelled:       "bg-gray-100 text-gray-700",
+    completed: "bg-green-100 text-green-700", delivered: "bg-green-100 text-green-700",
+    ready: "bg-blue-100 text-blue-700", in_progress: "bg-yellow-100 text-yellow-700",
+    pending: "bg-yellow-100 text-yellow-700", pending_dropoff: "bg-yellow-100 text-yellow-700",
+    checked_in: "bg-cyan-100 text-cyan-700", sorting: "bg-purple-100 text-purple-700",
+    washing: "bg-indigo-100 text-indigo-700", drying: "bg-sky-100 text-sky-700",
+    folding: "bg-violet-100 text-violet-700", cancelled: "bg-gray-100 text-gray-700",
   }
   const formatStatus = (s: string) =>
     s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
@@ -710,14 +336,6 @@ const AdminOverview = () => {
 
   return (
     <div className="space-y-4 pb-8">
-
-      {/* Modal */}
-      {showWeeklyReports && (
-        <WeeklyReportsModal
-          weeklyStats={filteredWeeklyStats.length > 0 ? filteredWeeklyStats : weeklyStats as any[]}
-          onClose={() => setShowWeeklyReports(false)}
-        />
-      )}
 
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -745,12 +363,33 @@ const AdminOverview = () => {
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — one clean sub-line each, no duplicates */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard title="Revenue"     value={`₵${stats.selectedRevenue.toFixed(2)}`} change={stats.revenueChange} color="border-l-green-500" />
-        <StatCard title="Orders"      value={stats.selectedOrders}                    change={stats.ordersChange}  color="border-l-blue-500" />
-        <StatCard title="In Progress" value={stats.pendingOrders}                     sub="Require attention"      color="border-l-yellow-500" />
-        <StatCard title="Completed"   value={stats.completedInRange}                  sub="In selected period"     color="border-l-emerald-500" />
+        <StatCard
+          title="Revenue"
+          value={`₵${stats.selectedRevenue.toFixed(2)}`}
+          change={stats.revenueChange}
+          color="border-l-green-500"
+          isAllTime={isAllTime}
+        />
+        <StatCard
+          title="Orders"
+          value={stats.selectedOrders}
+          color="border-l-blue-500"
+          isAllTime={isAllTime}
+        />
+        <StatCard
+          title="In Progress"
+          value={stats.pendingOrders}
+          sub="Require attention"
+          color="border-l-yellow-500"
+        />
+        <StatCard
+          title="Completed"
+          value={stats.completedInRange}
+          sub="In selected period"
+          color="border-l-emerald-500"
+        />
       </div>
 
       {/* Charts row */}
@@ -770,22 +409,21 @@ const AdminOverview = () => {
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Zap className="w-3 h-3 text-yellow-500" />
                   <span className="text-xs">
-                    {filteredWeeklyStats.length}{" "}
-                    {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
+                    {filteredWeeklyStats.length} {filteredWeeklyStats.length === 1 ? "branch" : "branches"}
                   </span>
                 </div>
+                {/* Goes to /dashboard/reports — click "Weekly Target Reports" button there */}
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowWeeklyReports(true)}
+                  onClick={() => router.push("/dashboard/reports")}
                 >
                   <BarChart2 className="w-3 h-3 mr-1" /> Details
                 </Button>
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="pb-4">
             {filteredWeeklyStats.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
@@ -793,10 +431,7 @@ const AdminOverview = () => {
                 <p className="text-sm">No branch data available</p>
               </div>
             ) : (
-              <div
-                className="flex flex-col gap-2 overflow-y-auto pr-1"
-                style={{ maxHeight: "260px", scrollbarWidth: "thin" }}
-              >
+              <div className="flex flex-col gap-2 overflow-y-auto pr-1" style={{ maxHeight: "260px", scrollbarWidth: "thin" }}>
                 {filteredWeeklyStats.map((b: any, idx: number) => (
                   <WeeklyTargetCard
                     key={b.branchId}
@@ -836,7 +471,7 @@ const AdminOverview = () => {
               <BarChart data={stats.chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="displayDate" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={45} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={45} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: "11px" }} />
                 <Bar dataKey="mobileMoney" name="Mobile Money" fill="#3b82f6" radius={[3,3,0,0]} />
@@ -865,9 +500,7 @@ const AdminOverview = () => {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   {["Order", "Customer", "Branch", "Status", "Amount"].map(h => (
-                    <th key={h} className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">
-                      {h}
-                    </th>
+                    <th key={h} className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 py-3">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -876,9 +509,7 @@ const AdminOverview = () => {
                   <tr key={order._id} className="border-b border-border hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3">
                       <p className="text-sm font-bold">{order.orderNumber}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(order._creationTime), "MMM d, h:mm a")}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(order._creationTime), "MMM d, h:mm a")}</p>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {order.customerName || order.customerPhoneNumber || "—"}
@@ -895,16 +526,12 @@ const AdminOverview = () => {
                       <p className={`text-sm font-bold ${order.paymentStatus !== "paid" ? "text-muted-foreground" : ""}`}>
                         ₵{(order.finalPrice || 0).toFixed(2)}
                       </p>
-                      {order.paymentStatus !== "paid" && (
-                        <p className="text-xs text-orange-500">Unpaid</p>
-                      )}
+                      {order.paymentStatus !== "paid" && <p className="text-xs text-orange-500">Unpaid</p>}
                     </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                      No orders yet
-                    </td>
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">No orders yet</td>
                   </tr>
                 )}
               </tbody>
