@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@jordan6699/washlab-backend/api'
 import { Button } from '@/components/ui/button'
@@ -107,9 +107,6 @@ function StatusBadge({ status }: { status: string }) {
 function fmt(n: number) { return `₵${Math.abs(n).toFixed(2)}` }
 function fmtDate(ts: number) { return format(new Date(ts), 'd MMM yyyy, h:mm a') }
 
-// ─── Format the period label for the Outstanding card ─────────────────────────
-// If from and to are the same calendar day → show just that one date
-// Otherwise → show "d MMM yyyy – d MMM yyyy"
 function formatPeriodLabel(from: Date, to: Date): string {
   const sameDay =
     from.getFullYear() === to.getFullYear() &&
@@ -119,7 +116,7 @@ function formatPeriodLabel(from: Date, to: Date): string {
   return `${format(from, 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`
 }
 
-// ─── Excel export (true multi-sheet .xlsx via xlsx npm package) ──────────────
+// ─── Excel export ─────────────────────────────────────────────────────────────
 
 async function exportBranchesExcel(
   summaries: BranchSummary[],
@@ -192,18 +189,13 @@ interface BranchHistoryDrawerProps {
   summary: BranchSummary
   allRecons: Reconciliation[]
   allDeductions: Deduction[]
-  initialFrom: Date
-  initialTo: Date
   onClose: () => void
 }
 
-function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, initialTo, onClose }: BranchHistoryDrawerProps) {
-  const [from, setFrom] = useState<Date>(initialFrom)
-  const [to, setTo]     = useState<Date>(initialTo)
-
-  // Sync when parent date range changes
-  useEffect(() => { setFrom(initialFrom) }, [initialFrom])
-  useEffect(() => { setTo(initialTo) }, [initialTo])
+function BranchHistoryDrawer({ summary, allRecons, allDeductions, onClose }: BranchHistoryDrawerProps) {
+  // Drawer has its own independent date state — defaults to last 30 days
+  const [from, setFrom] = useState<Date>(subDays(new Date(), 30))
+  const [to, setTo]     = useState<Date>(new Date())
 
   const fromTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
   const toTs   = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime()
@@ -224,6 +216,11 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 
   const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
 
+  // All-time outstanding — never filtered by date, always shows true balance
+  const allTimeOutstanding = summary.unsettledOrders.reduce((s, o) => s + o.finalPrice, 0)
+  const allTimeOrderCount  = summary.unsettledOrders.length
+
+  // Period outstanding — only orders created within the selected date range
   const periodUnsettledOrders = summary.unsettledOrders.filter(
     o => o.createdAt >= fromTs && o.createdAt <= toTs
   )
@@ -282,37 +279,76 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Sent</p>
-            <p className="text-2xl font-bold text-green-600">{fmt(historySentTotal)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used</p>
-            <p className="text-2xl font-bold text-orange-600">{fmt(historyCashUsedTotal)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
-            <p className="text-2xl font-bold text-foreground">{allEvents.length}</p>
-          </Card>
-          <Card className={`p-4 ${
-            periodOutstanding > 0
-              ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
-              : 'border-green-200 bg-green-50 dark:bg-green-950/20'
-          }`}>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding</p>
-            <p className={`text-2xl font-bold ${periodOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {fmt(periodOutstanding)}
+
+        {/* ── All-time outstanding banner — always visible, ignores date filter ── */}
+        {allTimeOutstanding > 0 ? (
+          <div className="rounded-xl border-2 border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                  All-Time Outstanding Balance
+                </p>
+                <p className="text-xs text-red-600/80 dark:text-red-400/70 mt-0.5">
+                  {allTimeOrderCount} unsettled cash order{allTimeOrderCount !== 1 ? 's' : ''} 
+                </p>
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-red-600 dark:text-red-400 shrink-0">
+              {fmt(allTimeOutstanding)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
-          </Card>
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 px-5 py-4 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                Fully Settled
+              </p>
+              <p className="text-xs text-green-600/80 dark:text-green-400/70 mt-0.5">
+                No outstanding cash orders for this branch
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Period summary cards ── */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            {formatPeriodLabel(from, to)}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Sent</p>
+              <p className="text-2xl font-bold text-green-600">{fmt(historySentTotal)}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Cash Used</p>
+              <p className="text-2xl font-bold text-orange-600">{fmt(historyCashUsedTotal)}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Transactions</p>
+              <p className="text-2xl font-bold text-foreground">{allEvents.length}</p>
+            </Card>
+            <Card className={`p-4 ${
+              periodOutstanding > 0
+                ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
+                : 'border-green-200 bg-green-50 dark:bg-green-950/20'
+            }`}>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Outstanding (period)</p>
+              <p className={`text-2xl font-bold ${periodOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {fmt(periodOutstanding)}
+              </p>
+            </Card>
+          </div>
         </div>
 
+        {/* ── Transaction history table ── */}
         {allEvents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <History className="w-10 h-10 mb-3 opacity-20" />
             <p className="text-sm">No transactions in this period.</p>
+            <p className="text-xs mt-1 opacity-70">Try expanding the date range above.</p>
           </div>
         ) : (
           <Card className="overflow-hidden w-full">
@@ -388,11 +424,9 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, initialFrom, i
 export default function AdminCashReconciliationPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
-  // Date state lives here at the top level — persists when opening/closing the history drawer
   const [from, setFrom] = useState<Date>(new Date())
   const [to, setTo]     = useState<Date>(new Date())
   const [expanded, setExpanded] = useState<string | null>(null)
-  // Store branchId only — we look up the branch from fresh data on render, so stale objects are never an issue
   const [historyBranchId, setHistoryBranchId] = useState<string | null>(null)
 
   const sinceTs = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0).getTime()
@@ -417,11 +451,7 @@ export default function AdminCashReconciliationPage() {
           o => o.createdAt >= sinceTs && o.createdAt <= untilTs
         )
         const periodOutstanding = periodOrders.reduce((sum, o) => sum + o.finalPrice, 0)
-        return {
-          ...s,
-          unsettledOrders: periodOrders,
-          outstanding: periodOutstanding,
-        }
+        return { ...s, unsettledOrders: periodOrders, outstanding: periodOutstanding }
       })
       .filter(s => s.outstanding > 0)
   }, [summaries, sinceTs, untilTs])
@@ -445,13 +475,12 @@ export default function AdminCashReconciliationPage() {
     }
   }, [summaries, filteredSummaries])
 
-  // Resolve history branch from live data so it's always fresh
+  // Resolve history branch from live data — fall back to full summaries so settled branches still open
   const historyBranch = useMemo(() => {
-    if (!historyBranchId || !filteredSummaries.length) return null
-    // Fall back to summaries so history works even for settled branches
+    if (!historyBranchId || !summaries) return null
     return (
       filteredSummaries.find(s => s.branchId === historyBranchId) ??
-      summaries?.find(s => s.branchId === historyBranchId) ??
+      summaries.find(s => s.branchId === historyBranchId) ??
       null
     )
   }, [historyBranchId, filteredSummaries, summaries])
@@ -462,8 +491,6 @@ export default function AdminCashReconciliationPage() {
         summary={historyBranch}
         allRecons={allRecons ?? []}
         allDeductions={allDeductions ?? []}
-        initialFrom={from}
-        initialTo={to}
         onClose={() => setHistoryBranchId(null)}
       />
     )
@@ -474,10 +501,10 @@ export default function AdminCashReconciliationPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Cash Reconciliation</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">All-time outstanding per branch</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Outstanding cash per branch for the selected period</p>
       </div>
 
-      {/* Date picker for period */}
+      {/* Date picker */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground font-medium">Period:</span>
         <DateRangePicker
@@ -500,7 +527,6 @@ export default function AdminCashReconciliationPage() {
             <p className={`text-2xl font-bold ${totals.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
               {fmt(totals.outstanding)}
             </p>
-            {/* Show the chosen filter period — same logic: single day or range */}
             <p className="text-xs text-muted-foreground mt-1">{formatPeriodLabel(from, to)}</p>
           </Card>
         </div>
@@ -563,7 +589,6 @@ export default function AdminCashReconciliationPage() {
             const isOpen = expanded === branch.branchId
             return (
               <Card key={branch.branchId} className="overflow-hidden">
-                {/* Branch row */}
                 <div
                   className="w-full text-left px-4 sm:px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer"
                   onClick={() => setExpanded(isOpen ? null : branch.branchId)}
@@ -603,11 +628,8 @@ export default function AdminCashReconciliationPage() {
                   </Button>
                 </div>
 
-                {/* Expanded detail */}
                 {isOpen && (
                   <div className="border-t border-border px-4 sm:px-5 py-4 space-y-4 bg-muted/10">
-
-                    {/* Unsettled orders */}
                     {branch.unsettledOrders.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -650,7 +672,6 @@ export default function AdminCashReconciliationPage() {
                       </div>
                     )}
 
-                    {/* In-progress recons */}
                     {branch.inProgressRecons.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">In Progress</p>
@@ -671,7 +692,6 @@ export default function AdminCashReconciliationPage() {
                       </div>
                     )}
 
-                    {/* Nothing to show */}
                     {branch.unsettledOrders.length === 0 && branch.inProgressRecons.length === 0 && (
                       <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 py-2">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />

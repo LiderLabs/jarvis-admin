@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { usePaginatedQuery, useQuery, useConvexAuth } from "convex/react"
 import { api } from "@jordan6699/washlab-backend/api"
 import { Id, Doc } from "@jordan6699/washlab-backend/dataModel"
@@ -14,10 +14,22 @@ import { Download } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 
-const PAYMENTS_LIMIT = 20
+
 
 type PaymentStatus = "pending" | "processing" | "completed" | "failed" | "refunded"
 type PaymentMethod = "mobile_money" | "card" | "cash"
+
+type PaymentWithDetails = Doc<"payments"> & {
+  order?: Doc<"orders"> | null
+  customer?: Doc<"users"> | null
+  branch?: Doc<"branches"> | null
+}
+
+interface Branch {
+  _id: Id<'branches'>
+  name: string
+  code: string
+}
 
 function downloadCSV(rows: (string | number | null | undefined)[][], filename: string) {
   const csv = rows
@@ -40,29 +52,38 @@ const AdminPayments = () => {
   const [selectedMethod, setSelectedMethod] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState<Date>(new Date())
   const [dateTo, setDateTo] = useState<Date>(new Date())
-const [selectedPayment, setSelectedPayment] = useState<
-  (Doc<"payments"> & {
-    order?: Doc<"orders"> | null
-    customer?: Doc<"users"> | null
-    branch?: Doc<"branches"> | null
-  }) | null
->(null)
+  const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null)
 
-  const { results: branchesPages } = usePaginatedQuery(
+  // Branches
+  const branchesResult = useQuery(
     api.admin.getBranches,
-    isAuthenticated ? {} : "skip",
-    { initialNumItems: 100 }
+    isAuthenticated ? { paginationOpts: { numItems: 100, cursor: null } } : 'skip'
   )
-  const branchesList = branchesPages?.flat() || []
-  const branchMap = Object.fromEntries(branchesList.map((b: any) => [b._id, b.name]))
+  const branchesList: Branch[] = useMemo(() => {
+    if (!branchesResult) return []
+    if (Array.isArray(branchesResult)) return branchesResult
+    if ((branchesResult as any).page) return (branchesResult as any).page
+    return []
+  }, [branchesResult])
 
-  const startTimestamp = dateFrom ? new Date(dateFrom).setHours(0, 0, 0, 0) : undefined
-  const endTimestamp = dateTo ? new Date(dateTo).setHours(23, 59, 59, 999) : undefined
+  const branchMap = useMemo(
+    () => Object.fromEntries(branchesList.map((b) => [b._id, b.name])),
+    [branchesList]
+  )
 
+  const startTimestamp = useMemo(
+    () => new Date(dateFrom).setHours(0, 0, 0, 0),
+    [dateFrom]
+  )
+  const endTimestamp = useMemo(
+    () => new Date(dateTo).setHours(23, 59, 59, 999),
+    [dateTo]
+  )
+
+  // Payments — usePaginatedQuery with a large initialNumItems to load everything at once
   const {
     results: paymentsPages,
-    status: paginationStatus,
-    loadMore,
+    status: paymentsStatus,
   } = usePaginatedQuery(
     api.payments.getTransactionHistory,
     isAuthenticated
@@ -74,13 +95,13 @@ const [selectedPayment, setSelectedPayment] = useState<
           endDate: endTimestamp,
         }
       : "skip",
-    { initialNumItems: PAYMENTS_LIMIT }
+    { initialNumItems: 5000 }
   )
 
-  const allPayments = paymentsPages?.flat() || []
-  const isLoading = paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore"
-  const hasMore = paginationStatus === "CanLoadMore"
+  const isLoading = paymentsStatus === "LoadingFirstPage"
+  const allPayments: any[] = paymentsPages?.flat() ?? []
 
+  // Summary — separate query, always accurate
   const summary = useQuery(
     api.payments.getTransactionSummary,
     isAuthenticated
@@ -93,11 +114,11 @@ const [selectedPayment, setSelectedPayment] = useState<
   )
 
   const stats = {
-    total: summary?.totalAmount || 0,
-    count: summary?.totalTransactions || 0,
-    mobileMoney: summary?.byMethod?.mobile_money || 0,
-    card: summary?.byMethod?.card || 0,
-    cash: summary?.byMethod?.cash || 0,
+    total: summary?.totalAmount ?? 0,
+    count: summary?.totalTransactions ?? 0,
+    mobileMoney: summary?.byMethod?.mobile_money ?? 0,
+    card: summary?.byMethod?.card ?? 0,
+    cash: summary?.byMethod?.cash ?? 0,
   }
 
   const handleViewDetails = (payment: Doc<"payments">) => {
@@ -121,28 +142,17 @@ const [selectedPayment, setSelectedPayment] = useState<
 
     const rows: (string | number | null | undefined)[][] = [
       [
-        "Date",
-        "Time",
-        "Transaction Ref",
-        "Order Number",
-        "Customer Name",
-        "Customer Phone",
-        "Branch",
-        "Payment Method",
-        "Amount (GHS)",
-        "Status",
-        "Voucher Applied",
-        "Voucher Code",
-        "Loyalty Discount (GHS)",
-        "Original Price (GHS)",
-        "Final Price (GHS)",
+        "Date", "Time", "Transaction Ref", "Order Number", "Customer Name",
+        "Customer Phone", "Branch", "Payment Method", "Amount (GHS)", "Status",
+        "Voucher Applied", "Voucher Code", "Loyalty Discount (GHS)",
+        "Original Price (GHS)", "Final Price (GHS)",
       ],
       ...allPayments.map((p: any) => {
         const createdAt = new Date(p._creationTime)
         const order = p.order
         const voucherApplied = order?.voucherCode ? "Yes" : "No"
         const loyaltyDiscount =
-          order && order.totalPrice && order.finalPrice
+          order?.totalPrice && order?.finalPrice
             ? Math.max(0, order.totalPrice - order.finalPrice - (order.voucherDiscount || 0))
             : 0
 
@@ -154,12 +164,9 @@ const [selectedPayment, setSelectedPayment] = useState<
           p.customer?.name || order?.customerName || "",
           p.customer?.phoneNumber || order?.customerPhoneNumber || "",
           p.branch?.name || branchMap[p.branchId] || "",
-          p.paymentMethod === "mobile_money"
-            ? "Mobile Money"
-            : p.paymentMethod === "card"
-            ? "Card"
-            : p.paymentMethod === "cash"
-            ? "Cash"
+          p.paymentMethod === "mobile_money" ? "Mobile Money"
+            : p.paymentMethod === "card" ? "Card"
+            : p.paymentMethod === "cash" ? "Cash"
             : p.paymentMethod || "",
           (p.amount || 0).toFixed(2),
           p.status || "",
@@ -172,8 +179,10 @@ const [selectedPayment, setSelectedPayment] = useState<
       }),
     ]
 
-    const filename = `payments-${format(dateFrom, "yyyy-MM-dd")}-to-${format(dateTo, "yyyy-MM-dd")}.csv`
-    downloadCSV(rows, filename)
+    downloadCSV(
+      rows,
+      `payments-${format(dateFrom, "yyyy-MM-dd")}-to-${format(dateTo, "yyyy-MM-dd")}.csv`
+    )
   }
 
   return (
@@ -192,7 +201,7 @@ const [selectedPayment, setSelectedPayment] = useState<
           className="h-9 gap-1.5 w-full sm:w-auto"
         >
           <Download className="w-3.5 h-3.5" />
-          Export CSV
+          Export CSV{allPayments.length > 0 ? ` (${allPayments.length})` : ''}
         </Button>
       </div>
 
@@ -215,7 +224,7 @@ const [selectedPayment, setSelectedPayment] = useState<
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Branches</SelectItem>
-            {branchesList.map((branch: any) => (
+            {branchesList.map((branch) => (
               <SelectItem key={branch._id} value={branch._id}>
                 {branch.name}
               </SelectItem>
@@ -247,12 +256,7 @@ const [selectedPayment, setSelectedPayment] = useState<
           </SelectContent>
         </Select>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleClearFilters}
-          className="h-9 w-full sm:w-auto"
-        >
+        <Button variant="outline" size="sm" onClick={handleClearFilters} className="h-9 w-full sm:w-auto">
           Clear Filters
         </Button>
       </div>
@@ -310,27 +314,13 @@ const [selectedPayment, setSelectedPayment] = useState<
         </Card>
       </div>
 
-      {/* Payments Table */}
+      {/* Payments Table — no Load More, 5000 item limit loads everything */}
       <PaymentTable
-        payments={allPayments as any}
-        isLoading={isLoading && allPayments.length === 0}
+        payments={allPayments}
+        isLoading={isLoading}
         onViewDetails={handleViewDetails}
       />
 
-      {/* Load More */}
-      {hasMore && allPayments.length > 0 && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => loadMore(PAYMENTS_LIMIT)}
-            disabled={isLoading}
-          >
-            {isLoading ? "Loading..." : "Load More Payments"}
-          </Button>
-        </div>
-      )}
-
-      {/* Payment Details Dialog */}
       {selectedPayment && (
         <PaymentDetailsDialog
           payment={selectedPayment}

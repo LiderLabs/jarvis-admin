@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { usePaginatedQuery, useQuery, useMutation, useConvexAuth } from 'convex/react'
+import { useQuery, useMutation, useConvexAuth } from 'convex/react'
 import { api } from '@jordan6699/washlab-backend/api'
 import { Id, Doc } from '@jordan6699/washlab-backend/dataModel'
 import { Button } from '@/components/ui/button'
@@ -44,8 +44,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, addDays, subDays } from 'date-fns'
-
-const ORDERS_LIMIT = 100
 
 type OrderStatus =
   | 'pending_dropoff'
@@ -104,38 +102,48 @@ const AdminOrders = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
-  const { results: branchesPages } = usePaginatedQuery(
+  // Branches — plain query with paginationOpts to match backend signature
+  const branchesResult = useQuery(
     api.admin.getBranches,
-    isAuthenticated ? {} : 'skip',
-    { initialNumItems: 100 }
+    isAuthenticated ? { paginationOpts: { numItems: 100, cursor: null } } : 'skip'
   )
-  const branchesList = branchesPages?.flat() || []
+  const branchesList: Branch[] = useMemo(() => {
+    if (!branchesResult) return []
+    if (Array.isArray(branchesResult)) return branchesResult
+    if ((branchesResult as any).page) return (branchesResult as any).page
+    return []
+  }, [branchesResult])
 
   const { dayStart, dayEnd } = useMemo(
     () => getLocalDayBounds(selectedDateStr),
     [selectedDateStr]
   )
 
-  const queryArgs = isAuthenticated
+  // Orders — plain useQuery so ALL orders for the day load at once
+  // This means stat boxes always reflect the full day, not just one page
+  const ordersQueryArgs = isAuthenticated
     ? {
-        ...(selectedBranchId && selectedBranchId !== 'all'
+        ...(selectedBranchId !== 'all'
           ? { branchId: selectedBranchId as Id<'branches'> }
           : {}),
-        ...(selectedStatus && selectedStatus !== 'all'
+        ...(selectedStatus !== 'all'
           ? { status: selectedStatus as OrderStatus }
           : {}),
         startDate: dayStart,
         endDate: dayEnd,
+        paginationOpts: { numItems: 1000, cursor: null },
       }
     : ('skip' as const)
 
-  const {
-    results: ordersPages,
-    status: paginationStatus,
-    loadMore,
-  } = usePaginatedQuery(api.admin.getOrders, queryArgs, {
-    initialNumItems: ORDERS_LIMIT,
-  })
+  const ordersResult = useQuery(api.admin.getOrders, ordersQueryArgs)
+  const isLoading = ordersResult === undefined
+
+  const orders: Doc<'orders'>[] = useMemo(() => {
+    if (!ordersResult) return []
+    if (Array.isArray(ordersResult)) return ordersResult
+    if ((ordersResult as any).page) return (ordersResult as any).page
+    return []
+  }, [ordersResult])
 
   const orderDetails = useQuery(
     api.admin.getOrderDetails,
@@ -145,15 +153,8 @@ const AdminOrders = () => {
   const updateOrderStatus = useMutation(api.admin.updateOrderStatus)
   const deleteOrder = useMutation(api.admin.deleteOrder)
 
-  const orders = ordersPages?.flat() || []
-  const hasMore = paginationStatus === 'CanLoadMore'
-  const isLoading =
-    paginationStatus === 'LoadingFirstPage' || paginationStatus === 'LoadingMore'
-
-  const dayOrders = useMemo(
-    () => orders.filter((o) => o._creationTime >= dayStart && o._creationTime < dayEnd),
-    [orders, dayStart, dayEnd]
-  )
+  // dayOrders = all orders (already filtered by date in the query args)
+  const dayOrders = orders
 
   const filteredOrders = useMemo(() => {
     return dayOrders.filter((order) => {
@@ -196,7 +197,7 @@ const AdminOrders = () => {
     setIsExporting(true)
     try {
       const branchMap = Object.fromEntries(
-        branchesList.map((b: any) => [b._id, b.name])
+        branchesList.map((b) => [b._id, b.name])
       )
 
       const headers = [
@@ -248,9 +249,7 @@ const AdminOrders = () => {
             `orders-${name.replace(/\s+/g, '-').toLowerCase()}-${selectedDateStr}.csv`
           )
         }
-        toast.success(
-          `Exported ${filteredOrders.length} orders across ${ordersByBranch.size} branches`
-        )
+        toast.success(`Exported ${filteredOrders.length} orders across ${ordersByBranch.size} branches`)
       } else {
         toast.success(`Exported ${filteredOrders.length} orders`)
       }
@@ -282,17 +281,12 @@ const AdminOrders = () => {
       toast.success('Order deleted successfully')
       setOrderToDelete(null)
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to delete order'
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete order'
       toast.error(errorMessage)
     }
   }
 
-  const handleStatusUpdate = async (
-    orderId: string,
-    newStatus: string,
-    notes?: string
-  ) => {
+  const handleStatusUpdate = async (orderId: string, newStatus: string, notes?: string) => {
     try {
       await updateOrderStatus({
         orderId: orderId as Id<'orders'>,
@@ -303,8 +297,7 @@ const AdminOrders = () => {
       setShowStatusDialog(false)
       setOrderToUpdate(null)
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to update order status'
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update order status'
       toast.error(errorMessage)
     }
   }
@@ -344,9 +337,7 @@ const AdminOrders = () => {
           <span className="hidden sm:inline">
             {isExporting ? 'Exporting…' : `Export${filteredOrders.length > 0 ? ` (${filteredOrders.length})` : ''}`}
           </span>
-          <span className="sm:hidden">
-            {isExporting ? '…' : 'CSV'}
-          </span>
+          <span className="sm:hidden">{isExporting ? '…' : 'CSV'}</span>
         </Button>
       </div>
 
@@ -354,45 +345,43 @@ const AdminOrders = () => {
       <Card className="mb-4">
         <CardContent className="py-3 px-4">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={goToPrevDay}
-              className="h-8 w-8 shrink-0"
-            >
+            <Button variant="outline" size="icon" onClick={goToPrevDay} className="h-9 w-9 shrink-0">
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <div className="relative flex items-center flex-1 min-w-0">
-                <CalendarIcon className="absolute left-2.5 h-3.5 w-3.5 text-primary pointer-events-none z-10" />
-                <input
-                  type="date"
-                  value={selectedDateStr}
-                  max={todayStr}
-                  onChange={(e) => {
-                    if (e.target.value) setSelectedDateStr(e.target.value)
-                  }}
-                  className="w-full h-8 pl-8 pr-2 rounded-md border border-input bg-background text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
-                />
-              </div>
-              {!isSelectedToday && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs shrink-0 px-2.5"
-                  onClick={() => setSelectedDateStr(todayStr)}
-                >
-                  Today
-                </Button>
-              )}
+            <div className="relative flex items-center">
+              <CalendarIcon className="absolute left-2.5 h-3.5 w-3.5 text-primary pointer-events-none z-10" />
+              <input
+                type="date"
+                value={selectedDateStr}
+                max={todayStr}
+                onChange={(e) => { if (e.target.value) setSelectedDateStr(e.target.value) }}
+                className="h-9 w-[160px] pl-8 pr-2 rounded-md border border-input bg-background text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
+              />
             </div>
+
+            {!isSelectedToday && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs px-3 shrink-0"
+                onClick={() => setSelectedDateStr(todayStr)}
+              >
+                Today
+              </Button>
+            )}
+
+            {isLoading && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+            )}
+
+            <div className="flex-1" />
 
             <Button
               variant="outline"
               size="icon"
               onClick={goToNextDay}
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0"
               disabled={isSelectedToday}
             >
               <ChevronRight className="h-4 w-4" />
@@ -403,8 +392,6 @@ const AdminOrders = () => {
 
       {/* ── Stats ── */}
       <div className="space-y-3 mb-5">
-
-        {/* Top row: 2 cols on mobile, 3 on sm+ */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 col-span-2 sm:col-span-1">
             <CardContent className="py-3 px-4">
@@ -447,7 +434,6 @@ const AdminOrders = () => {
           </Card>
         </div>
 
-        {/* Pipeline card */}
         <Card>
           <CardContent className="py-3 px-4">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -482,7 +468,6 @@ const AdminOrders = () => {
         </CardHeader>
         <CardContent className="px-4 pb-4">
           <div className="space-y-3">
-            {/* Search — full width */}
             <div>
               <Label htmlFor="search" className="text-xs">Search Orders</Label>
               <div className="relative mt-1.5">
@@ -497,7 +482,6 @@ const AdminOrders = () => {
               </div>
             </div>
 
-            {/* Branch + Status side by side on mobile */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="branch" className="text-xs">Branch</Label>
@@ -507,7 +491,7 @@ const AdminOrders = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Branches</SelectItem>
-                    {branchesList.map((branch: Branch) => (
+                    {branchesList.map((branch) => (
                       <SelectItem key={branch._id} value={branch._id}>
                         {branch.name}
                       </SelectItem>
@@ -536,34 +520,14 @@ const AdminOrders = () => {
         </CardContent>
       </Card>
 
-      {/* ── Orders Table / Cards ── */}
+      {/* ── Orders Table — no Load More, all orders fetched at once ── */}
       <OrderTable
         orders={filteredOrders}
-        isLoading={isLoading && orders.length === 0}
+        isLoading={isLoading}
         onViewDetails={handleViewDetails}
         onUpdateStatus={handleUpdateStatus}
         onDelete={handleDelete}
       />
-
-      {hasMore && (
-        <div className="flex justify-center mt-5">
-          <Button
-            variant="outline"
-            onClick={() => loadMore(ORDERS_LIMIT)}
-            disabled={isLoading}
-            size="sm"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
 
       {selectedOrder && (
         <OrderDetailsDialog
