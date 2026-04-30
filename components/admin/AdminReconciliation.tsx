@@ -424,8 +424,8 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, onClose }: Bra
 export default function AdminCashReconciliationPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
-  const [from, setFrom] = useState<Date>(new Date())
-  const [to, setTo]     = useState<Date>(new Date())
+ const [from, setFrom] = useState<Date>(new Date('2020-01-01'))
+const [to, setTo]     = useState<Date>(new Date())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [historyBranchId, setHistoryBranchId] = useState<string | null>(null)
 

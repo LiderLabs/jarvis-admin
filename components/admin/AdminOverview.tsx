@@ -417,7 +417,7 @@ const AdminOverview = () => {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => router.push("/dashboard/reports")}
+                onClick={() => router.push("/dashboard/reports?view=weekly")}
                 >
                   <BarChart2 className="w-3 h-3 mr-1" /> Details
                 </Button>
