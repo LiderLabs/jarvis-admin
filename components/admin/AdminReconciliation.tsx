@@ -447,12 +447,11 @@ export default function AdminCashReconciliationPage() {
     if (!summaries) return []
     return summaries
       .map(s => {
-        const periodOrders = s.unsettledOrders.filter(
-          o => o.createdAt >= sinceTs && o.createdAt <= untilTs
-        )
-        const periodOutstanding = periodOrders.reduce((sum, o) => sum + o.finalPrice, 0)
-        return { ...s, unsettledOrders: periodOrders, outstanding: periodOutstanding }
-      })
+  const periodOrders = s.unsettledOrders.filter(
+    o => o.createdAt >= sinceTs && o.createdAt <= untilTs
+  )
+  return { ...s, unsettledOrders: periodOrders, outstanding: s.outstanding }
+})
       .filter(s => s.outstanding > 0)
   }, [summaries, sinceTs, untilTs])
 

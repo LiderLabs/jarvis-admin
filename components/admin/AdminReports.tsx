@@ -418,8 +418,9 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   onViewReport?: (id: string) => void
   onWeeklyReports: () => void
 }) => {
-  const [dateFrom, setDateFrom]             = useState<Date>(new Date());
-  const [dateTo, setDateTo]                 = useState<Date>(new Date());
+  // ── FIX 1: Default to last 7 days instead of today-only ──────────────────
+  const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 6));
+  const [dateTo, setDateTo]     = useState<Date>(new Date());
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [showAllReports, setShowAllReports] = useState(false);
 
@@ -430,26 +431,30 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   const { results: ordersPages } = usePaginatedQuery(api.admin.getOrders, {} as any, { initialNumItems: 200 });
   const orders = ordersPages?.flat() ?? [];
 
+  // ── FIX 2: Raise limit to 1000 so "all time" captures every report ────────
+  // Also extend start date back 5 years so older records aren't excluded
   const allRecentReports = useQuery(
     (api as any).dailyReports.getAll,
     {
-      startDate: format(subDays(new Date(), 365), 'yyyy-MM-dd'),
+      startDate: format(subDays(new Date(), 365 * 5), 'yyyy-MM-dd'),
       endDate:   format(new Date(), 'yyyy-MM-dd'),
       ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
-      limit: 200,
+      limit: 1000,
     }
   ) ?? [];
 
   const startDateStr = format(dateFrom, 'yyyy-MM-dd');
   const endDateStr   = format(dateTo,   'yyyy-MM-dd');
 
+  // ── FIX 3: Raise limit to 1000 on the date-filtered query too ────────────
+  // Previously capped at 100, which silently truncated revenue for wide ranges
   const dailyReports = useQuery(
     (api as any).dailyReports.getAll,
     {
       startDate: startDateStr,
       endDate:   endDateStr,
       ...(selectedBranch !== 'all' ? { branchId: selectedBranch } : {}),
-      limit: 100,
+      limit: 1000,
     }
   ) ?? [];
 
@@ -471,6 +476,8 @@ const AdminReportsOverview = ({ onViewReport, onWeeklyReports }: {
   }, [orders, startTs, dateFrom, dateTo]);
 
   const stats = useMemo(() => {
+    // Revenue and payment breakdowns come from dailyReports (submitted reports)
+    // which are now fetched with limit:1000 so all records in range are included
     const totalRevenue = (dailyReports as any[]).reduce((s: number, r: any) =>
       s + (r.cashAmount || 0) + (r.mobileMoneylAmount || 0) + (r.cardAmount || 0) + (r.paystackAmount || 0), 0);
     const mobileMoney  = (dailyReports as any[]).reduce((s: number, r: any) => s + (r.mobileMoneylAmount || 0), 0);

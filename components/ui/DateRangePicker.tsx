@@ -16,6 +16,25 @@ const PRESETS = [
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
+// ── Detect which preset label matches a given from/to pair ────────────────────
+// Compares dates by formatted string so minor time differences don't matter.
+function detectPreset(from: Date, to: Date): string {
+  const fromStr = format(from, "yyyy-MM-dd");
+  const toStr   = format(to,   "yyyy-MM-dd");
+  for (const p of PRESETS) {
+    if (p.label === "Custom") continue;
+    const r = p.getRange();
+    if (!r) continue;
+    if (
+      format(r.from, "yyyy-MM-dd") === fromStr &&
+      format(r.to,   "yyyy-MM-dd") === toStr
+    ) {
+      return p.label;
+    }
+  }
+  return "Custom";
+}
+
 function MiniCalendar({ month, selected, onSelect }: { month: Date; selected: { from?: Date; to?: Date }; onSelect: (d: Date) => void }) {
   const year = month.getFullYear();
   const mon = month.getMonth();
@@ -77,11 +96,19 @@ interface DateRangePickerProps {
 export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
-  const [activePreset, setActivePreset] = useState("Today");
+
+  // ── FIX: derive the initial active preset from the props, not hardcoded "Today"
+  const [activePreset, setActivePreset] = useState(() => detectPreset(from, to));
+
   const [calMonth, setCalMonth] = useState(new Date());
   const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
   const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Keep activePreset in sync if the parent changes from/to externally
+  useEffect(() => {
+    setActivePreset(detectPreset(from, to));
+  }, [from, to]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -114,7 +141,6 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
     : activePreset === "All time" ? "All time"
     : `${activePreset}  ${PRESETS.find(p => p.label === activePreset)?.display() || ""}`;
 
-  // Shared dropdown positioning: on mobile use fixed centering, on desktop anchor right
   const dropdownClass = "fixed left-1/2 -translate-x-1/2 sm:absolute sm:left-auto sm:translate-x-0 sm:right-0 top-auto z-50 bg-card border border-border rounded-xl shadow-xl";
 
   return (

@@ -106,6 +106,17 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
   const faults = parseFaults(report.technicalFaultNotes || '')
 
+  // ── Token revenue: prefer liveData (exact per-service prices per order) ──────
+  // liveData.washerTokenRevenue / dryerTokenRevenue are calculated in getAutoData
+  // using the actual branchServices price for each order — so "Big Wash" at GHS 50
+  // shows GHS 50, not the wash_only fallback of GHS 35.
+  // Fall back to the old formula only if liveData hasn't loaded yet.
+  const washerTokenRevenue = liveData?.washerTokenRevenue
+    ?? (report.washerTokensUsed || 0) * (report.washerPrice || 25);
+  const dryerTokenRevenue = liveData?.dryerTokenRevenue
+    ?? (report.dryerTokensUsed || 0) * (report.dryerPrice || 25);
+  const totalTokenRevenue = washerTokenRevenue + dryerTokenRevenue;
+
   const exportPDF = () => {
     const w = window.open('', '_blank');
     if (!w) return toast.error('Allow popups');
@@ -205,12 +216,12 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           <div class="stat">
             <div class="stat-label">Wash Tokens</div>
             <div class="stat-value">${report.washerTokensUsed || 0}</div>
-            <div class="stat-sub">GHS ${((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</div>
+            <div class="stat-sub">GHS ${washerTokenRevenue.toFixed(2)}</div>
           </div>
           <div class="stat">
             <div class="stat-label">Dry Tokens</div>
             <div class="stat-value">${report.dryerTokensUsed || 0}</div>
-            <div class="stat-sub">GHS ${((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</div>
+            <div class="stat-sub">GHS ${dryerTokenRevenue.toFixed(2)}</div>
           </div>
           <div class="stat">
             <div class="stat-label">Soap Used</div>
@@ -327,7 +338,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       {/* 4-col card row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
-        {/* Wash Summary */}
+        {/* Wash Summary — uses liveData token revenue for correct per-service pricing */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-sm text-foreground">Wash Summary</h2>
@@ -335,19 +346,27 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           </div>
           <p className="text-xs text-muted-foreground mb-0.5">Token Value</p>
           <p className="text-2xl font-bold text-foreground mb-0.5">
-            GHS {((report.washerTokensUsed || 0) * (report.washerPrice || 25) + (report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}
+            {/* ── FIX: use liveData revenue (exact per-service price per order)
+                instead of tokens × fallback wash_only price.
+                This means "Big Wash" at GHS 50 shows GHS 50, not GHS 35. ── */}
+            {liveData ? fmt(totalTokenRevenue) : fmt((report.washerTokensUsed || 0) * (report.washerPrice || 25) + (report.dryerTokensUsed || 0) * (report.dryerPrice || 25))}
           </p>
           <div className="w-full h-1 bg-blue-500 rounded-full mb-3" />
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Wash Token</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Wash Tokens</p>
               <p className="text-xl font-bold text-foreground">{report.washerTokensUsed || 0}</p>
-              <p className="text-xs text-muted-foreground">GHS {((report.washerTokensUsed || 0) * (report.washerPrice || 25)).toFixed(2)}</p>
+              {/* Per-machine revenue from liveData, fallback to old formula */}
+              <p className="text-xs text-muted-foreground">
+                {liveData ? fmt(washerTokenRevenue) : fmt((report.washerTokensUsed || 0) * (report.washerPrice || 25))}
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dry Tokens</p>
               <p className="text-xl font-bold text-foreground">{report.dryerTokensUsed || 0}</p>
-              <p className="text-xs text-muted-foreground">GHS {((report.dryerTokensUsed || 0) * (report.dryerPrice || 25)).toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground">
+                {liveData ? fmt(dryerTokenRevenue) : fmt((report.dryerTokensUsed || 0) * (report.dryerPrice || 25))}
+              </p>
             </div>
           </div>
         </div>
@@ -576,7 +595,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </div>
       )}
 
-      {/* Technical Faults — uses parseFaults for both JSON and legacy format */}
+      {/* Technical Faults */}
       {faults.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
