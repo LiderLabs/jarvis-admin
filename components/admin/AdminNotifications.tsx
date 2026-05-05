@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { usePaginatedQuery, useMutation, useQuery } from "convex/react"
 import { useDebounce } from "use-debounce"
-import { api } from "@jordan6699/washlab-backend/api"
+import { api } from "@liderlabs/washlab-backend/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -59,7 +59,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
-import { Doc, Id } from "@jordan6699/washlab-backend/dataModel"
+import { Doc, Id } from "@liderlabs/washlab-backend/dataModel"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 

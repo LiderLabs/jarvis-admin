@@ -9,7 +9,7 @@ import { DashboardHeader } from "@/components/DashboardHeader"
 import { useCurrentAdmin } from "@/hooks/use-current-admin"
 import { cn } from "@/lib/utils"
 import { useQuery } from "convex/react"
-import { api } from "@jordan6699/washlab-backend/api"
+import { api } from "@liderlabs/washlab-backend/api"
 import {
   LayoutDashboard,
   Building2, Wrench,
@@ -104,6 +104,13 @@ const sidebarItems = [
     path: "/dashboard/reconciliation",
     group: "features",
   },
+  {
+  id: "headlines",
+  label: "Headlines",
+  icon: MessageSquare,
+  path: "/dashboard/headlines",
+  group: "main",
+},
   {
     id: "settings",
     label: "Settings",

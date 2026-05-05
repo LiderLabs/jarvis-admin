@@ -1,6 +1,6 @@
 "use client"
 
-import { Doc } from "@jordan6699/washlab-backend/dataModel"
+import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import {
   Dialog,
   DialogContent,
@@ -85,36 +85,41 @@ export const PaymentDetailsDialog = ({
 
             <Separator />
 
-            {/* Order Details */}
-            {payment.order && (
-              <>
-                <div>
-                  <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                    <Package className="h-5 w-5 text-primary" />
-                    Order Details
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                    <p>
-                      <span className="text-muted-foreground">Order Number:</span>{" "}
-                      <span className="font-medium">{payment.order.orderNumber}</span>
-                    </p>
-                    <p>
-                      <span className="text-muted-foreground">Order Status:</span>{" "}
-                      <span className="font-medium capitalize">
-                        {payment.order.status.replace(/_/g, " ")}
-                      </span>
-                    </p>
-                    <p>
-                      <span className="text-muted-foreground">Order Total:</span>{" "}
-                      <span className="font-medium">
-                        ₵{payment.order.finalPrice.toFixed(2)}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <Separator />
-              </>
-            )}
+           {payment.order && (
+  <>
+    <div>
+      <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
+        <Package className="h-5 w-5 text-primary" />
+        Order Details
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+        <p>
+          <span className="text-muted-foreground">Order Number:</span>{" "}
+          <span className="font-medium">{payment.order.orderNumber}</span>
+        </p>
+        <p>
+          <span className="text-muted-foreground">Order Status:</span>{" "}
+          <span className="font-medium capitalize">
+            {payment.order.status.replace(/_/g, " ")}
+          </span>
+        </p>
+        <p>
+          <span className="text-muted-foreground">Order Total:</span>{" "}
+          <span className="font-medium">
+            ₵{payment.order.finalPrice.toFixed(2)}
+          </span>
+        </p>
+        {(payment as any).completedBy && (
+          <p>
+            <span className="text-muted-foreground">Completed By:</span>{" "}
+            <span className="font-medium">{(payment as any).completedBy}</span>
+          </p>
+        )}
+      </div>
+    </div>
+    <Separator />
+  </>
+)}
 
             {/* Customer Details */}
             {payment.customer && (

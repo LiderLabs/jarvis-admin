@@ -33,9 +33,9 @@ export const Logo = ({ className, showText = true, size = 'md' }: LogoProps) => 
   };
 
   // Use dark logo as default (avoids flash on dark-mode apps)
-  const logoSrc = mounted && resolvedTheme === 'light'
-    ? '/assets/washlab logo-light.png'
-    : '/assets/washlab logo-dark.png';
+ const logoSrc = mounted && resolvedTheme === 'light'
+  ? '/assets/washlab-logo-light.png'
+  : '/assets/washlab-logo-dark.png';
 
   return (
     <div className={cn('flex items-center', className)}>

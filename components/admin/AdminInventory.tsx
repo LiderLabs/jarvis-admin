@@ -1,12 +1,12 @@
-﻿'use client';
+'use client';
 
 import { useState, useCallback } from 'react';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "convex/react";
-import { api } from '@jordan6699/washlab-backend/api';
-import { Id } from "@jordan6699/washlab-backend/dataModel";
+import { api } from '@liderlabs/washlab-backend/api';
+import { Id } from "@liderlabs/washlab-backend/dataModel";
 import { toast } from "sonner";
 import {
   Package, Plus, Edit, Trash2, AlertTriangle, CheckCircle,
@@ -338,7 +338,7 @@ const AdminInventory = () => {
                   </div>
                   {item.currentStock <= item.minStock && (
                     <div className="flex justify-end text-xs mt-1">
-                      <span className="text-red-500">🔴 Below alert threshold ({item.minStock} {item.unit})</span>
+                      <span className="text-red-500">?? Below alert threshold ({item.minStock} {item.unit})</span>
                     </div>
                   )}
                 </div>
@@ -349,7 +349,7 @@ const AdminInventory = () => {
                     <div className="text-xs">
                       <span className="text-muted-foreground">{item.scoopsPerUnit} scoops/{item.unit}</span>
                       {totalScoops !== null && (
-                        <span className="text-foreground font-medium ml-2">≈ {totalScoops} scoops remaining</span>
+                        <span className="text-foreground font-medium ml-2">� {totalScoops} scoops remaining</span>
                       )}
                     </div>
                   </div>

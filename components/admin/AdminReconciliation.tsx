@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery } from 'convex/react'
-import { api } from '@jordan6699/washlab-backend/api'
+import { api } from '@liderlabs/washlab-backend/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -450,7 +450,10 @@ const [to, setTo]     = useState<Date>(new Date())
   const periodOrders = s.unsettledOrders.filter(
     o => o.createdAt >= sinceTs && o.createdAt <= untilTs
   )
-  return { ...s, unsettledOrders: periodOrders, outstanding: s.outstanding }
+const periodOutstanding = Math.round(
+        periodOrders.reduce((sum, o) => sum + o.finalPrice, 0) * 100
+      ) / 100
+      return { ...s, unsettledOrders: periodOrders, outstanding: periodOutstanding }
 })
       .filter(s => s.outstanding > 0)
   }, [summaries, sinceTs, untilTs])

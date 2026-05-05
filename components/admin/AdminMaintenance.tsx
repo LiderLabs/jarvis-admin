@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 import { useState, useMemo } from "react"
 import { useQuery, useMutation, useConvexAuth, usePaginatedQuery } from "convex/react"
-import { api } from "@jordan6699/washlab-backend/api"
+import { api } from "@liderlabs/washlab-backend/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,7 +56,7 @@ const AdminMaintenance = () => {
     addBranchId ? { branchId: addBranchId as any } : "skip"
   ) ?? []
 
-  // Fetch ALL tickets — filter client-side so UI filters are instant and reliable
+  // Fetch ALL tickets � filter client-side so UI filters are instant and reliable
   const allTicketsRaw = useQuery(
     (api as any).maintenanceTickets.listTickets,
     isAuthenticated ? {} : "skip"
@@ -141,7 +141,7 @@ const AdminMaintenance = () => {
 
   return (
     <div>
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Maintenance</h1>
@@ -154,7 +154,7 @@ const AdminMaintenance = () => {
         </Button>
       </div>
 
-      {/* ── Stat cards ── */}
+      {/* -- Stat cards -- */}
       <div className="space-y-3 mb-6">
         <div className="grid grid-cols-3 gap-3">
           {/* Total */}
@@ -188,7 +188,7 @@ const AdminMaintenance = () => {
                 <span className="text-xs text-muted-foreground">
                   {allTickets.length > 0
                     ? `${Math.round((fixedTickets.length / allTickets.length) * 100)}% fix rate`
-                    : "—"}
+                    : "�"}
                 </span>
               </div>
             </CardContent>
@@ -200,7 +200,7 @@ const AdminMaintenance = () => {
           <CardContent className="py-3 px-5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Top Open Fault Types</p>
             {topFaults.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-1">No open faults — all machines running smoothly.</p>
+              <p className="text-sm text-muted-foreground py-1">No open faults � all machines running smoothly.</p>
             ) : (
               <div className="grid grid-cols-4 divide-x divide-border">
                 {topFaults.map(([label, count]) => (
@@ -215,7 +215,7 @@ const AdminMaintenance = () => {
         </Card>
       </div>
 
-      {/* ── Filters ── */}
+      {/* -- Filters -- */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -265,7 +265,7 @@ const AdminMaintenance = () => {
         </CardContent>
       </Card>
 
-      {/* ── Ticket list ── */}
+      {/* -- Ticket list -- */}
       {allTicketsRaw === undefined ? (
         <Card>
           <CardContent className="flex items-center justify-center py-12">
@@ -360,7 +360,7 @@ const AdminMaintenance = () => {
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Clock className="w-3 h-3" />
                             Reported {format(new Date(ticket.reportedAt), "MMM d, yyyy 'at' h:mm a")}
-                            {ticket.reportedBy && <span>· by {ticket.reportedBy}</span>}
+                            {ticket.reportedBy && <span>� by {ticket.reportedBy}</span>}
                           </div>
                           {ticket.fixedAt && (
                             <div className="flex items-center gap-1.5 text-xs text-green-600">
@@ -399,7 +399,7 @@ const AdminMaintenance = () => {
         </div>
       )}
 
-      {/* ── Add Fault Modal ── */}
+      {/* -- Add Fault Modal -- */}
       <Dialog open={showAddFault} onOpenChange={setShowAddFault}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -413,7 +413,7 @@ const AdminMaintenance = () => {
                 onChange={e => { setAddBranchId(e.target.value); setAddMachineId("") }}
                 className="mt-1.5 w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="">Select branch…</option>
+                <option value="">Select branch�</option>
                 {(branchList as any[]).map((b: any) => (
                   <option key={b._id} value={b._id}>{b.name}</option>
                 ))}
@@ -428,7 +428,7 @@ const AdminMaintenance = () => {
                 disabled={!addBranchId}
                 className="mt-1.5 w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
               >
-                <option value="">Select machine…</option>
+                <option value="">Select machine�</option>
                 {(branchMachines as any[]).map((m: any) => (
                   <option key={m._id} value={m._id}>
                     {m.name}{m.serialNumber ? ` (SN: ${m.serialNumber})` : ''}
@@ -465,7 +465,7 @@ const AdminMaintenance = () => {
               <Textarea
                 value={addDescription}
                 onChange={e => setAddDescription(e.target.value)}
-                placeholder="Describe the issue in more detail…"
+                placeholder="Describe the issue in more detail�"
                 rows={3}
                 className="mt-1.5 text-sm resize-none"
               />
@@ -475,7 +475,7 @@ const AdminMaintenance = () => {
             <Button variant="outline" onClick={() => setShowAddFault(false)}>Cancel</Button>
             <Button onClick={handleAddFault} disabled={adding}>
               {adding
-                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Reporting…</>
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Reporting�</>
                 : <><Plus className="w-4 h-4 mr-2" />Report Fault</>
               }
             </Button>
@@ -483,7 +483,7 @@ const AdminMaintenance = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete confirm ── */}
+      {/* -- Delete confirm -- */}
       <AlertDialog open={!!ticketToDelete} onOpenChange={() => setTicketToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

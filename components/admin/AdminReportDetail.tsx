@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useQuery } from 'convex/react';
-import { api } from '@jordan6699/washlab-backend/api';
+import { api } from '@liderlabs/washlab-backend/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -43,7 +43,7 @@ function discountTypeBadge(type: string) {
   return { label: type, cls: 'bg-muted text-muted-foreground' };
 }
 
-// ── Fault deserializer — handles both JSON (new) and legacy [id] desc format ──
+// -- Fault deserializer � handles both JSON (new) and legacy [id] desc format --
 function parseFaults(raw: string): Array<{ machineName: string; serialNumber?: string; faultTypes: string[]; description: string }> {
   if (!raw) return []
   try {
@@ -54,7 +54,7 @@ function parseFaults(raw: string): Array<{ machineName: string; serialNumber?: s
   return raw.split('\n').filter(Boolean).map((line: string) => {
     const match = line.match(/^\[(.+?)\]\s*(.*)$/)
     return {
-      machineName: match ? match[1] : '—',
+      machineName: match ? match[1] : '�',
       faultTypes: [],
       description: match ? match[2] : line,
     }
@@ -88,7 +88,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
   const mobileAmount = report.mobileMoneylAmount || 0;
   const cardAmount   = (report.cardAmount || 0) + (report.paystackAmount || 0);
 
-  // Day's own payments — shown in Payment Breakdown
+  // Day's own payments � shown in Payment Breakdown
   const dayRevenue = cashAmount + mobileAmount + cardAmount;
 
   const voucherBreakdown: any[]  = report.voucherBreakdown || [];
@@ -106,9 +106,9 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
   const faults = parseFaults(report.technicalFaultNotes || '')
 
-  // ── Token revenue: prefer liveData (exact per-service prices per order) ──────
+  // -- Token revenue: prefer liveData (exact per-service prices per order) ------
   // liveData.washerTokenRevenue / dryerTokenRevenue are calculated in getAutoData
-  // using the actual branchServices price for each order — so "Big Wash" at GHS 50
+  // using the actual branchServices price for each order � so "Big Wash" at GHS 50
   // shows GHS 50, not the wash_only fallback of GHS 35.
   // Fall back to the old formula only if liveData hasn't loaded yet.
   const washerTokenRevenue = liveData?.washerTokenRevenue
@@ -150,14 +150,14 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
     const faultRows = faults.map(f =>
       `<tr>
         <td style="padding:6px 8px;font-weight:600">${f.machineName}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:12px;color:#6b7280">${(f as any).serialNumber || '—'}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:12px;color:#6b7280">${(f as any).serialNumber || '�'}</td>
         <td style="padding:6px 8px">${f.faultTypes?.join(', ') || ''}</td>
         <td style="padding:6px 8px">${f.description}</td>
       </tr>`
     ).join('');
 
     w.document.write(`
-      <html><head><title>WashLab Report — ${report.branchName} ${report.date}</title>
+      <html><head><title>WashLab Report � ${report.branchName} ${report.date}</title>
       <style>
         *{box-sizing:border-box}
         body{font-family:system-ui,sans-serif;padding:40px;color:#111;max-width:900px;margin:0 auto}
@@ -185,17 +185,17 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         @media print{body{padding:20px}}
       </style></head><body>
 
-      <h1>${report.branchName} — ${format(new Date(report.date), 'd MMMM yyyy')}</h1>
+      <h1>${report.branchName} � ${format(new Date(report.date), 'd MMMM yyyy')}</h1>
       <div class="meta">
         <span class="badge">Status: ${statusText}</span>
-        <span>Attendants: ${(report.attendantsOnShift || []).join(', ') || '—'}</span>
+        <span>Attendants: ${(report.attendantsOnShift || []).join(', ') || '�'}</span>
         <span>Last updated: ${format(new Date(report._creationTime), 'h:mm a')}</span>
       </div>
 
       <div class="total-block">
         <div class="total-label">End of Day Total</div>
         <div class="total-value">GHS ${endOfDayTotal.toFixed(2)}</div>
-        ${receivedTotal > 0 ? `<div class="total-sub">Includes GHS ${receivedTotal.toFixed(2)} outstanding recovered · Day payments: GHS ${dayRevenue.toFixed(2)}</div>` : ''}
+        ${receivedTotal > 0 ? `<div class="total-sub">Includes GHS ${receivedTotal.toFixed(2)} outstanding recovered � Day payments: GHS ${dayRevenue.toFixed(2)}</div>` : ''}
       </div>
 
       <!-- Payment Breakdown (day only) -->
@@ -232,7 +232,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
       ${outstandingOrders.length > 0 ? `
       <div class="section">
-        <h2>Unpaid Orders — Total: ${fmt(outstandingTotal)}</h2>
+        <h2>Unpaid Orders � Total: ${fmt(outstandingTotal)}</h2>
         <table>
           <thead><tr><th>Order ID</th><th>Customer</th><th>Service</th><th style="text-align:right">Amount</th></tr></thead>
           <tbody>${outstandingRows}</tbody>
@@ -242,7 +242,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
       ${receivedOrders.length > 0 ? `
       <div class="section">
-        <h2>Outstanding Payment Received — Total: ${fmt(receivedTotal)}</h2>
+        <h2>Outstanding Payment Received � Total: ${fmt(receivedTotal)}</h2>
         <table>
           <thead><tr><th>Method</th><th style="text-align:right">Amount</th><th>Order Date</th></tr></thead>
           <tbody>${receivedRows}</tbody>
@@ -252,7 +252,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
 
       ${voucherBreakdown.length > 0 ? `
       <div class="section">
-        <h2>Discounts & Vouchers — Total: ${fmt(totalVoucherDiscount)}</h2>
+        <h2>Discounts & Vouchers � Total: ${fmt(totalVoucherDiscount)}</h2>
         <table>
           <thead><tr><th>Voucher</th><th>Code</th><th>Uses</th><th style="text-align:right">Total Discount</th></tr></thead>
           <tbody>${voucherRows}</tbody>
@@ -277,7 +277,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </div>` : ''}
         <div class="section">
           <h2>Attendants on Duty</h2>
-          <p style="font-weight:600;font-size:13px;margin:0">${(report.attendantsOnShift || []).join(' | ') || '—'}</p>
+          <p style="font-weight:600;font-size:13px;margin:0">${(report.attendantsOnShift || []).join(' | ') || '�'}</p>
         </div>
       </div>
 
@@ -320,7 +320,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
         </Button>
       </div>
 
-      {/* Big total — includes recovered outstanding */}
+      {/* Big total � includes recovered outstanding */}
       <div className="text-center py-4">
         <p className="text-lg text-muted-foreground font-medium">End Of Day Total</p>
         <p className="text-5xl sm:text-6xl font-black text-foreground tracking-tight mt-1">
@@ -338,7 +338,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
       {/* 4-col card row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
-        {/* Wash Summary — uses liveData token revenue for correct per-service pricing */}
+        {/* Wash Summary � uses liveData token revenue for correct per-service pricing */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-sm text-foreground">Wash Summary</h2>
@@ -346,9 +346,9 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           </div>
           <p className="text-xs text-muted-foreground mb-0.5">Token Value</p>
           <p className="text-2xl font-bold text-foreground mb-0.5">
-            {/* ── FIX: use liveData revenue (exact per-service price per order)
-                instead of tokens × fallback wash_only price.
-                This means "Big Wash" at GHS 50 shows GHS 50, not GHS 35. ── */}
+            {/* -- FIX: use liveData revenue (exact per-service price per order)
+                instead of tokens � fallback wash_only price.
+                This means "Big Wash" at GHS 50 shows GHS 50, not GHS 35. -- */}
             {liveData ? fmt(totalTokenRevenue) : fmt((report.washerTokensUsed || 0) * (report.washerPrice || 25) + (report.dryerTokensUsed || 0) * (report.dryerPrice || 25))}
           </p>
           <div className="w-full h-1 bg-blue-500 rounded-full mb-3" />
@@ -394,7 +394,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
           )}
         </div>
 
-        {/* Payment Breakdown — day's orders only, no outstanding */}
+        {/* Payment Breakdown � day's orders only, no outstanding */}
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm text-foreground mb-1">Payment Breakdown</h2>
           <p className="text-[10px] text-muted-foreground mb-3 uppercase tracking-wide">Today's orders only</p>
@@ -556,7 +556,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${badge.cls}`}>{badge.label}</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-foreground">{v.count}×</p>
+                    <p className="text-sm font-bold text-foreground">{v.count}�</p>
                     <p className="text-xs text-muted-foreground">{fmt(v.totalDiscount)}</p>
                   </div>
                 </div>
@@ -584,7 +584,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
                       </td>
                       <td className="py-2.5 pr-4 text-sm font-bold text-foreground">{v.count}</td>
                       <td className="py-2.5 text-sm font-semibold text-foreground">
-                        {v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : v.discountType === 'percentage' ? `${v.discountValue ?? ''}% → ${fmt(v.totalDiscount)}` : fmt(v.totalDiscount)}
+                        {v.discountType === 'loyalty' ? `${v.totalDiscount} pts` : v.discountType === 'percentage' ? `${v.discountValue ?? ''}% ? ${fmt(v.totalDiscount)}` : fmt(v.totalDiscount)}
                       </td>
                     </tr>
                   );
@@ -615,19 +615,19 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
               <tbody>
                 {faults.map((f, i) => (
                   <tr key={i} className="border-b border-border last:border-0">
-                    <td className="py-2.5 pr-4 text-sm font-semibold text-foreground">{f.machineName || '—'}</td>
-                    <td className="py-2.5 pr-4 text-xs font-mono text-muted-foreground">{(f as any).serialNumber || '—'}</td>
+                    <td className="py-2.5 pr-4 text-sm font-semibold text-foreground">{f.machineName || '�'}</td>
+                    <td className="py-2.5 pr-4 text-xs font-mono text-muted-foreground">{(f as any).serialNumber || '�'}</td>
                     <td className="py-2.5 pr-4">
                       <div className="flex flex-wrap gap-1">
                         {f.faultTypes?.length > 0
                           ? f.faultTypes.map((ft: string) => (
                               <span key={ft} className="text-xs px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full">{ft}</span>
                             ))
-                          : <span className="text-xs text-muted-foreground">—</span>
+                          : <span className="text-xs text-muted-foreground">�</span>
                         }
                       </div>
                     </td>
-                    <td className="py-2.5 text-sm text-muted-foreground">{f.description || '—'}</td>
+                    <td className="py-2.5 text-sm text-muted-foreground">{f.description || '�'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -637,7 +637,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             {faults.map((f, i) => (
               <div key={i} className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs font-semibold text-destructive">{f.machineName || '—'}</p>
+                  <p className="text-xs font-semibold text-destructive">{f.machineName || '�'}</p>
                   {(f as any).serialNumber && (
                     <span className="text-[10px] font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
                       SN: {(f as any).serialNumber}
@@ -675,7 +675,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
             Attendant on Duty
           </h2>
           <p className="text-sm font-semibold text-foreground">
-            {(report.attendantsOnShift || []).join(' | ') || '—'}
+            {(report.attendantsOnShift || []).join(' | ') || '�'}
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Doc } from "@jordan6699/washlab-backend/dataModel"
+import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import {
   Table,
   TableBody,
@@ -17,16 +17,12 @@ interface OrderTableProps {
   orders: Doc<"orders">[]
   isLoading?: boolean
   onViewDetails: (order: Doc<"orders">) => void
-  onUpdateStatus: (order: Doc<"orders">) => void
-  onDelete: (order: Doc<"orders">) => void
 }
 
 export const OrderTable = ({
   orders,
   isLoading = false,
   onViewDetails,
-  onUpdateStatus,
-  onDelete,
 }: OrderTableProps) => {
   if (isLoading && orders.length === 0) {
     return (
@@ -70,11 +66,9 @@ export const OrderTable = ({
         <TableBody>
           {orders.map((order) => (
             <OrderTableRow
-              key={order._id}
-              order={order}
-              onViewDetails={onViewDetails}
-              onUpdateStatus={onUpdateStatus}
-              onDelete={onDelete}
+             key={order._id}
+            order={order}
+            onViewDetails={onViewDetails}
             />
           ))}
         </TableBody>

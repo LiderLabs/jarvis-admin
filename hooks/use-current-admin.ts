@@ -2,8 +2,8 @@
 
 import { useUser } from "@clerk/nextjs"
 import { useQuery, useConvexAuth } from "convex/react"
-import { api } from "@jordan6699/washlab-backend/api"
-import { Id } from "@jordan6699/washlab-backend/dataModel"
+import { api } from "@liderlabs/washlab-backend/api"
+import { Id } from "@liderlabs/washlab-backend/dataModel"
 
 export function useCurrentAdmin() {
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser()

@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useConvexAuth } from 'convex/react'
-import { api } from '@jordan6699/washlab-backend/api'
-import { Id, Doc } from '@jordan6699/washlab-backend/dataModel'
+import { api } from '@liderlabs/washlab-backend/api'
+import { Id, Doc } from '@liderlabs/washlab-backend/dataModel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,19 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { OrderTable } from './OrderTable'
 import { OrderDetailsDialog } from './OrderDetailsDialog'
-import { OrderStatusDialog } from './OrderStatusDialog'
 import {
   Search,
   Filter,
@@ -96,10 +85,7 @@ const AdminOrders = () => {
   const [selectedDateStr, setSelectedDateStr] = useState<string>(todayStr)
 
   const [selectedOrder, setSelectedOrder] = useState<Doc<'orders'> | null>(null)
-  const [orderToUpdate, setOrderToUpdate] = useState<Doc<'orders'> | null>(null)
-  const [orderToDelete, setOrderToDelete] = useState<Doc<'orders'> | null>(null)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
-  const [showStatusDialog, setShowStatusDialog] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   // Branches — plain query with paginationOpts to match backend signature
@@ -150,8 +136,6 @@ const AdminOrders = () => {
     selectedOrder && isAuthenticated ? { orderId: selectedOrder._id } : 'skip'
   )
 
-  const updateOrderStatus = useMutation(api.admin.updateOrderStatus)
-  const deleteOrder = useMutation(api.admin.deleteOrder)
 
   // dayOrders = all orders (already filtered by date in the query args)
   const dayOrders = orders
@@ -263,43 +247,6 @@ const AdminOrders = () => {
   const handleViewDetails = (order: Doc<'orders'>) => {
     setSelectedOrder(order)
     setShowDetailsDialog(true)
-  }
-
-  const handleUpdateStatus = (order: Doc<'orders'>) => {
-    setOrderToUpdate(order)
-    setShowStatusDialog(true)
-  }
-
-  const handleDelete = (order: Doc<'orders'>) => {
-    setOrderToDelete(order)
-  }
-
-  const handleConfirmDelete = async () => {
-    if (!orderToDelete) return
-    try {
-      await deleteOrder({ orderId: orderToDelete._id })
-      toast.success('Order deleted successfully')
-      setOrderToDelete(null)
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete order'
-      toast.error(errorMessage)
-    }
-  }
-
-  const handleStatusUpdate = async (orderId: string, newStatus: string, notes?: string) => {
-    try {
-      await updateOrderStatus({
-        orderId: orderId as Id<'orders'>,
-        newStatus: newStatus as OrderStatus,
-        notes,
-      })
-      toast.success('Order status updated successfully')
-      setShowStatusDialog(false)
-      setOrderToUpdate(null)
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update order status'
-      toast.error(errorMessage)
-    }
   }
 
   const isSelectedToday = selectedDateStr === todayStr
@@ -525,8 +472,6 @@ const AdminOrders = () => {
         orders={filteredOrders}
         isLoading={isLoading}
         onViewDetails={handleViewDetails}
-        onUpdateStatus={handleUpdateStatus}
-        onDelete={handleDelete}
       />
 
       {selectedOrder && (
@@ -538,39 +483,6 @@ const AdminOrders = () => {
           onOpenChange={setShowDetailsDialog}
         />
       )}
-
-      {orderToUpdate && (
-        <OrderStatusDialog
-          order={orderToUpdate}
-          open={showStatusDialog}
-          onOpenChange={setShowStatusDialog}
-          onUpdate={handleStatusUpdate}
-        />
-      )}
-
-      <AlertDialog
-        open={!!orderToDelete}
-        onOpenChange={(open) => !open && setOrderToDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Order</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete order{' '}
-              <strong>{orderToDelete?.orderNumber}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

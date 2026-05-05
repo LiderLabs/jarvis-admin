@@ -1,17 +1,11 @@
 "use client"
 
-import { Doc } from "@jordan6699/washlab-backend/dataModel"
+import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { OrderStatusBadge } from "./OrderStatusBadge"
 import { TableRow, TableCell } from "@/components/ui/table"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { MoreVertical, Eye, Edit, Trash2, Copy, Check } from "lucide-react"
+import { Eye, Copy, Check } from "lucide-react"
 import { format } from "date-fns"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -19,15 +13,11 @@ import { toast } from "sonner"
 interface OrderTableRowProps {
   order: Doc<"orders">
   onViewDetails: (order: Doc<"orders">) => void
-  onUpdateStatus: (order: Doc<"orders">) => void
-  onDelete: (order: Doc<"orders">) => void
 }
 
 export const OrderTableRow = ({
   order,
   onViewDetails,
-  onUpdateStatus,
-  onDelete,
 }: OrderTableRowProps) => {
   const [copied, setCopied] = useState(false)
 
@@ -91,7 +81,7 @@ export const OrderTableRow = ({
         <OrderStatusBadge status={order.status} size="sm" />
       </TableCell>
 
-      {/* Payment — status + method stacked */}
+      {/* Payment */}
       <TableCell className="whitespace-nowrap">
         <div className="flex flex-col gap-0.5">
           <Badge
@@ -133,27 +123,15 @@ export const OrderTableRow = ({
 
       {/* Actions */}
       <TableCell className="text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onViewDetails(order)}>
-              <Eye className="h-4 w-4 mr-2" />
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onUpdateStatus(order)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Update Status
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDelete(order)} className="text-destructive">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onViewDetails(order)}
+          title="View Details"
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
       </TableCell>
 
     </TableRow>

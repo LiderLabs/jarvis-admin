@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import { usePaginatedQuery, useQuery, useConvexAuth } from "convex/react"
-import { api } from "@jordan6699/washlab-backend/api"
-import { Doc } from "@jordan6699/washlab-backend/dataModel"
+import { api } from "@liderlabs/washlab-backend/api"
+import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +20,7 @@ import { LoyaltyTransactionsTable } from "./LoyaltyTransactionsTable"
 import { AdjustPointsDialog } from "./AdjustPointsDialog"
 import { TransactionDetailsDialog } from "./TransactionDetailsDialog"
 import { Award, TrendingUp, Users, Gift, Search, Loader2, History } from "lucide-react"
-import { Id } from "@jordan6699/washlab-backend/dataModel"
+import { Id } from "@liderlabs/washlab-backend/dataModel"
 
 type ViewMode = "points" | "transactions"
 

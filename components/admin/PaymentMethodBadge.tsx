@@ -1,6 +1,6 @@
 "use client"
 
-import { Doc } from "@jordan6699/washlab-backend/dataModel"
+import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import { Badge } from "@/components/ui/badge"
 import { Wallet, CreditCard } from "lucide-react"
 
