@@ -444,19 +444,11 @@ const [to, setTo]     = useState<Date>(new Date())
   )
 
   const filteredSummaries = useMemo(() => {
-    if (!summaries) return []
-    return summaries
-      .map(s => {
-  const periodOrders = s.unsettledOrders.filter(
-    o => o.createdAt >= sinceTs && o.createdAt <= untilTs
-  )
-const periodOutstanding = Math.round(
-        periodOrders.reduce((sum, o) => sum + o.finalPrice, 0) * 100
-      ) / 100
-      return { ...s, unsettledOrders: periodOrders, outstanding: periodOutstanding }
-})
-      .filter(s => s.outstanding > 0)
-  }, [summaries, sinceTs, untilTs])
+  if (!summaries) return []
+  return summaries
+    .filter(s => s.outstanding > 0)
+    .sort((a, b) => b.outstanding - a.outstanding)
+}, [summaries])
 
   const filtered = useMemo(() => {
     return filteredSummaries
