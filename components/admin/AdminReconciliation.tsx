@@ -217,8 +217,8 @@ function BranchHistoryDrawer({ summary, allRecons, allDeductions, onClose }: Bra
   const historyCashUsedTotal = branchDeductions.reduce((s, d) => s + d.amount, 0)
 
   // All-time outstanding — never filtered by date, always shows true balance
-  const allTimeOutstanding = summary.unsettledOrders.reduce((s, o) => s + o.finalPrice, 0)
-  const allTimeOrderCount  = summary.unsettledOrders.length
+ const allTimeOutstanding = summary.outstanding
+const allTimeOrderCount  = summary.unsettledOrders.length
 
   // Period outstanding — only orders created within the selected date range
   const periodUnsettledOrders = summary.unsettledOrders.filter(
