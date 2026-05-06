@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import {
   Building2,
@@ -334,49 +335,18 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           {services.map((s: any) => (
             editingId === s._id ? (
               <div key={s._id} className="border rounded-lg p-3 space-y-2 bg-background">
-                {/* ── Row 1: Name + Price ── */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Service name"
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    value={form.price || ""}
-                    onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
-                    placeholder="Price"
-                    className="h-8 text-sm"
-                    min="0"
-                    step="0.01"
-                  />
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Service name" className="h-8 text-sm" />
+                  <Input type="number" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="Price" className="h-8 text-sm" min="0" step="0.01" />
                 </div>
-                {/* ── Row 2: Extra Wash Price + Extra Dry Price ── */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Extra Wash Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
-                    <Input
-                      type="number"
-                      value={form.extraWashPrice}
-                      onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })}
-                      placeholder="Leave blank = default"
-                      className="h-8 text-sm"
-                      min="0"
-                      step="0.01"
-                    />
+                    <Input type="number" value={form.extraWashPrice} onChange={(e) => setForm({ ...form, extraWashPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Extra Dry Price (&#8373;) <span className="text-muted-foreground">optional</span></Label>
-                    <Input
-                      type="number"
-                      value={form.extraDryPrice}
-                      onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })}
-                      placeholder="Leave blank = default"
-                      className="h-8 text-sm"
-                      min="0"
-                      step="0.01"
-                    />
+                    <Input type="number" value={form.extraDryPrice} onChange={(e) => setForm({ ...form, extraDryPrice: e.target.value })} placeholder="Leave blank = default" className="h-8 text-sm" min="0" step="0.01" />
                   </div>
                 </div>
                 <ServiceImagePicker value={form.imageUrl} onChange={(url) => setForm({ ...form, imageUrl: url })} generateUploadUrl={generateUploadUrl} />
@@ -399,12 +369,8 @@ const BranchServicesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
                           <EyeOff className="h-2.5 w-2.5" />Hidden from customers
                         </Badge>
                       )}
-                      {s.extraWashPrice != null && (
-                        <Badge variant="outline" className="text-[10px] py-0">+wash &#8373;{s.extraWashPrice}</Badge>
-                      )}
-                      {s.extraDryPrice != null && (
-                        <Badge variant="outline" className="text-[10px] py-0">+dry &#8373;{s.extraDryPrice}</Badge>
-                      )}
+                      {s.extraWashPrice != null && <Badge variant="outline" className="text-[10px] py-0">+wash &#8373;{s.extraWashPrice}</Badge>}
+                      {s.extraDryPrice != null && <Badge variant="outline" className="text-[10px] py-0">+dry &#8373;{s.extraDryPrice}</Badge>}
                     </div>
                   </div>
                 </div>
@@ -598,30 +564,55 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const createMachine = useMutation((api as any).branchMachines.create)
   const updateMachine = useMutation((api as any).branchMachines.update)
   const removeMachine = useMutation((api as any).branchMachines.remove)
-  const [showAdd, setShowAdd] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: "", serialNumber: "", washPrice: 0 })
   const adminId = (useQuery(api.admin.getCurrentUser) as any)?._id
-  const resetForm = () => setForm({ name: "", serialNumber: "", washPrice: 0 })
+
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    name: "",
+    displayName: "",
+    serialNumber: "",
+    otherDetails: "",
+  })
+
+  const resetForm = () => setForm({ name: "", displayName: "", serialNumber: "", otherDetails: "" })
 
   const handleAdd = async () => {
-    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
-    if (!adminId) { toast.error("Not authenticated"); return }
+    if (!form.name.trim())        { toast.error("Machine name is required"); return }
+    if (!form.displayName.trim()) { toast.error("Display name is required"); return }
+    if (!adminId)                 { toast.error("Not authenticated"); return }
     try {
-      await createMachine({ branchId, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
+      await createMachine({
+        branchId,
+        name:         form.name.trim(),
+        displayName:  form.displayName.trim(),
+        serialNumber: form.serialNumber.trim() || undefined,
+        otherDetails: form.otherDetails.trim() || undefined,
+        adminId,
+      })
       toast.success("Machine added")
-      setShowAdd(false); resetForm()
-    } catch (e: any) { toast.error(e.message || "Failed") }
+      setShowAdd(false)
+      resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed to add machine") }
   }
 
   const handleUpdate = async () => {
     if (!editingId || !adminId) return
-    if (!form.name || form.washPrice <= 0) { toast.error("Name and wash price required"); return }
+    if (!form.name.trim())        { toast.error("Machine name is required"); return }
+    if (!form.displayName.trim()) { toast.error("Display name is required"); return }
     try {
-      await updateMachine({ machineId: editingId as any, name: form.name.trim(), serialNumber: form.serialNumber.trim() || undefined, washPrice: form.washPrice, adminId })
+      await updateMachine({
+        machineId:    editingId as any,
+        name:         form.name.trim(),
+        displayName:  form.displayName.trim(),
+        serialNumber: form.serialNumber.trim() || undefined,
+        otherDetails: form.otherDetails.trim() || undefined,
+        adminId,
+      })
       toast.success("Machine updated")
-      setEditingId(null); resetForm()
-    } catch (e: any) { toast.error(e.message || "Failed") }
+      setEditingId(null)
+      resetForm()
+    } catch (e: any) { toast.error(e.message || "Failed to update machine") }
   }
 
   const handleToggle = async (machine: any) => {
@@ -640,91 +631,167 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
     } catch (e: any) { toast.error(e.message || "Failed") }
   }
 
+  const startEdit = (m: any) => {
+    setEditingId(m._id)
+    setForm({
+      name:         m.name || "",
+      displayName:  m.displayName || "",
+      serialNumber: m.serialNumber || "",
+      otherDetails: m.otherDetails || "",
+    })
+    setShowAdd(false)
+  }
+
+  // Shared form fields used in both Add and Edit
+  const MachineFormFields = () => (
+    <div className="space-y-2">
+      {/* Row 1: Machine Name + Display Name */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Machine Name * <span className="text-muted-foreground font-normal">(internal)</span></Label>
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="e.g., Samsung WF45 Washer"
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Display Name * <span className="text-muted-foreground font-normal">(attendant sees)</span></Label>
+          <Input
+            value={form.displayName}
+            onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+            placeholder="e.g., Big Washer"
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      {/* Row 2: Serial Number */}
+      <div className="space-y-1">
+        <Label className="text-xs">Serial Number <span className="text-muted-foreground">(optional)</span></Label>
+        <Input
+          value={form.serialNumber}
+          onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
+          placeholder="e.g., SN-20240001"
+          className="h-8 text-sm font-mono"
+        />
+      </div>
+      {/* Row 3: Other Details */}
+      <div className="space-y-1">
+        <Label className="text-xs">Other Details <span className="text-muted-foreground">(brand, capacity, notes — optional)</span></Label>
+        <Textarea
+          value={form.otherDetails}
+          onChange={(e) => setForm({ ...form, otherDetails: e.target.value })}
+          placeholder="e.g., Samsung, 18kg, front-load"
+          rows={2}
+          className="text-sm resize-none"
+        />
+      </div>
+    </div>
+  )
+
   return (
     <div className="space-y-3">
       {machines.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-3">No machines configured. Add machines to enable fault tracking.</p>
+        <p className="text-sm text-muted-foreground text-center py-3">
+          No machines configured. Add machines to enable fault tracking.
+        </p>
       ) : (
         <div className="space-y-2">
           {(machines as any[]).map((m: any) => (
             editingId === m._id ? (
               <div key={m._id} className="border rounded-lg p-3 space-y-2 bg-background">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Machine Name *</Label>
-                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Machine name" className="h-8 text-sm" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Wash Price (&#8373;) *</Label>
-                    <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} placeholder="Wash price" className="h-8 text-sm" min="0" step="0.01" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Serial Number</Label>
-                  <Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="e.g., SN-20240001" className="h-8 text-sm" />
-                </div>
-                <div className="flex gap-2">
+                <MachineFormFields />
+                <div className="flex gap-2 pt-1">
                   <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
                 </div>
               </div>
             ) : (
-              <div key={m._id} className={"flex items-center justify-between px-3 py-2 rounded-lg border " + (m.isActive ? "bg-muted/50" : "bg-muted/20 opacity-60")}>
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <div
+                key={m._id}
+                className={"flex items-start justify-between px-3 py-2.5 rounded-lg border gap-3 " +
+                  (m.isActive ? "bg-muted/50" : "bg-muted/20 opacity-60")}
+              >
+                {/* Left: icon + info */}
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                     <Cpu className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-medium text-sm">{m.name}</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    {/* Full name (admin) */}
+                    <span className="font-medium text-sm leading-tight">{m.name}</span>
+                    {/* Display name pill */}
+                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded w-fit font-medium">
+                      Attendants see: {m.displayName}
+                    </span>
+                    {/* Serial + other details */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                       {m.serialNumber && (
-                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">SN: {m.serialNumber}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                          SN: {m.serialNumber}
+                        </span>
                       )}
-                      {!m.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+                      {m.otherDetails && (
+                        <span className="text-[10px] text-muted-foreground italic truncate max-w-[160px]">
+                          {m.otherDetails}
+                        </span>
+                      )}
+                      {!m.isActive && <Badge variant="outline" className="text-[10px] py-0">Inactive</Badge>}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-bold text-primary text-sm">&#8373;{m.washPrice.toFixed(2)}</span>
-                  <span className="text-xs text-muted-foreground">wash</span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                    setEditingId(m._id)
-                    setForm({ name: m.name, serialNumber: m.serialNumber || "", washPrice: m.washPrice })
-                    setShowAdd(false)
-                  }}><Edit2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleToggle(m)}>
-                    <span className="text-xs">{m.isActive ? "Off" : "On"}</span>
+
+                {/* Right: actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => startEdit(m)}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemove(m._id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={() => handleToggle(m)}
+                    title={m.isActive ? "Deactivate" : "Activate"}
+                  >
+                    <span className="text-xs font-medium">{m.isActive ? "Off" : "On"}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => handleRemove(m._id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             )
           ))}
         </div>
       )}
+
+      {/* Add form */}
       {showAdd ? (
         <div className="border rounded-lg p-3 space-y-2 bg-background">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Machine Name *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Washer 1" className="h-8 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Wash Price (&#8373;) *</Label>
-              <Input type="number" value={form.washPrice || ""} onChange={(e) => setForm({ ...form, washPrice: parseFloat(e.target.value) || 0 })} min="0" step="0.01" className="h-8 text-sm" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Serial Number <span className="text-muted-foreground">(optional)</span></Label>
-            <Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="e.g., SN-20240001" className="h-8 text-sm" />
-          </div>
-          <div className="flex gap-2">
+          <MachineFormFields />
+          <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Machine</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
           </div>
         </div>
       ) : (
-        <Button variant="outline" size="sm" className="w-full h-8 text-xs border-dashed" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs border-dashed"
+          onClick={() => { setShowAdd(true); setEditingId(null) }}
+        >
           <Plus className="h-3.5 w-3.5 mr-1.5" />Add Machine
         </Button>
       )}
@@ -1077,7 +1144,9 @@ const AdminBranches = () => {
                 <Cpu className='h-4 w-4 text-primary' />
                 <Label className='text-base font-semibold'>Machines</Label>
               </div>
-              <p className='text-xs text-muted-foreground mb-3'>Configure machines for fault tracking. Serial numbers help identify machines during maintenance.</p>
+              <p className='text-xs text-muted-foreground mb-3'>
+                Configure machines for fault tracking. The display name is what attendants see when reporting a fault.
+              </p>
               {selectedBranch && <BranchMachinesPanel branchId={selectedBranch._id} />}
             </div>
           </div>

@@ -32,35 +32,50 @@ const ClockIcon = () => (
 
 type Priority = "info" | "warning" | "urgent";
 
-const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string; dot: string }> = {
-  info:    { label: "Info",    color: "#3b82f6", bg: "#eff6ff", dot: "#93c5fd" },
-  warning: { label: "Warning", color: "#f59e0b", bg: "#fffbeb", dot: "#fcd34d" },
-  urgent:  { label: "Urgent",  color: "#ef4444", bg: "#fef2f2", dot: "#fca5a5" },
+const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string }> = {
+  info:    { label: "Info",    color: "#3b82f6", bg: "#eff6ff" },
+  warning: { label: "Warning", color: "#f59e0b", bg: "#fffbeb" },
+  urgent:  { label: "Urgent",  color: "#ef4444", bg: "#fef2f2" },
 };
 
-const EXPIRY_OPTIONS = [
-  { label: "1 day",    value: 1 },
-  { label: "3 days",   value: 3 },
-  { label: "1 week",   value: 7 },
-  { label: "2 weeks",  value: 14 },
-  { label: "1 month",  value: 30 },
-  { label: "3 months", value: 90 },
+// Quick-pick presets (shown as chips); user can also pick a custom date
+const QUICK_PRESETS = [
+  { label: "2 hours",  minutes: 120 },
+  { label: "Tomorrow", minutes: 24 * 60 },
+  { label: "3 days",   minutes: 3 * 24 * 60 },
+  { label: "1 week",   minutes: 7 * 24 * 60 },
+  { label: "Custom…",  minutes: -1 }, // signals custom date input
 ];
+
+function toLocalDatetimeValue(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function timeLeft(expiresAt: number): string {
   const diff = expiresAt - Date.now();
   if (diff <= 0) return "Expired";
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor(diff / (1000 * 60 * 60));
-  if (days > 1) return `${days}d left`;
+  const mins  = Math.floor(diff / (1000 * 60));
+  if (days > 1)   return `${days}d left`;
   if (days === 1) return "Expires tomorrow";
   if (hours >= 1) return `${hours}h left`;
+  if (mins >= 1)  return `${mins}m left`;
   return "Expires soon";
 }
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+function formatDateTime(ts: number): string {
+  return new Date(ts).toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
   });
 }
 
@@ -77,24 +92,50 @@ interface AddModalProps {
 }
 
 function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [title, setTitle]       = useState("");
+  const [body, setBody]         = useState("");
   const [branchId, setBranchId] = useState<string>("all");
   const [priority, setPriority] = useState<Priority>("info");
-  const [expiryDays, setExpiryDays] = useState(7);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+
+  // Expiry: selected preset index (or -1 = custom), and a custom datetime string
+  const [presetIdx, setPresetIdx]     = useState(2); // default "3 days"
+  const [customDatetime, setCustomDatetime] = useState(() =>
+    toLocalDatetimeValue(Date.now() + 3 * 24 * 60 * 60 * 1000)
+  );
+
+  const isCustom = QUICK_PRESETS[presetIdx]?.minutes === -1;
+
+  function getExpiresAt(): number {
+    if (isCustom) {
+      const ts = new Date(customDatetime).getTime();
+      return isNaN(ts) ? 0 : ts;
+    }
+    return Date.now() + QUICK_PRESETS[presetIdx].minutes * 60 * 1000;
+  }
+
+  // When selecting a preset (not custom), sync the datetime input to match
+  function handlePresetSelect(idx: number) {
+    setPresetIdx(idx);
+    const preset = QUICK_PRESETS[idx];
+    if (preset.minutes > 0) {
+      setCustomDatetime(toLocalDatetimeValue(Date.now() + preset.minutes * 60 * 1000));
+    }
+  }
 
   async function handleSubmit() {
     if (!title.trim()) { setError("Title is required."); return; }
+    const expiresAt = getExpiresAt();
+    if (expiresAt <= Date.now()) { setError("Expiry must be in the future."); return; }
     setSaving(true);
     try {
       await onSave({
         title: title.trim(),
-      body: body.trim(),
+        body: body.trim(),
         branchId: branchId === "all" ? null : (branchId as Id<"branches">),
         priority,
-        expiresAt: Date.now() + expiryDays * 24 * 60 * 60 * 1000,
+        expiresAt,
       });
       onClose();
     } catch (e: any) {
@@ -103,6 +144,9 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
       setSaving(false);
     }
   }
+
+  const expiresAt  = getExpiresAt();
+  const previewStr = expiresAt > Date.now() ? formatDateTime(expiresAt) : null;
 
   return (
     <div style={styles.backdrop} onClick={onClose}>
@@ -114,7 +158,9 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
           </div>
           <button style={styles.iconBtn} onClick={onClose}><XIcon /></button>
         </div>
+
         <div style={styles.modalBody}>
+          {/* Branch */}
           <div style={styles.field}>
             <label style={styles.label}>Branch</label>
             <select style={styles.select} value={branchId} onChange={e => setBranchId(e.target.value)}>
@@ -124,11 +170,13 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
               ))}
             </select>
           </div>
+
+          {/* Priority */}
           <div style={styles.field}>
             <label style={styles.label}>Priority</label>
             <div style={styles.pillRow}>
               {(["info", "warning", "urgent"] as Priority[]).map(p => {
-                const cfg = PRIORITY_CONFIG[p];
+                const cfg    = PRIORITY_CONFIG[p];
                 const active = priority === p;
                 return (
                   <button key={p} style={{ ...styles.pill, background: active ? cfg.color : "#f4f4f5", color: active ? "#fff" : "#52525b", border: active ? `1.5px solid ${cfg.color}` : "1.5px solid #e4e4e7" }} onClick={() => setPriority(p)}>
@@ -139,26 +187,75 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
               })}
             </div>
           </div>
+
+          {/* Title */}
           <div style={styles.field}>
             <label style={styles.label}>Title <span style={{ color: "#ef4444" }}>*</span></label>
             <input style={styles.input} placeholder="e.g. Academic City is on break this week" value={title} onChange={e => { setTitle(e.target.value); setError(""); }} />
           </div>
+
+          {/* Details */}
           <div style={styles.field}>
             <label style={styles.label}>Details <span style={{ color: "#a1a1aa", fontWeight: 400 }}>(optional)</span></label>
             <textarea style={{ ...styles.input, minHeight: 80, resize: "vertical" }} placeholder="Additional info customers or staff should know..." value={body} onChange={e => setBody(e.target.value)} />
           </div>
+
+          {/* Expiry */}
           <div style={styles.field}>
-            <label style={styles.label}>Expires after</label>
+            <label style={styles.label}>Expires</label>
+
+            {/* Quick presets */}
             <div style={styles.pillRow}>
-              {EXPIRY_OPTIONS.map(opt => (
-                <button key={opt.value} style={{ ...styles.pill, background: expiryDays === opt.value ? "#18181b" : "#f4f4f5", color: expiryDays === opt.value ? "#fff" : "#52525b", border: expiryDays === opt.value ? "1.5px solid #18181b" : "1.5px solid #e4e4e7" }} onClick={() => setExpiryDays(opt.value)}>
-                  {opt.label}
+              {QUICK_PRESETS.map((p, i) => (
+                <button
+                  key={p.label}
+                  style={{
+                    ...styles.pill,
+                    background: presetIdx === i ? "#18181b" : "#f4f4f5",
+                    color: presetIdx === i ? "#fff" : "#52525b",
+                    border: presetIdx === i ? "1.5px solid #18181b" : "1.5px solid #e4e4e7",
+                  }}
+                  onClick={() => handlePresetSelect(i)}
+                >
+                  {p.label}
                 </button>
               ))}
             </div>
+
+            {/* Date/time input — always visible, updates when preset changes */}
+            <div style={{ marginTop: 10 }}>
+              <input
+                type="datetime-local"
+                style={{
+                  ...styles.input,
+                  color: "#18181b",
+                  cursor: "pointer",
+                  // highlight border when user is in custom mode
+                  borderColor: isCustom ? "#18181b" : "#e4e4e7",
+                }}
+                value={customDatetime}
+                min={toLocalDatetimeValue(Date.now() + 60 * 1000)}
+                onChange={e => {
+                  setCustomDatetime(e.target.value);
+                  // switch to custom mode if the user manually edits
+                  setPresetIdx(QUICK_PRESETS.length - 1);
+                  setError("");
+                }}
+              />
+            </div>
+
+            {/* Preview */}
+            {previewStr && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
+                <ClockIcon />
+                Expires <strong style={{ color: "#18181b", marginLeft: 2 }}>{previewStr}</strong>
+              </p>
+            )}
           </div>
+
           {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "4px 0 0" }}>{error}</p>}
         </div>
+
         <div style={styles.modalFooter}>
           <button style={styles.cancelBtn} onClick={onClose}>Cancel</button>
           <button style={styles.saveBtn} onClick={handleSubmit} disabled={saving}>{saving ? "Posting…" : "Post Headline"}</button>
@@ -169,7 +266,7 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
 }
 
 function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branchName: string; onDelete: (id: Id<"headlines">) => void }) {
-  const cfg = PRIORITY_CONFIG[headline.priority as Priority];
+  const cfg     = PRIORITY_CONFIG[headline.priority as Priority];
   const timeStr = timeLeft(headline.expiresAt);
   return (
     <div style={styles.card}>
@@ -184,7 +281,7 @@ function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branc
             <span style={styles.branchTag}>{branchName}</span>
           </div>
           <div style={styles.cardRight}>
-            <span style={{ ...styles.timeBadge, color: timeStr.includes("soon") || timeStr.includes("tomorrow") ? "#f59e0b" : "#52525b" }}>
+            <span style={{ ...styles.timeBadge, color: timeStr.includes("soon") || timeStr.includes("tomorrow") || timeStr.includes("h left") || timeStr.includes("m left") ? "#f59e0b" : "#52525b" }}>
               <ClockIcon />{timeStr}
             </span>
             <button style={styles.deleteBtn} onClick={() => onDelete(headline._id)} title="Delete headline"><TrashIcon /></button>
@@ -192,7 +289,7 @@ function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branc
         </div>
         <h3 style={styles.cardTitle}>{headline.title}</h3>
         {headline.body && <p style={styles.cardBody}>{headline.body}</p>}
-        <p style={styles.cardFooter}>Posted {formatDate(headline.createdAt)} · Expires {formatDate(headline.expiresAt)}</p>
+        <p style={styles.cardFooter}>Posted {formatDate(headline.createdAt)} · Expires {formatDateTime(headline.expiresAt)}</p>
       </div>
     </div>
   );
@@ -200,11 +297,11 @@ function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branc
 
 export default function AdminHeadlines() {
   const [showModal, setShowModal] = useState(false);
-  const branches = useQuery(api.branches.getActive) ?? [];
+  const branches  = useQuery(api.branches.getActive) ?? [];
   const headlines = useQuery(api.headlines.getAll) ?? [];
   const createHeadline = useMutation(api.headlines.create);
   const deleteHeadline = useMutation(api.headlines.remove);
-  const now = Date.now();
+  const now    = Date.now();
   const active = headlines.filter((h: any) => !h.isDeleted && h.expiresAt > now);
 
   function getBranchName(branchId?: Id<"branches">) {
@@ -228,6 +325,7 @@ export default function AdminHeadlines() {
           <PlusIcon /> Add Headline
         </button>
       </div>
+
       {active.length === 0 ? (
         <div style={styles.empty}>
           <MegaphoneIcon />
@@ -240,8 +338,13 @@ export default function AdminHeadlines() {
           ))}
         </div>
       )}
+
       {showModal && (
-        <AddHeadlineModal branches={branches} onClose={() => setShowModal(false)} onSave={async (data) => { await createHeadline(data); }} />
+        <AddHeadlineModal
+          branches={branches}
+          onClose={() => setShowModal(false)}
+          onSave={async (data) => { await createHeadline(data); }}
+        />
       )}
     </div>
   );
