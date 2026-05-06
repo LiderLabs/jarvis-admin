@@ -96,6 +96,13 @@ interface FormData {
   weeklyOrderTarget: number
 }
 
+interface MachineForm {
+  name: string
+  displayName: string
+  serialNumber: string
+  otherDetails: string
+}
+
 const BRANCHES_LIMIT = 20
 
 const DEFAULT_IMAGES = [
@@ -558,6 +565,60 @@ const ServiceDraftsPanel = ({
   )
 }
 
+// ─── Machine Form Fields (lifted out to module level to prevent focus loss) ───
+const MachineFormFields = ({
+  form,
+  setForm,
+}: {
+  form: MachineForm
+  setForm: React.Dispatch<React.SetStateAction<MachineForm>>
+}) => (
+  <div className="space-y-2">
+    {/* Row 1: Machine Name + Display Name */}
+    <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-1">
+        <Label className="text-xs">Machine Name * <span className="text-muted-foreground font-normal">(internal)</span></Label>
+        <Input
+          value={form.name}
+          onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+          placeholder="e.g., Samsung WF45 Washer"
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Display Name * <span className="text-muted-foreground font-normal">(attendant sees)</span></Label>
+        <Input
+          value={form.displayName}
+          onChange={(e) => setForm((prev) => ({ ...prev, displayName: e.target.value }))}
+          placeholder="e.g., Big Washer"
+          className="h-8 text-sm"
+        />
+      </div>
+    </div>
+    {/* Row 2: Serial Number */}
+    <div className="space-y-1">
+      <Label className="text-xs">Serial Number <span className="text-muted-foreground">(optional)</span></Label>
+      <Input
+        value={form.serialNumber}
+        onChange={(e) => setForm((prev) => ({ ...prev, serialNumber: e.target.value }))}
+        placeholder="e.g., SN-20240001"
+        className="h-8 text-sm font-mono"
+      />
+    </div>
+    {/* Row 3: Other Details */}
+    <div className="space-y-1">
+      <Label className="text-xs">Other Details <span className="text-muted-foreground">(brand, capacity, notes — optional)</span></Label>
+      <Textarea
+        value={form.otherDetails}
+        onChange={(e) => setForm((prev) => ({ ...prev, otherDetails: e.target.value }))}
+        placeholder="e.g., Samsung, 18kg, front-load"
+        rows={2}
+        className="text-sm resize-none"
+      />
+    </div>
+  </div>
+)
+
 // ─── Branch Machines Panel ────────────────────────────────────────────────────
 const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
   const machines = useQuery((api as any).branchMachines.listByBranch, { branchId }) ?? []
@@ -568,7 +629,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
 
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<MachineForm>({
     name: "",
     displayName: "",
     serialNumber: "",
@@ -642,54 +703,6 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
     setShowAdd(false)
   }
 
-  // Shared form fields used in both Add and Edit
-  const MachineFormFields = () => (
-    <div className="space-y-2">
-      {/* Row 1: Machine Name + Display Name */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Machine Name * <span className="text-muted-foreground font-normal">(internal)</span></Label>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="e.g., Samsung WF45 Washer"
-            className="h-8 text-sm"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Display Name * <span className="text-muted-foreground font-normal">(attendant sees)</span></Label>
-          <Input
-            value={form.displayName}
-            onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-            placeholder="e.g., Big Washer"
-            className="h-8 text-sm"
-          />
-        </div>
-      </div>
-      {/* Row 2: Serial Number */}
-      <div className="space-y-1">
-        <Label className="text-xs">Serial Number <span className="text-muted-foreground">(optional)</span></Label>
-        <Input
-          value={form.serialNumber}
-          onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
-          placeholder="e.g., SN-20240001"
-          className="h-8 text-sm font-mono"
-        />
-      </div>
-      {/* Row 3: Other Details */}
-      <div className="space-y-1">
-        <Label className="text-xs">Other Details <span className="text-muted-foreground">(brand, capacity, notes — optional)</span></Label>
-        <Textarea
-          value={form.otherDetails}
-          onChange={(e) => setForm({ ...form, otherDetails: e.target.value })}
-          placeholder="e.g., Samsung, 18kg, front-load"
-          rows={2}
-          className="text-sm resize-none"
-        />
-      </div>
-    </div>
-  )
-
   return (
     <div className="space-y-3">
       {machines.length === 0 ? (
@@ -701,7 +714,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
           {(machines as any[]).map((m: any) => (
             editingId === m._id ? (
               <div key={m._id} className="border rounded-lg p-3 space-y-2 bg-background">
-                <MachineFormFields />
+                <MachineFormFields form={form} setForm={setForm} />
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="h-8 text-xs" onClick={handleUpdate}>Save</Button>
                   <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditingId(null); resetForm() }}>Cancel</Button>
@@ -779,7 +792,7 @@ const BranchMachinesPanel = ({ branchId }: { branchId: Id<"branches"> }) => {
       {/* Add form */}
       {showAdd ? (
         <div className="border rounded-lg p-3 space-y-2 bg-background">
-          <MachineFormFields />
+          <MachineFormFields form={form} setForm={setForm} />
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="h-8 text-xs" onClick={handleAdd}>Add Machine</Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setShowAdd(false); resetForm() }}>Cancel</Button>
