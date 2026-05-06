@@ -221,7 +221,7 @@ const AdminOverview = () => {
   const endDateStr   = format(dateTo,   "yyyy-MM-dd")
 
   const dDiff     = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / 86400000) + 1)
-  const isAllTime = dDiff > 365
+ const isAllTime = dDiff > 364
 
   // Only 8 rows for the recent orders table — stats come from server queries
   const { results: ordersPages, status } = usePaginatedQuery(
@@ -266,7 +266,8 @@ const AdminOverview = () => {
     const byDayByMethod    = (selectedStats as any)?.byDayByMethod ?? {}
 
     const selectedOrders   = analyticsStats?.totalOrders ?? 0
-    const completedInRange = (analyticsStats?.ordersByStatus as any)?.completed ?? 0
+   const completedInRange = ((analyticsStats?.ordersByStatus as any)?.completed ?? 0) +
+                         ((analyticsStats?.ordersByStatus as any)?.delivered ?? 0)
     const pendingStatuses  = ["pending","pending_dropoff","in_progress","washing","drying","folding","sorting","checked_in"]
     const pendingOrders    = pendingStatuses.reduce(
       (sum, s) => sum + ((analyticsStats?.ordersByStatus as any)?.[s] ?? 0), 0
@@ -277,29 +278,41 @@ const AdminOverview = () => {
     const bucketDays = dDiff <= MAX_POINTS ? 1 : Math.ceil(dDiff / MAX_POINTS)
     const chartData: any[] = []
 
-    let i = dDiff - 1
-    while (i >= 0) {
-      let mm = 0, card = 0, cash = 0
-      const bucketStart = subDays(dateTo, i)
-      for (let j = 0; j < bucketDays && i - j >= 0; j++) {
-        const dateStr = format(subDays(dateTo, i - j), "yyyy-MM-dd")
-        const d = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
-        mm   += d.mobile_money ?? 0
-        card += d.card         ?? 0
-        cash += d.cash         ?? 0
-      }
-      const label = bucketDays === 1
-        ? format(bucketStart, "MMM d")
-        : `${format(bucketStart, "MMM d")}–${format(subDays(dateTo, Math.max(0, i - bucketDays + 1)), "MMM d")}`
+   // Only use dates that actually have data to avoid empty bars packing chart
+const activeDates = Object.keys(byDayByMethod).sort()
 
-      chartData.push({
-        date: label, displayDate: label,
-        mobileMoney: Math.round(mm   * 100) / 100,
-        card:        Math.round(card * 100) / 100,
-        cash:        Math.round(cash * 100) / 100,
-      })
-      i -= bucketDays
+if (activeDates.length === 0) {
+  // fallback: show last 7 days empty
+  for (let i = 6; i >= 0; i--) {
+    chartData.push({
+      date: format(subDays(dateTo, i), "MMM d"),
+      displayDate: format(subDays(dateTo, i), "MMM d"),
+      mobileMoney: 0, card: 0, cash: 0,
+    })
+  }
+} else {
+  // Group active dates into MAX_POINTS buckets
+  const bucketSize = Math.ceil(activeDates.length / MAX_POINTS)
+  for (let i = 0; i < activeDates.length; i += bucketSize) {
+    const bucket = activeDates.slice(i, i + bucketSize)
+    let mm = 0, card = 0, cash = 0
+    for (const dateStr of bucket) {
+      const d = byDayByMethod[dateStr] ?? { cash: 0, mobile_money: 0, card: 0 }
+      mm   += d.mobile_money ?? 0
+      card += d.card         ?? 0
+      cash += d.cash         ?? 0
     }
+    const label = bucket.length === 1
+      ? format(new Date(bucket[0] + 'T00:00:00'), "MMM d")
+      : `${format(new Date(bucket[0] + 'T00:00:00'), "MMM d")}–${format(new Date(bucket[bucket.length - 1] + 'T00:00:00'), "MMM d")}`
+    chartData.push({
+      date: label, displayDate: label,
+      mobileMoney: Math.round(mm   * 100) / 100,
+      card:        Math.round(card * 100) / 100,
+      cash:        Math.round(cash * 100) / 100,
+    })
+  }
+}
 
     const totalRevenue30  = (last30Stats as any)?.totalRevenue ?? 0
     const avgDailyRevenue = totalRevenue30 / 30

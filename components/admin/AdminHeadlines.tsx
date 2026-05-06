@@ -38,32 +38,18 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: stri
   urgent:  { label: "Urgent",  color: "#ef4444", bg: "#fef2f2" },
 };
 
-// Quick-pick presets (shown as chips); user can also pick a custom date
 const QUICK_PRESETS = [
-  { label: "2 hours",  minutes: 120 },
-  { label: "Tomorrow", minutes: 24 * 60 },
-  { label: "3 days",   minutes: 3 * 24 * 60 },
-  { label: "1 week",   minutes: 7 * 24 * 60 },
-  { label: "Custom…",  minutes: -1 }, // signals custom date input
+  { label: "2 hours",  duration: "2 hours", minutes: 120 },
+  { label: "Tomorrow", duration: "1 day",   minutes: 24 * 60 },
+  { label: "3 days",   duration: "3 days",  minutes: 3 * 24 * 60 },
+  { label: "1 week",   duration: "1 week",  minutes: 7 * 24 * 60 },
+  { label: "Custom…",  duration: "",        minutes: -1 },
 ];
 
 function toLocalDatetimeValue(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function timeLeft(expiresAt: number): string {
-  const diff = expiresAt - Date.now();
-  if (diff <= 0) return "Expired";
-  const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const mins  = Math.floor(diff / (1000 * 60));
-  if (days > 1)   return `${days}d left`;
-  if (days === 1) return "Expires tomorrow";
-  if (hours >= 1) return `${hours}h left`;
-  if (mins >= 1)  return `${mins}m left`;
-  return "Expires soon";
 }
 
 function formatDate(ts: number): string {
@@ -79,6 +65,21 @@ function formatDateTime(ts: number): string {
   });
 }
 
+function getDurationLabel(createdAt: number, expiresAt: number): string {
+  const diffMs    = expiresAt - createdAt;
+  const diffMins  = Math.round(diffMs / 60000);
+  if (diffMins < 60)  return `Runs for ${diffMins}m`;
+  const diffHours = Math.round(diffMins / 60);
+  if (diffHours < 24) return `Runs for ${diffHours}h`;
+  const diffDays  = Math.round(diffHours / 24);
+  if (diffDays === 1) return `Runs for 1 day`;
+  if (diffDays < 14)  return `Runs for ${diffDays} days`;
+  const diffWeeks = Math.round(diffDays / 7);
+  return `Runs for ${diffWeeks} week${diffWeeks > 1 ? "s" : ""}`;
+}
+
+// ── Add Modal ────────────────────────────────────────────────────────────────
+
 interface AddModalProps {
   branches: Array<{ _id: Id<"branches">; name: string }>;
   onClose: () => void;
@@ -92,15 +93,13 @@ interface AddModalProps {
 }
 
 function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
-  const [title, setTitle]       = useState("");
-  const [body, setBody]         = useState("");
-  const [branchId, setBranchId] = useState<string>("all");
-  const [priority, setPriority] = useState<Priority>("info");
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
-
-  // Expiry: selected preset index (or -1 = custom), and a custom datetime string
-  const [presetIdx, setPresetIdx]     = useState(2); // default "3 days"
+  const [title, setTitle]               = useState("");
+  const [body, setBody]                 = useState("");
+  const [branchId, setBranchId]         = useState<string>("all");
+  const [priority, setPriority]         = useState<Priority>("info");
+  const [saving, setSaving]             = useState(false);
+  const [error, setError]               = useState("");
+  const [presetIdx, setPresetIdx]       = useState(2);
   const [customDatetime, setCustomDatetime] = useState(() =>
     toLocalDatetimeValue(Date.now() + 3 * 24 * 60 * 60 * 1000)
   );
@@ -115,7 +114,6 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
     return Date.now() + QUICK_PRESETS[presetIdx].minutes * 60 * 1000;
   }
 
-  // When selecting a preset (not custom), sync the datetime input to match
   function handlePresetSelect(idx: number) {
     setPresetIdx(idx);
     const preset = QUICK_PRESETS[idx];
@@ -145,8 +143,11 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
     }
   }
 
-  const expiresAt  = getExpiresAt();
-  const previewStr = expiresAt > Date.now() ? formatDateTime(expiresAt) : null;
+  const expiresAt   = getExpiresAt();
+  const previewStr  = expiresAt > Date.now() ? formatDateTime(expiresAt) : null;
+  const durationStr = !isCustom && QUICK_PRESETS[presetIdx]?.duration
+    ? `Runs for ${QUICK_PRESETS[presetIdx].duration}`
+    : null;
 
   return (
     <div style={styles.backdrop} onClick={onClose}>
@@ -160,7 +161,6 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
         </div>
 
         <div style={styles.modalBody}>
-          {/* Branch */}
           <div style={styles.field}>
             <label style={styles.label}>Branch</label>
             <select style={styles.select} value={branchId} onChange={e => setBranchId(e.target.value)}>
@@ -171,7 +171,6 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
             </select>
           </div>
 
-          {/* Priority */}
           <div style={styles.field}>
             <label style={styles.label}>Priority</label>
             <div style={styles.pillRow}>
@@ -188,33 +187,23 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
             </div>
           </div>
 
-          {/* Title */}
           <div style={styles.field}>
             <label style={styles.label}>Title <span style={{ color: "#ef4444" }}>*</span></label>
             <input style={styles.input} placeholder="e.g. Academic City is on break this week" value={title} onChange={e => { setTitle(e.target.value); setError(""); }} />
           </div>
 
-          {/* Details */}
           <div style={styles.field}>
             <label style={styles.label}>Details <span style={{ color: "#a1a1aa", fontWeight: 400 }}>(optional)</span></label>
             <textarea style={{ ...styles.input, minHeight: 80, resize: "vertical" }} placeholder="Additional info customers or staff should know..." value={body} onChange={e => setBody(e.target.value)} />
           </div>
 
-          {/* Expiry */}
           <div style={styles.field}>
-            <label style={styles.label}>Expires</label>
-
-            {/* Quick presets */}
+            <label style={styles.label}>Duration</label>
             <div style={styles.pillRow}>
               {QUICK_PRESETS.map((p, i) => (
                 <button
                   key={p.label}
-                  style={{
-                    ...styles.pill,
-                    background: presetIdx === i ? "#18181b" : "#f4f4f5",
-                    color: presetIdx === i ? "#fff" : "#52525b",
-                    border: presetIdx === i ? "1.5px solid #18181b" : "1.5px solid #e4e4e7",
-                  }}
+                  style={{ ...styles.pill, background: presetIdx === i ? "#2563eb" : "#f4f4f5", color: presetIdx === i ? "#fff" : "#52525b", border: presetIdx === i ? "1.5px solid #2563eb" : "1.5px solid #e4e4e7" }}
                   onClick={() => handlePresetSelect(i)}
                 >
                   {p.label}
@@ -222,33 +211,25 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
               ))}
             </div>
 
-            {/* Date/time input — always visible, updates when preset changes */}
             <div style={{ marginTop: 10 }}>
               <input
                 type="datetime-local"
-                style={{
-                  ...styles.input,
-                  color: "#18181b",
-                  cursor: "pointer",
-                  // highlight border when user is in custom mode
-                  borderColor: isCustom ? "#18181b" : "#e4e4e7",
-                }}
+                style={{ ...styles.input, color: "#18181b", cursor: "pointer", borderColor: isCustom ? "#2563eb" : "#e4e4e7" }}
                 value={customDatetime}
                 min={toLocalDatetimeValue(Date.now() + 60 * 1000)}
                 onChange={e => {
                   setCustomDatetime(e.target.value);
-                  // switch to custom mode if the user manually edits
                   setPresetIdx(QUICK_PRESETS.length - 1);
                   setError("");
                 }}
               />
             </div>
 
-            {/* Preview */}
             {previewStr && (
               <p style={{ margin: "6px 0 0", fontSize: 12, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
                 <ClockIcon />
-                Expires <strong style={{ color: "#18181b", marginLeft: 2 }}>{previewStr}</strong>
+                {durationStr && <><strong style={{ color: "#18181b" }}>{durationStr}</strong>&nbsp;·&nbsp;</>}
+                Ends <strong style={{ color: "#18181b", marginLeft: 2 }}>{previewStr}</strong>
               </p>
             )}
           </div>
@@ -265,11 +246,27 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
   );
 }
 
+// ── Headline Card ─────────────────────────────────────────────────────────────
+
 function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branchName: string; onDelete: (id: Id<"headlines">) => void }) {
-  const cfg     = PRIORITY_CONFIG[headline.priority as Priority];
-  const timeStr = timeLeft(headline.expiresAt);
+  const [clickCount, setClickCount] = useState(0);
+  const [clickTimer, setClickTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  const cfg         = PRIORITY_CONFIG[headline.priority as Priority];
+  const durationStr = getDurationLabel(headline.createdAt, headline.expiresAt);
+  const endStr      = formatDateTime(headline.expiresAt);
+  const showDelete  = clickCount >= 3;
+
+  function handleClick() {
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    if (clickTimer) clearTimeout(clickTimer);
+    const t = setTimeout(() => setClickCount(0), 2000);
+    setClickTimer(t);
+  }
+
   return (
-    <div style={styles.card}>
+    <div style={styles.card} onClick={handleClick}>
       <div style={{ ...styles.priorityBar, background: cfg.color }} />
       <div style={styles.cardContent}>
         <div style={styles.cardTop}>
@@ -280,27 +277,41 @@ function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branc
             </span>
             <span style={styles.branchTag}>{branchName}</span>
           </div>
-          <div style={styles.cardRight}>
-            <span style={{ ...styles.timeBadge, color: timeStr.includes("soon") || timeStr.includes("tomorrow") || timeStr.includes("h left") || timeStr.includes("m left") ? "#f59e0b" : "#52525b" }}>
-              <ClockIcon />{timeStr}
-            </span>
-            <button style={styles.deleteBtn} onClick={() => onDelete(headline._id)} title="Delete headline"><TrashIcon /></button>
-          </div>
+          {showDelete && (
+            <button
+              style={styles.deleteBtn}
+              onClick={e => { e.stopPropagation(); onDelete(headline._id); }}
+              title="Delete headline"
+            >
+              <TrashIcon />
+              <span style={{ fontSize: 12, marginLeft: 4 }}>Delete</span>
+            </button>
+          )}
         </div>
         <h3 style={styles.cardTitle}>{headline.title}</h3>
         {headline.body && <p style={styles.cardBody}>{headline.body}</p>}
-        <p style={styles.cardFooter}>Posted {formatDate(headline.createdAt)} · Expires {formatDateTime(headline.expiresAt)}</p>
+        <p style={styles.cardFooter}>
+          <strong>Posted {formatDate(headline.createdAt)}</strong>
+          {" · "}
+          <strong>{durationStr}</strong>
+          {" · Ends "}
+          <strong>{endStr}</strong>
+        </p>
       </div>
     </div>
   );
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function AdminHeadlines() {
   const [showModal, setShowModal] = useState(false);
-  const branches  = useQuery(api.branches.getActive) ?? [];
-  const headlines = useQuery(api.headlines.getAll) ?? [];
+
+  const branches       = useQuery(api.branches.getActive) ?? [];
+  const headlines      = useQuery(api.headlines.getAll) ?? [];
   const createHeadline = useMutation(api.headlines.create);
   const deleteHeadline = useMutation(api.headlines.remove);
+
   const now    = Date.now();
   const active = headlines.filter((h: any) => !h.isDeleted && h.expiresAt > now);
 
@@ -334,7 +345,12 @@ export default function AdminHeadlines() {
       ) : (
         <div style={styles.grid}>
           {active.map((h: any) => (
-            <HeadlineCard key={h._id} headline={h} branchName={getBranchName(h.branchId)} onDelete={handleDelete} />
+            <HeadlineCard
+              key={h._id}
+              headline={h}
+              branchName={getBranchName(h.branchId)}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}
@@ -350,41 +366,41 @@ export default function AdminHeadlines() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "28px 32px", width: "100%", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" },
-  pageHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" },
-  pageTitle: { display: "flex", alignItems: "center", gap: 10 },
-  h1: { margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.4px", color: "#18181b" },
-  activeBadge: { background: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 99 },
-  addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#18181b", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  grid: { display: "flex", flexDirection: "column", gap: 12, width: "100%" },
-  card: { display: "flex", background: "#fff", border: "1.5px solid #e4e4e7", borderRadius: 12, overflow: "hidden", width: "100%", boxSizing: "border-box" },
-  priorityBar: { width: 4, flexShrink: 0 },
-  cardContent: { flex: 1, padding: "14px 16px", minWidth: 0 },
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" },
-  cardMeta: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" },
-  priorityBadge: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.4px" },
-  branchTag: { fontSize: 12, color: "#52525b", background: "#f4f4f5", padding: "2px 8px", borderRadius: 99, fontWeight: 500 },
-  cardRight: { display: "flex", alignItems: "center", gap: 10 },
-  timeBadge: { display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500 },
-  deleteBtn: { background: "none", border: "1px solid #e4e4e7", borderRadius: 6, padding: "4px 6px", cursor: "pointer", color: "#a1a1aa", display: "flex", alignItems: "center" },
-  cardTitle: { margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#18181b", lineHeight: 1.35 },
-  cardBody: { margin: "0 0 8px", fontSize: 13, color: "#52525b", lineHeight: 1.5 },
-  cardFooter: { margin: 0, fontSize: 11, color: "#a1a1aa" },
-  empty: { textAlign: "center", padding: "60px 20px", color: "#a1a1aa", display: "flex", flexDirection: "column", alignItems: "center" },
-  backdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
-  modal: { background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" },
-  modalHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: "1px solid #f4f4f5" },
-  modalTitle: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16, color: "#18181b" },
-  modalBody: { padding: "20px", display: "flex", flexDirection: "column", gap: 16 },
-  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: "1px solid #f4f4f5" },
-  field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 13, fontWeight: 600, color: "#3f3f46" },
-  input: { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" as const },
-  select: { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", background: "#fff", outline: "none", fontFamily: "inherit", width: "100%", cursor: "pointer" },
-  pillRow: { display: "flex", gap: 6, flexWrap: "wrap" },
-  pill: { display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all .15s" },
-  cancelBtn: { background: "#f4f4f5", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 500, color: "#52525b", cursor: "pointer" },
-  saveBtn: { background: "#18181b", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
-  iconBtn: { background: "none", border: "none", cursor: "pointer", color: "#71717a", display: "flex", padding: 4 },
+  page:         { padding: "28px 32px", width: "100%", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" },
+  pageHeader:   { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" },
+  pageTitle:    { display: "flex", alignItems: "center", gap: 10 },
+  h1:           { margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.4px", color: "#18181b" },
+  activeBadge:  { background: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 99 },
+  addBtn:       { display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  grid:         { display: "flex", flexDirection: "column", gap: 12, width: "100%" },
+  card:         { display: "flex", background: "#fff", border: "1.5px solid #e4e4e7", borderRadius: 12, overflow: "hidden", width: "100%", boxSizing: "border-box", cursor: "default" },
+  priorityBar:  { width: 4, flexShrink: 0 },
+  cardContent:  { flex: 1, padding: "14px 16px", minWidth: 0 },
+  cardTop:      { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" },
+  cardMeta:     { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" },
+  priorityBadge:{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.4px" },
+  branchTag:    { fontSize: 12, color: "#52525b", background: "#f4f4f5", padding: "2px 8px", borderRadius: 99, fontWeight: 500 },
+  deleteBtn:    { display: "flex", alignItems: "center", gap: 4, background: "none", border: "1px solid #fca5a5", borderRadius: 8, padding: "4px 10px", cursor: "pointer", color: "#ef4444", flexShrink: 0, whiteSpace: "nowrap" },
+  cardTitle:    { margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#18181b", lineHeight: 1.35 },
+  cardBody:     { margin: "0 0 8px", fontSize: 13, color: "#52525b", lineHeight: 1.5 },
+  cardFooter:   { margin: 0, fontSize: 11, color: "#71717a" },
+  empty:        { textAlign: "center", padding: "60px 20px", color: "#a1a1aa", display: "flex", flexDirection: "column", alignItems: "center" },
+  backdrop:     { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
+  modal:        { background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" },
+  modalHeader:  { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: "1px solid #f4f4f5" },
+  modalTitle:   { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16, color: "#18181b" },
+  modalBody:    { padding: "20px", display: "flex", flexDirection: "column", gap: 16 },
+  modalFooter:  { display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: "1px solid #f4f4f5" },
+  field:        { display: "flex", flexDirection: "column", gap: 6 },
+  label:        { fontSize: 13, fontWeight: 600, color: "#3f3f46" },
+  input:        { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" as const },
+  select:       { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", background: "#fff", outline: "none", fontFamily: "inherit", width: "100%", cursor: "pointer" },
+  pillRow:      { display: "flex", gap: 6, flexWrap: "wrap" },
+  pill:         { display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all .15s" },
+  cancelBtn:    { background: "#f4f4f5", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 500, color: "#52525b", cursor: "pointer" },
+  saveBtn:      { background: "#2563eb", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
+  iconBtn:      { background: "none", border: "none", cursor: "pointer", color: "#71717a", display: "flex", padding: 4 },
 };
