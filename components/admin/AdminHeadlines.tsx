@@ -32,10 +32,10 @@ const ClockIcon = () => (
 
 type Priority = "info" | "warning" | "urgent";
 
-const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string }> = {
-  info:    { label: "Info",    color: "#3b82f6", bg: "#eff6ff" },
-  warning: { label: "Warning", color: "#f59e0b", bg: "#fffbeb" },
-  urgent:  { label: "Urgent",  color: "#ef4444", bg: "#fef2f2" },
+const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string; darkBg: string }> = {
+  info:    { label: "Info",    color: "#3b82f6", bg: "#eff6ff", darkBg: "rgba(59,130,246,0.15)" },
+  warning: { label: "Warning", color: "#f59e0b", bg: "#fffbeb", darkBg: "rgba(245,158,11,0.15)" },
+  urgent:  { label: "Urgent",  color: "#ef4444", bg: "#fef2f2", darkBg: "rgba(239,68,68,0.15)"  },
 };
 
 const QUICK_PRESETS = [
@@ -150,36 +150,46 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
     : null;
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <div style={styles.modalTitle}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-card text-card-foreground rounded-2xl w-full max-w-[520px] shadow-2xl overflow-hidden border border-border" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2 font-bold text-base text-foreground">
             <MegaphoneIcon />
             <span>New Headline</span>
           </div>
-          <button style={styles.iconBtn} onClick={onClose}><XIcon /></button>
+          <button className="text-muted-foreground hover:text-foreground p-1" onClick={onClose}><XIcon /></button>
         </div>
 
-        <div style={styles.modalBody}>
-          <div style={styles.field}>
-            <label style={styles.label}>Branch</label>
-            <select style={styles.select} value={branchId} onChange={e => setBranchId(e.target.value)}>
+        {/* Body */}
+        <div className="p-5 flex flex-col gap-4">
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-foreground">Branch</label>
+            <select
+              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground outline-none cursor-pointer w-full"
+              value={branchId} onChange={e => setBranchId(e.target.value)}
+            >
               <option value="all">All Branches</option>
-              {branches.map(b => (
-                <option key={b._id} value={b._id}>{b.name}</option>
-              ))}
+              {branches.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
             </select>
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Priority</label>
-            <div style={styles.pillRow}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-foreground">Priority</label>
+            <div className="flex gap-2 flex-wrap">
               {(["info", "warning", "urgent"] as Priority[]).map(p => {
                 const cfg    = PRIORITY_CONFIG[p];
                 const active = priority === p;
                 return (
-                  <button key={p} style={{ ...styles.pill, background: active ? cfg.color : "#f4f4f5", color: active ? "#fff" : "#52525b", border: active ? `1.5px solid ${cfg.color}` : "1.5px solid #e4e4e7" }} onClick={() => setPriority(p)}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? "#fff" : cfg.color, display: "inline-block" }} />
+                  <button
+                    key={p}
+                    onClick={() => setPriority(p)}
+                    style={{ borderColor: active ? cfg.color : undefined, background: active ? cfg.color : undefined }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${active ? "text-white" : "border-border bg-muted text-muted-foreground"}`}
+                  >
+                    <span style={{ background: active ? "#fff" : cfg.color }} className="w-1.5 h-1.5 rounded-full inline-block" />
                     {cfg.label}
                   </button>
                 );
@@ -187,59 +197,62 @@ function AddHeadlineModal({ branches, onClose, onSave }: AddModalProps) {
             </div>
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Title <span style={{ color: "#ef4444" }}>*</span></label>
-            <input style={styles.input} placeholder="e.g. Academic City is on break this week" value={title} onChange={e => { setTitle(e.target.value); setError(""); }} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-foreground">Title <span className="text-red-500">*</span></label>
+            <input
+              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground outline-none w-full placeholder:text-muted-foreground"
+              placeholder="e.g. Academic City is on break this week"
+              value={title} onChange={e => { setTitle(e.target.value); setError(""); }}
+            />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Details <span style={{ color: "#a1a1aa", fontWeight: 400 }}>(optional)</span></label>
-            <textarea style={{ ...styles.input, minHeight: 80, resize: "vertical" }} placeholder="Additional info customers or staff should know..." value={body} onChange={e => setBody(e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-foreground">Details <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <textarea
+              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground outline-none w-full placeholder:text-muted-foreground resize-y min-h-[80px]"
+              placeholder="Additional info customers or staff should know..."
+              value={body} onChange={e => setBody(e.target.value)}
+            />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Duration</label>
-            <div style={styles.pillRow}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-foreground">Duration</label>
+            <div className="flex gap-2 flex-wrap">
               {QUICK_PRESETS.map((p, i) => (
                 <button
                   key={p.label}
-                  style={{ ...styles.pill, background: presetIdx === i ? "#2563eb" : "#f4f4f5", color: presetIdx === i ? "#fff" : "#52525b", border: presetIdx === i ? "1.5px solid #2563eb" : "1.5px solid #e4e4e7" }}
                   onClick={() => handlePresetSelect(i)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${presetIdx === i ? "bg-blue-600 text-white border-blue-600" : "bg-muted text-muted-foreground border-border"}`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
-
-            <div style={{ marginTop: 10 }}>
-              <input
-                type="datetime-local"
-                style={{ ...styles.input, color: "#18181b", cursor: "pointer", borderColor: isCustom ? "#2563eb" : "#e4e4e7" }}
-                value={customDatetime}
-                min={toLocalDatetimeValue(Date.now() + 60 * 1000)}
-                onChange={e => {
-                  setCustomDatetime(e.target.value);
-                  setPresetIdx(QUICK_PRESETS.length - 1);
-                  setError("");
-                }}
-              />
-            </div>
-
+            <input
+              type="datetime-local"
+              className={`mt-1 border rounded-lg px-3 py-2 text-sm bg-background text-foreground outline-none w-full cursor-pointer ${isCustom ? "border-blue-500" : "border-border"}`}
+              value={customDatetime}
+              min={toLocalDatetimeValue(Date.now() + 60 * 1000)}
+              onChange={e => { setCustomDatetime(e.target.value); setPresetIdx(QUICK_PRESETS.length - 1); setError(""); }}
+            />
             {previewStr && (
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
+              <p className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                 <ClockIcon />
-                {durationStr && <><strong style={{ color: "#18181b" }}>{durationStr}</strong>&nbsp;·&nbsp;</>}
-                Ends <strong style={{ color: "#18181b", marginLeft: 2 }}>{previewStr}</strong>
+                {durationStr && <><strong className="text-foreground">{durationStr}</strong>&nbsp;·&nbsp;</>}
+                Ends <strong className="text-foreground ml-1">{previewStr}</strong>
               </p>
             )}
           </div>
 
-          {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "4px 0 0" }}>{error}</p>}
+          {error && <p className="text-red-500 text-xs">{error}</p>}
         </div>
 
-        <div style={styles.modalFooter}>
-          <button style={styles.cancelBtn} onClick={onClose}>Cancel</button>
-          <button style={styles.saveBtn} onClick={handleSubmit} disabled={saving}>{saving ? "Posting…" : "Post Headline"}</button>
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
+          <button className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80" onClick={onClose}>Cancel</button>
+          <button className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={handleSubmit} disabled={saving}>
+            {saving ? "Posting…" : "Post Headline"}
+          </button>
         </div>
       </div>
     </div>
@@ -266,36 +279,49 @@ function HeadlineCard({ headline, branchName, onDelete }: { headline: any; branc
   }
 
   return (
-    <div style={styles.card} onClick={handleClick}>
-      <div style={{ ...styles.priorityBar, background: cfg.color }} />
-      <div style={styles.cardContent}>
-        <div style={styles.cardTop}>
-          <div style={styles.cardMeta}>
-            <span style={{ ...styles.priorityBadge, background: cfg.bg, color: cfg.color }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color, display: "inline-block" }} />
+    <div
+      className="flex w-full rounded-xl overflow-hidden border border-border bg-card cursor-default"
+      onClick={handleClick}
+    >
+      {/* Priority bar */}
+      <div className="w-1 shrink-0" style={{ background: cfg.color }} />
+
+      <div className="flex-1 px-4 py-3 min-w-0">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Priority badge */}
+            <span
+              className="flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide"
+              style={{ color: cfg.color, background: cfg.darkBg }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: cfg.color }} />
               {cfg.label}
             </span>
-            <span style={styles.branchTag}>{branchName}</span>
+            {/* Branch tag */}
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {branchName}
+            </span>
           </div>
+
           {showDelete && (
             <button
-              style={styles.deleteBtn}
+              className="flex items-center gap-1.5 text-xs font-medium text-red-500 border border-red-300 dark:border-red-800 rounded-lg px-2.5 py-1 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
               onClick={e => { e.stopPropagation(); onDelete(headline._id); }}
-              title="Delete headline"
             >
               <TrashIcon />
-              <span style={{ fontSize: 12, marginLeft: 4 }}>Delete</span>
+              Delete
             </button>
           )}
         </div>
-        <h3 style={styles.cardTitle}>{headline.title}</h3>
-        {headline.body && <p style={styles.cardBody}>{headline.body}</p>}
-        <p style={styles.cardFooter}>
-          <strong>Posted {formatDate(headline.createdAt)}</strong>
+
+        <h3 className="text-sm font-semibold text-foreground mb-1 leading-snug">{headline.title}</h3>
+        {headline.body && <p className="text-xs text-muted-foreground mb-2 leading-relaxed">{headline.body}</p>}
+        <p className="text-[11px] text-muted-foreground">
+          <strong className="text-foreground">Posted {formatDate(headline.createdAt)}</strong>
           {" · "}
-          <strong>{durationStr}</strong>
+          <strong className="text-foreground">{durationStr}</strong>
           {" · Ends "}
-          <strong>{endStr}</strong>
+          <strong className="text-foreground">{endStr}</strong>
         </p>
       </div>
     </div>
@@ -326,24 +352,33 @@ export default function AdminHeadlines() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.pageHeader}>
-        <div style={styles.pageTitle}>
-          <h1 style={styles.h1}>Headlines</h1>
-          {active.length > 0 && <span style={styles.activeBadge}>{active.length} active</span>}
+    <div className="p-6 w-full box-border font-sans text-foreground">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">Headlines</h1>
+          {active.length > 0 && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              {active.length} active
+            </span>
+          )}
         </div>
-        <button style={styles.addBtn} onClick={() => setShowModal(true)}>
+        <button
+          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          onClick={() => setShowModal(true)}
+        >
           <PlusIcon /> Add Headline
         </button>
       </div>
 
+      {/* Cards */}
       {active.length === 0 ? (
-        <div style={styles.empty}>
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <MegaphoneIcon />
-          <p style={{ margin: "8px 0 0", color: "#a1a1aa", fontSize: 14 }}>No active headlines. Add one above.</p>
+          <p className="mt-2 text-sm">No active headlines. Add one above.</p>
         </div>
       ) : (
-        <div style={styles.grid}>
+        <div className="flex flex-col gap-3 w-full">
           {active.map((h: any) => (
             <HeadlineCard
               key={h._id}
@@ -365,42 +400,3 @@ export default function AdminHeadlines() {
     </div>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  page:         { padding: "28px 32px", width: "100%", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" },
-  pageHeader:   { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" },
-  pageTitle:    { display: "flex", alignItems: "center", gap: 10 },
-  h1:           { margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.4px", color: "#18181b" },
-  activeBadge:  { background: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 99 },
-  addBtn:       { display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  grid:         { display: "flex", flexDirection: "column", gap: 12, width: "100%" },
-  card:         { display: "flex", background: "#fff", border: "1.5px solid #e4e4e7", borderRadius: 12, overflow: "hidden", width: "100%", boxSizing: "border-box", cursor: "default" },
-  priorityBar:  { width: 4, flexShrink: 0 },
-  cardContent:  { flex: 1, padding: "14px 16px", minWidth: 0 },
-  cardTop:      { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" },
-  cardMeta:     { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" },
-  priorityBadge:{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.4px" },
-  branchTag:    { fontSize: 12, color: "#52525b", background: "#f4f4f5", padding: "2px 8px", borderRadius: 99, fontWeight: 500 },
-  deleteBtn:    { display: "flex", alignItems: "center", gap: 4, background: "none", border: "1px solid #fca5a5", borderRadius: 8, padding: "4px 10px", cursor: "pointer", color: "#ef4444", flexShrink: 0, whiteSpace: "nowrap" },
-  cardTitle:    { margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#18181b", lineHeight: 1.35 },
-  cardBody:     { margin: "0 0 8px", fontSize: 13, color: "#52525b", lineHeight: 1.5 },
-  cardFooter:   { margin: 0, fontSize: 11, color: "#71717a" },
-  empty:        { textAlign: "center", padding: "60px 20px", color: "#a1a1aa", display: "flex", flexDirection: "column", alignItems: "center" },
-  backdrop:     { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
-  modal:        { background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" },
-  modalHeader:  { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: "1px solid #f4f4f5" },
-  modalTitle:   { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16, color: "#18181b" },
-  modalBody:    { padding: "20px", display: "flex", flexDirection: "column", gap: 16 },
-  modalFooter:  { display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: "1px solid #f4f4f5" },
-  field:        { display: "flex", flexDirection: "column", gap: 6 },
-  label:        { fontSize: 13, fontWeight: 600, color: "#3f3f46" },
-  input:        { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" as const },
-  select:       { border: "1.5px solid #e4e4e7", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#18181b", background: "#fff", outline: "none", fontFamily: "inherit", width: "100%", cursor: "pointer" },
-  pillRow:      { display: "flex", gap: 6, flexWrap: "wrap" },
-  pill:         { display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all .15s" },
-  cancelBtn:    { background: "#f4f4f5", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 500, color: "#52525b", cursor: "pointer" },
-  saveBtn:      { background: "#2563eb", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
-  iconBtn:      { background: "none", border: "none", cursor: "pointer", color: "#71717a", display: "flex", padding: 4 },
-};
