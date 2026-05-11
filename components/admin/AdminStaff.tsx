@@ -352,7 +352,7 @@ const AdminStaff = () => {
           const attendantPhone = actionDialog.attendant.phoneNumber
           const attendantName = actionDialog.attendant.name
           const resetUrl = "https://staging.attendant.washlab.app/sign-in"
-          const resetMsg = `Hi ${attendantName}! 👋\n\nYour WashLab password reset has been initiated.\n\nPlease follow these steps:\n1. Go to: ${resetUrl}\n2. Click *"Forgot Password"*\n3. Enter your email: ${actionDialog.attendant.email}\n4. Check your email for the reset link\n\nIf you need help, contact your branch manager.`
+          const resetMsg = `Hi ${attendantName}! 👋\n\nYour Javis password reset has been initiated.\n\nPlease follow these steps:\n1. Go to: ${resetUrl}\n2. Click *"Forgot Password"*\n3. Enter your email: ${actionDialog.attendant.email}\n4. Check your email for the reset link\n\nIf you need help, contact your branch manager.`
           const formattedPhone = attendantPhone.startsWith("+") ? attendantPhone.slice(1) : attendantPhone.startsWith("0") ? `233${attendantPhone.slice(1)}` : attendantPhone
           const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(resetMsg)}`
           window.open(waUrl, "_blank")
@@ -369,7 +369,7 @@ const AdminStaff = () => {
 
   const sendWhatsApp = (phone: string, link: string, name: string, branchName: string) => {
     try {
-      const message = `Hi ${name}! 👋\n\nYou've been invited to enroll as an attendant at *WashLab ${branchName}*.\n\nPlease complete your biometric enrollment by clicking this link:\n\n${link}\n\nThis link will expire in 72 hours.`
+      const message = `Hi ${name}! 👋\n\nYou've been invited to enroll as an attendant at *Javis ${branchName}*.\n\nPlease complete your biometric enrollment by clicking this link:\n\n${link}\n\nThis link will expire in 72 hours.`
       const formattedPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("0") ? `233${phone.slice(1)}` : phone
       const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
       const whatsappWindow = window.open(url, "_blank")

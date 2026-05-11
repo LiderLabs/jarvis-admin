@@ -54,7 +54,7 @@ export default function UnauthorizedPage() {
           <div>
             <CardTitle className='text-2xl'>Access Denied</CardTitle>
             <CardDescription className='mt-2'>
-              You don&apos;t have permission to access the WashLab Admin Panel
+              You don&apos;t have permission to access the Javis Admin Panel
             </CardDescription>
           </div>
         </CardHeader>
@@ -86,7 +86,7 @@ export default function UnauthorizedPage() {
           <div className='bg-muted/50 p-4 rounded-lg'>
             <h4 className='font-medium mb-2'>Admin Access Required</h4>
             <p className='text-sm text-muted-foreground'>
-              This application is the <strong>WashLab Admin Panel</strong>,
+              This application is the <strong>Javis Admin Panel</strong>,
               designed exclusively for platform administrators. Admin accounts
               are created and managed directly by system administrators - there
               is no public registration.
@@ -100,11 +100,11 @@ export default function UnauthorizedPage() {
             </h4>
             <div className='text-sm text-blue-800 dark:text-blue-200 space-y-1'>
               <p>
-                • <strong>Branch managers/staff:</strong> Use the WashLab Staff
+                • <strong>Branch managers/staff:</strong> Use the Javis Staff
                 app
               </p>
               <p>
-                • <strong>Customers:</strong> Use the WashLab mobile app
+                • <strong>Customers:</strong> Use the Javis mobile app
               </p>
             </div>
           </div>

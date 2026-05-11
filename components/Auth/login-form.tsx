@@ -81,7 +81,7 @@ export default function LoginForm() {
                             Welcome back
                           </h1>
                           <p className='text-sm text-muted-foreground'>
-                            Sign in to your WashLab admin account to continue
+                            Sign in to your Javis admin account to continue
                           </p>
                         </div>
 
@@ -291,7 +291,7 @@ export default function LoginForm() {
       <div className='hidden lg:block lg:w-1/2 relative overflow-hidden'>
         <Image
           src='/assets/stacked-clothes.jpg'
-          alt='WashLab laundry service'
+          alt='Javis laundry service'
           fill
           className='object-cover'
           priority

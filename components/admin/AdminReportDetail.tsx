@@ -157,7 +157,7 @@ const AdminReportDetail = ({ reportId, onBack }: ReportDetailProps) => {
     ).join('');
 
     w.document.write(`
-      <html><head><title>WashLab Report � ${report.branchName} ${report.date}</title>
+      <html><head><title>Javis Report � ${report.branchName} ${report.date}</title>
       <style>
         *{box-sizing:border-box}
         body{font-family:system-ui,sans-serif;padding:40px;color:#111;max-width:900px;margin:0 auto}

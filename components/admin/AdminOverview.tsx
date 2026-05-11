@@ -354,7 +354,7 @@ if (activeDates.length === 0) {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Dashboard Overview</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Welcome to WashLab Admin</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Welcome to Javis Admin</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <DateRangePicker

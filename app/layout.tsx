@@ -5,13 +5,13 @@ import { ThemeProvider } from "@/providers/theme-provider"
 import { AuthProvider } from "@/providers/auth-provider"
 
 export const metadata: Metadata = {
-  title: "WashLab Admin",
-  description: "WashLab Admin Dashboard",
+  title: "Javis Admin",
+  description: "Javis Admin Dashboard",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "WashLab Admin",
+    title: "Javis Admin",
   },
 }
 
