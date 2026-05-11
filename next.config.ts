@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+﻿import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    qualities: [75, 100],
+    qualities: [75, 90, 100],
   },
 };
 
 export default nextConfig;
+

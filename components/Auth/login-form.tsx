@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as Clerk from "@clerk/elements/common"
 import * as SignIn from "@clerk/elements/sign-in"
@@ -282,7 +282,7 @@ export default function LoginForm() {
         {/* Footer */}
         <div className='p-8 text-center'>
           <p className='text-xs text-muted-foreground'>
-            © {new Date().getFullYear()} WashLab · Powered by Lider Technologies LTD
+            © {new Date().getFullYear()} Javis · Powered by Lider Technologies LTD
           </p>
         </div>
       </div>
@@ -290,12 +290,13 @@ export default function LoginForm() {
       {/* Right panel — image */}
       <div className='hidden lg:block lg:w-1/2 relative overflow-hidden'>
         <Image
-          src='/assets/stacked-clothes.jpg'
+          src='/assets/login-bg.jpg'
           alt='Javis laundry service'
           fill
           className='object-cover'
           priority
           quality={90}
+          sizes="50vw"
         />
         {/* Overlay gradient */}
         <div className='absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent' />
@@ -313,3 +314,7 @@ export default function LoginForm() {
     </div>
   )
 }
+
+
+
+
