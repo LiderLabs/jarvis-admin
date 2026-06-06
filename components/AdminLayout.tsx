@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, createContext, useContext } from "react"
 import * as React from "react"
@@ -28,6 +28,7 @@ import {
   CreditCard,
   Boxes,
   Tag,
+  Truck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -74,6 +75,13 @@ const sidebarItems = [
     label: "Staff",
     icon: Users,
     path: "/dashboard/staff",
+    group: "management",
+  },
+  {
+    id: "drivers",
+    label: "Drivers",
+    icon: Truck,
+    path: "/dashboard/drivers",
     group: "management",
   },
   {
@@ -317,7 +325,7 @@ export default function AdminLayout({
           />
         </aside>
 
-        {/* Mobile Sidebar — solid overlay, not transparent */}
+        {/* Mobile Sidebar â€” solid overlay, not transparent */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetContent
             side='left'
@@ -348,3 +356,4 @@ export default function AdminLayout({
     </MobileMenuContext.Provider>
   )
 }
+
