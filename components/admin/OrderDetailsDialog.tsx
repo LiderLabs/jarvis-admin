@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Doc } from "@liderlabs/washlab-backend/dataModel"
 import {
@@ -231,32 +231,46 @@ export const OrderDetailsDialog = ({
             {/* Pricing */}
             <div>
               <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <span className="h-4 w-4 font-bold">₵</span>
+                <span className="h-4 w-4 font-bold">â‚µ</span>
                 Pricing
               </h3>
               <div className="rounded-lg border p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Base Price</span>
-                  <span className="font-medium">₵{order.basePrice.toFixed(2)}</span>
+                  <span className="font-medium">â‚µ{order.basePrice.toFixed(2)}</span>
                 </div>
-                {order.deliveryFee > 0 && (
+                {(order as any).driverStatus && (
+                    <div className="flex justify-between text-sm py-1">
+                      <span className="text-muted-foreground">Driver Status</span>
+                      <span className={`font-medium ${
+                        (order as any).driverStatus === 'delivered' ? 'text-green-600' :
+                        (order as any).driverStatus === 'picked_up' ? 'text-orange-600' :
+                        'text-blue-600'
+                      }`}>
+                        {(order as any).driverStatus === 'delivered' ? '✓ Delivered' :
+                         (order as any).driverStatus === 'picked_up' ? '🚚 Picked Up - In Transit' :
+                         '⏳ Awaiting Driver Pickup'}
+                      </span>
+                    </div>
+                  )}
+                  {order.deliveryFee > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Delivery Fee</span>
-                    <span className="font-medium">₵{order.deliveryFee.toFixed(2)}</span>
+                    <span className="font-medium">â‚µ{order.deliveryFee.toFixed(2)}</span>
                   </div>
                 )}
                 {order.finalPrice < order.totalPrice && (
                   <div className="flex justify-between text-sm text-green-600">
                     <span>Discount</span>
                     <span>
-                      -₵{(order.totalPrice - order.finalPrice).toFixed(2)}
+                      -â‚µ{(order.totalPrice - order.finalPrice).toFixed(2)}
                     </span>
                   </div>
                 )}
                 <Separator className="my-2" />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>₵{order.finalPrice.toFixed(2)}</span>
+                  <span>â‚µ{order.finalPrice.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -290,4 +304,5 @@ export const OrderDetailsDialog = ({
     </Dialog>
   )
 }
+
 
