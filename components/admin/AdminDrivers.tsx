@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { useQuery, useMutation } from "convex/react"
@@ -357,14 +357,14 @@ export default function AdminDrivers() {
                             <p className="text-xs text-muted-foreground">{order.branchName}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <p className="font-medium">{order.customerName || "—"}</p>
+                            <p className="font-medium">{order.customerName || "â€”"}</p>
                             <p className="text-xs text-muted-foreground">{order.customerPhoneNumber}</p>
                           </td>
                           <td className="px-4 py-3">
                             <p className="text-xs text-muted-foreground flex items-start gap-1">
                               <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
                               {[order.deliveryHall, order.deliveryRoom ? `Rm ${order.deliveryRoom}` : null]
-                                .filter(Boolean).join(", ") || order.deliveryAddress || "—"}
+                                .filter(Boolean).join(", ") || order.deliveryAddress || "â€”"}
                             </p>
                           </td>
                           <td className="px-4 py-3">
@@ -381,7 +381,7 @@ export default function AdminDrivers() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right font-bold">
-                            ₵{(order.finalPrice ?? 0).toFixed(2)}
+                            â‚µ{(order.finalPrice ?? 0).toFixed(2)}
                           </td>
                         </tr>
                       )
@@ -431,7 +431,7 @@ export default function AdminDrivers() {
                 </SelectTrigger>
                 <SelectContent>
                   {(branches as any[]).map((b: any) => (
-                    <SelectItem key={b.code} value={b.code}>
+                    <SelectItem key={b._id} value={b._id}>
                       {b.name}
                     </SelectItem>
                   ))}
