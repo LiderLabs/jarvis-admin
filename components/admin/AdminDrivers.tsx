@@ -68,7 +68,7 @@ export default function AdminDrivers() {
 
   // Form state
   const [form, setForm] = useState({
-    name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "",
+    name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "" as string,
   })
   const [editForm, setEditForm] = useState({
     name: "", phoneNumber: "", pin: "", branchId: "", isActive: true,
@@ -101,7 +101,7 @@ export default function AdminDrivers() {
       })
       toast.success(`Driver ${form.name} created`)
       setShowCreateDialog(false)
-      setForm({ name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "" })
+      setForm({ name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "" as string })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create driver")
     } finally {
@@ -176,7 +176,7 @@ export default function AdminDrivers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Truck className="w-6 h-6 text-orange-500" />
+            <Truck className="w-6 h-6 text-primary" />
             Drivers & Deliveries
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -185,7 +185,7 @@ export default function AdminDrivers() {
         </div>
         <Button
           onClick={() => setShowCreateDialog(true)}
-          className="gap-2 bg-orange-600 hover:bg-orange-700 text-white"
+          className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <UserPlus className="w-4 h-4" />
           Add Driver
@@ -218,7 +218,7 @@ export default function AdminDrivers() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-6 py-2.5 text-sm font-semibold transition-colors ${
               activeTab === tab.key
-                ? "bg-orange-600 text-white"
+                ? "bg-primary text-primary-foreground"
                 : "bg-card text-muted-foreground hover:bg-muted/50"
             }`}
           >
@@ -399,7 +399,7 @@ export default function AdminDrivers() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Truck className="w-5 h-5 text-orange-500" />
+              <Truck className="w-5 h-5 text-primary" />
               Add New Driver
             </DialogTitle>
             <DialogDescription>
@@ -425,7 +425,7 @@ export default function AdminDrivers() {
             </div>
             <div className="space-y-1.5">
               <Label>Branch</Label>
-              <Select value={form.branchId} onValueChange={v => setForm(f => ({ ...f, branchId: v }))}>
+              <Select value={form.branchId || undefined} onValueChange={v => setForm(f => ({ ...f, branchId: v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
@@ -473,7 +473,7 @@ export default function AdminDrivers() {
             <Button
               onClick={handleCreate}
               disabled={saving}
-              className="bg-orange-600 hover:bg-orange-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Create Driver"}
             </Button>
@@ -564,3 +564,4 @@ export default function AdminDrivers() {
     </div>
   )
 }
+
