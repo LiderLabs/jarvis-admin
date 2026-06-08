@@ -808,8 +808,6 @@ const AdminStaff = () => {
         )}
       </div>
 
-      </>
-      )}
 
       {/* Drivers Tab */}
       {activeTab === "drivers" && (

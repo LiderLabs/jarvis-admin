@@ -34,8 +34,8 @@ export const Logo = ({ className, showText = true, size = 'md' }: LogoProps) => 
 
   // Use dark logo as default (avoids flash on dark-mode apps)
  const logoSrc = mounted && resolvedTheme === 'light'
-  ? '/assets/javis.png'
-  : '/assets/javis.png';
+  ? '/assets/Rapid.png'
+  : '/assets/Rapid.png';
 
   return (
     <div className={cn('flex items-center', className)}>
