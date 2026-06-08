@@ -103,7 +103,7 @@ const AdminSettings = () => {
     setSavingSettings(true)
     try {
       await updateSystemSettings({
-        businessName: (systemSettings as any)?.businessName || "Javis",
+        businessName: (systemSettings as any)?.businessName || "Rapid Wash",
         contactPhone: (systemSettings as any)?.contactPhone || "",
         contactEmail: (systemSettings as any)?.contactEmail || "",
         ...notifications,

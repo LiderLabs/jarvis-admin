@@ -1031,7 +1031,7 @@ const AdminBranches = () => {
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8'>
         <div>
           <h1 className='text-2xl sm:text-3xl font-bold text-foreground'>Branches</h1>
-          <p className='text-sm sm:text-base text-muted-foreground mt-1'>Manage Javis locations</p>
+          <p className='text-sm sm:text-base text-muted-foreground mt-1'>Manage Rapid Wash locations</p>
         </div>
         <div className='flex gap-2'>
           <Button variant='outline' onClick={() => setIncludeInactive(!includeInactive)}>
@@ -1112,7 +1112,7 @@ const AdminBranches = () => {
         <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Add New Branch</DialogTitle>
-            <DialogDescription>Create a new Javis branch location</DialogDescription>
+            <DialogDescription>Create a new Rapid Wash branch location</DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-4'>
             <BranchFormFields prefix="" formData={formData} setFormData={setFormData} selectedBranch={selectedBranch} />

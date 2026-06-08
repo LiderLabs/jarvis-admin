@@ -79,7 +79,7 @@ const sidebarItems = [
   },
   {
     id: "drivers",
-    label: "Drivers",
+    label: "Deliveries",
     icon: Truck,
     path: "/dashboard/drivers",
     group: "management",

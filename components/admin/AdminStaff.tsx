@@ -109,6 +109,8 @@ const AdminStaff = () => {
   const [isActionLoading, setIsActionLoading] = useState(false)
 
   // Multi-branch access dialog state
+  const [activeTab, setActiveTab] = useState<"attendants" | "drivers">("attendants")
+
   const [branchAccessDialog, setBranchAccessDialog] = useState<{
     open: boolean
     attendant: Attendant | null
@@ -159,6 +161,82 @@ const AdminStaff = () => {
   // This mutation needs to be added to your backend:
   // api.admin.updateAttendantBranchAccess({ attendantId, branchIds })
   const updateBranchAccess = useMutation((api as any).admin.updateAttendantBranchAccess)
+
+
+  // Driver management state
+  const [showCreateDriverDialog, setShowCreateDriverDialog] = useState(false)
+  const [showEditDriverDialog, setShowEditDriverDialog] = useState(false)
+  const [showDeleteDriverDialog, setShowDeleteDriverDialog] = useState(false)
+  const [selectedDriver, setSelectedDriver] = useState<any | null>(null)
+  const [savingDriver, setSavingDriver] = useState(false)
+  const [deletingDriver, setDeletingDriver] = useState(false)
+  const [driverForm, setDriverForm] = useState({ name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "" as string })
+  const [driverEditForm, setDriverEditForm] = useState({ name: "", phoneNumber: "", pin: "", branchId: "", isActive: true })
+
+  const drivers = useQuery((api as any).drivers.listDrivers, {}) ?? []
+  const createDriver = useMutation((api as any).drivers.createDriver)
+  const updateDriver = useMutation((api as any).drivers.updateDriver)
+  const deleteDriver = useMutation((api as any).drivers.deleteDriver)
+
+  const handleCreateDriver = async () => {
+    if (!driverForm.name.trim()) { toast.error("Name is required"); return }
+    if (!driverForm.phoneNumber.trim()) { toast.error("Phone number is required"); return }
+    if (!driverForm.pin || driverForm.pin.length < 4) { toast.error("PIN must be at least 4 digits"); return }
+    if (driverForm.pin !== driverForm.confirmPin) { toast.error("PINs do not match"); return }
+    if (!driverForm.branchId) { toast.error("Select a branch"); return }
+    setSavingDriver(true)
+    try {
+      await createDriver({ name: driverForm.name.trim(), phoneNumber: driverForm.phoneNumber.trim(), pin: driverForm.pin, branchId: driverForm.branchId as any })
+      toast.success(`Driver ${driverForm.name} created`)
+      setShowCreateDriverDialog(false)
+      setDriverForm({ name: "", phoneNumber: "", pin: "", confirmPin: "", branchId: "" })
+    } catch (e: any) {
+      toast.error(e.message || "Failed to create driver")
+    } finally {
+      setSavingDriver(false)
+    }
+  }
+
+  const handleEditDriver = async () => {
+    if (!selectedDriver) return
+    setSavingDriver(true)
+    try {
+      const updates: any = { driverId: selectedDriver._id }
+      if (driverEditForm.name.trim()) updates.name = driverEditForm.name.trim()
+      if (driverEditForm.phoneNumber.trim()) updates.phoneNumber = driverEditForm.phoneNumber.trim()
+      if (driverEditForm.pin.trim()) updates.pin = driverEditForm.pin.trim()
+      if (driverEditForm.branchId) updates.branchId = driverEditForm.branchId as any
+      updates.isActive = driverEditForm.isActive
+      await updateDriver(updates)
+      toast.success("Driver updated")
+      setShowEditDriverDialog(false)
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update driver")
+    } finally {
+      setSavingDriver(false)
+    }
+  }
+
+  const handleDeleteDriver = async () => {
+    if (!selectedDriver) return
+    setDeletingDriver(true)
+    try {
+      await deleteDriver({ driverId: selectedDriver._id })
+      toast.success("Driver removed")
+      setShowDeleteDriverDialog(false)
+      setSelectedDriver(null)
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete driver")
+    } finally {
+      setDeletingDriver(false)
+    }
+  }
+
+  const openEditDriver = (driver: any) => {
+    setSelectedDriver(driver)
+    setDriverEditForm({ name: driver.name, phoneNumber: driver.phoneNumber, pin: "", branchId: driver.branchId, isActive: driver.isActive })
+    setShowEditDriverDialog(true)
+  }
 
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message
@@ -369,7 +447,7 @@ const AdminStaff = () => {
 
   const sendWhatsApp = (phone: string, link: string, name: string, branchName: string) => {
     try {
-      const message = `Hi ${name}! 👋\n\nYou've been invited to enroll as an attendant at *Javis ${branchName}*.\n\nPlease complete your biometric enrollment by clicking this link:\n\n${link}\n\nThis link will expire in 72 hours.`
+      const message = `Hi ${name}! 👋\n\nYou've been invited to enroll as an attendant at *Rapid Wash ${branchName}*.\n\nPlease complete your biometric enrollment by clicking this link:\n\n${link}\n\nThis link will expire in 72 hours.`
       const formattedPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("0") ? `233${phone.slice(1)}` : phone
       const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
       const whatsappWindow = window.open(url, "_blank")
@@ -425,6 +503,27 @@ const AdminStaff = () => {
           <UserPlus className='w-4 h-4' />
           Create Enrollment
         </Button>
+      </div>
+
+
+      {/* Tabs */}
+      <div className="flex rounded-xl border border-border overflow-hidden w-fit mb-6">
+        {([
+          { key: "attendants" as const, label: "Attendants" },
+          { key: "drivers" as const, label: "Drivers" },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-6 py-2.5 text-sm font-semibold transition-colors ${
+              activeTab === tab.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-card text-muted-foreground hover:bg-muted/50"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -709,6 +808,99 @@ const AdminStaff = () => {
         )}
       </div>
 
+      </>
+      )}
+
+      {/* Drivers Tab */}
+      {activeTab === "drivers" && (
+      <div className="space-y-4">
+        {/* Drivers Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold">Driver Management</h2>
+            <p className="text-sm text-muted-foreground">Add and manage delivery drivers</p>
+          </div>
+          <Button onClick={() => setShowCreateDriverDialog(true)} className="gap-2">
+            <Truck className="w-4 h-4" />
+            Add Driver
+          </Button>
+        </div>
+        {/* Driver Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-card rounded-lg border border-border p-4">
+            <div className="text-2xl font-bold">{(drivers as any[]).length}</div>
+            <div className="text-sm text-muted-foreground">Total Drivers</div>
+          </div>
+          <div className="bg-card rounded-lg border border-border p-4">
+            <div className="text-2xl font-bold text-green-600">{(drivers as any[]).filter((d: any) => d.isActive).length}</div>
+            <div className="text-sm text-muted-foreground">Active</div>
+          </div>
+        </div>
+        {/* Drivers Table */}
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          {(drivers as any[]).length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <Truck className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-1">No drivers yet</p>
+              <p className="text-sm">Add a driver to get started</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-4 font-semibold text-foreground">Driver</th>
+                    <th className="text-left p-4 font-semibold text-foreground">Branch</th>
+                    <th className="text-left p-4 font-semibold text-foreground">Status</th>
+                    <th className="text-left p-4 font-semibold text-foreground">Last Login</th>
+                    <th className="text-left p-4 font-semibold text-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(drivers as any[]).map((driver: any) => (
+                    <tr key={driver._id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Truck className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-foreground">{driver.name}</p>
+                            <p className="text-sm text-muted-foreground">{driver.phoneNumber}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-foreground">{driver.branchName}</td>
+                      <td className="p-4">
+                        {driver.isActive ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-200 gap-1">Active</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground gap-1">Inactive</Badge>
+                        )}
+                      </td>
+                      <td className="p-4 text-sm text-muted-foreground">
+                        {driver.lastLoginAt ? new Date(driver.lastLoginAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Never"}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" className="gap-1" onClick={() => openEditDriver(driver)}>
+                            <Edit className="w-3 h-3" />Edit
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-1 text-destructive border-destructive hover:bg-destructive/10" onClick={() => { setSelectedDriver(driver); setShowDeleteDriverDialog(true) }}>
+                            <Trash2 className="w-3 h-3" />Remove
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+
       {/* ── Branch Access Dialog ──────────────────────────────────────────────── */}
       <Dialog open={branchAccessDialog.open} onOpenChange={(open) => { if (!open) setBranchAccessDialog({ open: false, attendant: null }) }}>
         <DialogContent className='sm:max-w-[440px]'>
@@ -926,6 +1118,73 @@ const AdminStaff = () => {
               {actionDialog.type === "delete" && "Delete"}
               {actionDialog.type === "password_reset" && "Send Reset Email"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Driver Dialog */}
+      <Dialog open={showCreateDriverDialog} onOpenChange={setShowCreateDriverDialog}>
+        <DialogContent className='sm:max-w-[420px]'>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Truck className="w-5 h-5 text-primary" />Add New Driver</DialogTitle>
+            <DialogDescription>Create a driver account. They log in at /driver/login with phone + PIN.</DialogDescription>
+          </DialogHeader>
+          <div className='space-y-3 py-2'>
+            <div><Label>Full Name</Label><Input className="mt-1" placeholder="e.g. Kwame Mensah" value={driverForm.name} onChange={e => setDriverForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>Phone Number</Label><Input className="mt-1" placeholder="e.g. 0241234567" value={driverForm.phoneNumber} onChange={e => setDriverForm(f => ({ ...f, phoneNumber: e.target.value }))} /></div>
+            <div>
+              <Label>Branch</Label>
+              <select className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={driverForm.branchId} onChange={e => setDriverForm(f => ({ ...f, branchId: e.target.value }))}>
+                <option value="">Select branch</option>
+                {branches.map((b: Branch) => <option key={b._id} value={b._id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>PIN (min 4 digits)</Label><Input type="password" inputMode="numeric" className="mt-1" placeholder="••••" value={driverForm.pin} onChange={e => setDriverForm(f => ({ ...f, pin: e.target.value.replace(/D/g,'') }))} maxLength={8} /></div>
+              <div><Label>Confirm PIN</Label><Input type="password" inputMode="numeric" className="mt-1" placeholder="••••" value={driverForm.confirmPin} onChange={e => setDriverForm(f => ({ ...f, confirmPin: e.target.value.replace(/D/g,'') }))} maxLength={8} /></div>
+            </div>
+            {driverForm.pin && driverForm.confirmPin && driverForm.pin !== driverForm.confirmPin && <p className="text-xs text-destructive">PINs do not match</p>}
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setShowCreateDriverDialog(false)} disabled={savingDriver}>Cancel</Button>
+            <Button onClick={handleCreateDriver} disabled={savingDriver}>{savingDriver ? <><Loader2 className='w-4 h-4 mr-2 animate-spin' />Creating...</> : "Create Driver"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Driver Dialog */}
+      <Dialog open={showEditDriverDialog} onOpenChange={setShowEditDriverDialog}>
+        <DialogContent className='sm:max-w-[420px]'>
+          <DialogHeader>
+            <DialogTitle>Edit Driver</DialogTitle>
+            <DialogDescription>Leave PIN blank to keep existing.</DialogDescription>
+          </DialogHeader>
+          <div className='space-y-3 py-2'>
+            <div><Label>Full Name</Label><Input className="mt-1" value={driverEditForm.name} onChange={e => setDriverEditForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>Phone Number</Label><Input className="mt-1" value={driverEditForm.phoneNumber} onChange={e => setDriverEditForm(f => ({ ...f, phoneNumber: e.target.value }))} /></div>
+            <div><Label>New PIN (optional)</Label><Input type="password" inputMode="numeric" className="mt-1" placeholder="Leave blank to keep" value={driverEditForm.pin} onChange={e => setDriverEditForm(f => ({ ...f, pin: e.target.value.replace(/D/g,'') }))} maxLength={8} /></div>
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+              <input type="checkbox" id="driverActive" checked={driverEditForm.isActive} onChange={e => setDriverEditForm(f => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4" />
+              <Label htmlFor="driverActive" className="cursor-pointer">Driver is active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setShowEditDriverDialog(false)} disabled={savingDriver}>Cancel</Button>
+            <Button onClick={handleEditDriver} disabled={savingDriver}>{savingDriver ? <><Loader2 className='w-4 h-4 mr-2 animate-spin' />Saving...</> : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Driver Dialog */}
+      <Dialog open={showDeleteDriverDialog} onOpenChange={setShowDeleteDriverDialog}>
+        <DialogContent className='sm:max-w-[380px]'>
+          <DialogHeader>
+            <DialogTitle>Remove Driver</DialogTitle>
+            <DialogDescription>Are you sure you want to remove <strong>{selectedDriver?.name}</strong>? This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setShowDeleteDriverDialog(false)} disabled={deletingDriver}>Cancel</Button>
+            <Button variant='destructive' onClick={handleDeleteDriver} disabled={deletingDriver}>{deletingDriver ? <><Loader2 className='w-4 h-4 mr-2 animate-spin' />Removing...</> : "Remove Driver"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
