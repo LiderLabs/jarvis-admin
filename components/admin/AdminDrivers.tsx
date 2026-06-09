@@ -49,12 +49,12 @@ export default function AdminDeliveries() {
   const [savingPrices, setSavingPrices] = useState(false)
 
   // Initialize form when data loads
-  if (deliveryPricing && !prices) {
+  if (deliveryPricing !== undefined && !prices) {
     setPrices({
-      dropoff_self: String(deliveryPricing.dropoff_self ?? 0),
-      dropoff_delivery: String(deliveryPricing.dropoff_delivery ?? 0),
-      pickup_self: String(deliveryPricing.pickup_self ?? 0),
-      full_service: String(deliveryPricing.full_service ?? 0),
+      dropoff_self: String(deliveryPricing?.dropoff_self ?? 0),
+      dropoff_delivery: String(deliveryPricing?.dropoff_delivery ?? 0),
+      pickup_self: String(deliveryPricing?.pickup_self ?? 0),
+      full_service: String(deliveryPricing?.full_service ?? 0),
     })
   }
 
@@ -85,10 +85,7 @@ export default function AdminDeliveries() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Truck className="w-6 h-6 text-primary" />
-          Deliveries
-        </h1>
+        <h1 className="text-2xl font-bold">Deliveries</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Track delivery orders and manage global pricing
         </p>
