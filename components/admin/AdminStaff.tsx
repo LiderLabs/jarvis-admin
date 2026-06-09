@@ -62,6 +62,8 @@ import {
   LogOut,
   Building2,
   Truck,
+  Edit,
+  Trash2,
 } from "lucide-react"
 
 interface Attendant {
