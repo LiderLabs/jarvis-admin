@@ -61,6 +61,7 @@ import {
   RotateCcw,
   LogOut,
   Building2,
+  Truck,
 } from "lucide-react"
 
 interface Attendant {
