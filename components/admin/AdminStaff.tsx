@@ -517,7 +517,7 @@ const AdminStaff = () => {
         ] as const).map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => { setActiveTab(tab.key); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
             className={`px-6 py-2.5 text-sm font-semibold transition-colors ${
               activeTab === tab.key
                 ? "bg-primary text-primary-foreground"
