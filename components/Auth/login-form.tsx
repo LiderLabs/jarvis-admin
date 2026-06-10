@@ -304,7 +304,7 @@ export default function LoginForm() {
         {/* Bottom text on image */}
         <div className='absolute bottom-12 left-10 right-10 text-white'>
           <p className='text-3xl font-bold leading-tight mb-2'>
-            Life made simple.
+            Laundry made easy.
           </p>
           <p className='text-white/75 text-sm'>
             Professional laundry management at your fingertips.

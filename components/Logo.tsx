@@ -41,7 +41,7 @@ export const Logo = ({ className, showText = true, size = 'md' }: LogoProps) => 
     <div className={cn('flex items-center', className)}>
       <Image
         src={logoSrc}
-        alt="Javis - Life made simple"
+        alt="Javis - Laundry made easy"
         width={dimensions[size].width}
         height={dimensions[size].height}
         className={cn(displayClasses[size], 'object-contain')}
