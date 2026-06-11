@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Doc } from "@liderlabs/washlab-backend/dataModel"
+import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Plus, Minus } from "lucide-react"
 import { useMutation } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { toast } from "sonner"
 
 interface AdjustPointsDialogProps {

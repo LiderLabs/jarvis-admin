@@ -1,6 +1,6 @@
 "use client"
 
-import { Doc } from "@liderlabs/washlab-backend/dataModel"
+import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import {
   Table,
   TableBody,

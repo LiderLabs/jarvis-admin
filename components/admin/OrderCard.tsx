@@ -1,6 +1,6 @@
-﻿"use client"
+"use client"
 
-import { Doc } from "@liderlabs/washlab-backend/dataModel"
+import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,7 @@ export const OrderCard = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <h3 className="font-semibold text-lg truncate">
-                {order.orderNumber || ""”"}
+                {order.orderNumber || ""�"}
               </h3>
               <OrderStatusBadge status={order.status} size="sm" />
             </div>
@@ -47,7 +47,7 @@ export const OrderCard = ({
               <span className="capitalize">
                 {order.serviceType?.replace(/_/g, " ") || "N/A"}
               </span>
-              <span>•</span>
+              <span>�</span>
               <span className="capitalize">
                 {order.orderType?.replace(/_/g, " ") || "N/A"}
               </span>
@@ -85,7 +85,7 @@ export const OrderCard = ({
             <User className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Customer:</span>
             <span className="font-medium">
-              {order.customerPhoneNumber || ""”"}
+              {order.customerPhoneNumber || ""�"}
             </span>
           </div>
 
@@ -108,15 +108,15 @@ export const OrderCard = ({
             <span className="font-medium">
               {order.createdAt
                 ? format(new Date(order.createdAt), "MMM d, yyyy")
-                : ""”"}
+                : ""�"}
             </span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="flex items-center gap-2 text-sm">
-              <span className="h-4 w-4 text-muted-foreground font-bold">₵</span>
+              <span className="h-4 w-4 text-muted-foreground font-bold">?</span>
               <span className="text-lg font-bold">
-                ₵{(order.finalPrice ?? 0).toFixed(2)}
+                ?{(order.finalPrice ?? 0).toFixed(2)}
               </span>
             </div>
 
@@ -134,9 +134,9 @@ export const OrderCard = ({
                     }`}
                     variant="outline"
                   >
-                    {(order as any).driverStatus === 'delivered' ? '✓ Delivered' :
-                     (order as any).driverStatus === 'picked_up' ? '🚚 In Transit' :
-                     '⏳ Awaiting Driver'}
+                    {(order as any).driverStatus === 'delivered' ? '? Delivered' :
+                     (order as any).driverStatus === 'picked_up' ? '?? In Transit' :
+                     '? Awaiting Driver'}
                   </Badge>
                 )}
               </div>

@@ -1,8 +1,8 @@
 "use client"
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@liderlabs/washlab-backend/api";
-import { Id } from "@liderlabs/washlab-backend/dataModel";
+import { api } from "@jordan6699/washlab-backend/api";
+import { Id } from "@jordan6699/washlab-backend/dataModel";
 
 const PlusIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

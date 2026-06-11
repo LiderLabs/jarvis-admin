@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react"
 import { usePaginatedQuery, useQuery, useConvexAuth } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
-import { Id, Doc } from "@liderlabs/washlab-backend/dataModel"
+import { api } from "@jordan6699/washlab-backend/api"
+import { Id, Doc } from "@jordan6699/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"

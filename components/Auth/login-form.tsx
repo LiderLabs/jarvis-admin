@@ -1,4 +1,4 @@
-ï»¿"use client"
+"use client"
 
 import * as Clerk from "@clerk/elements/common"
 import * as SignIn from "@clerk/elements/sign-in"
@@ -60,7 +60,7 @@ export default function LoginForm() {
 
   return (
     <div className='min-h-screen flex'>
-      {/* Left panel â€” form */}
+      {/* Left panel — form */}
       <div className='w-full lg:w-1/2 flex flex-col min-h-screen bg-background'>
         {/* Logo at top */}
         <div className='p-8'>
@@ -282,12 +282,12 @@ export default function LoginForm() {
         {/* Footer */}
         <div className='p-8 text-center'>
           <p className='text-xs text-muted-foreground'>
-            Â© {new Date().getFullYear()} Javis Â· Powered by Lider Technologies LTD
+            © {new Date().getFullYear()} Javis · Powered by Lider Technologies LTD
           </p>
         </div>
       </div>
 
-      {/* Right panel â€” image */}
+      {/* Right panel — image */}
       <div className='hidden lg:block lg:w-1/2 relative overflow-hidden'>
         <Image
           src='/assets/login-bg.jpg'

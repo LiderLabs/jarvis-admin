@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { usePaginatedQuery } from "convex/react"
 import { useDebounce } from "use-debounce"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -30,7 +30,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { format } from "date-fns"
-import { Doc } from "@liderlabs/washlab-backend/dataModel"
+import { Doc } from "@jordan6699/washlab-backend/dataModel"
 import {
   FileText,
   Search,

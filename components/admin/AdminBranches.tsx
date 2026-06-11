@@ -2,8 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { usePaginatedQuery, useMutation, useQuery, useConvexAuth } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
-import { Id } from "@liderlabs/washlab-backend/dataModel"
+import { api } from "@jordan6699/washlab-backend/api"
+import { Id } from "@jordan6699/washlab-backend/dataModel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, createContext, useContext } from "react"
 import * as React from "react"
@@ -9,7 +9,7 @@ import { DashboardHeader } from "@/components/DashboardHeader"
 import { useCurrentAdmin } from "@/hooks/use-current-admin"
 import { cn } from "@/lib/utils"
 import { useQuery } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import {
   LayoutDashboard,
   Building2, Wrench,
@@ -325,7 +325,7 @@ export default function AdminLayout({
           />
         </aside>
 
-        {/* Mobile Sidebar â€” solid overlay, not transparent */}
+        {/* Mobile Sidebar — solid overlay, not transparent */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetContent
             side='left'

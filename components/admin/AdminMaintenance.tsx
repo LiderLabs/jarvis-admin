@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useQuery, useMutation, useConvexAuth, usePaginatedQuery } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

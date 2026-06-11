@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { useUser, UserProfile } from "@clerk/nextjs"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"

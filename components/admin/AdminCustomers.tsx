@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react"
 import { useDebounce } from "use-debounce"
-import { api } from "@liderlabs/washlab-backend/api"
+import { api } from "@jordan6699/washlab-backend/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -48,7 +48,7 @@ import { CustomerTableRow } from "./CustomerTableRow"
 import { CustomersSkeleton } from "@/components/loaders/CustomersSkeleton"
 import { CustomersTableSkeleton } from "@/components/loaders/CustomersTableSkeleton"
 import { CustomersStatsSkeleton } from "@/components/loaders/CustomersStatsSkeleton"
-import { Id } from "@liderlabs/washlab-backend/dataModel"
+import { Id } from "@jordan6699/washlab-backend/dataModel"
 
 const BRANCH_COLORS = [
   "bg-orange-500",
